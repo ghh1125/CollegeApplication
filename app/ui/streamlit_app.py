@@ -312,7 +312,7 @@ def _parse_json_from_text(text: str) -> dict | None:
 
 
 _XIAOYU_WELCOME = (
-    "你好！我是**小芸**，你的志愿填报助手 👋\n\n"
+    "你好！我是**小明**，你的志愿填报助手 👋\n\n"
     "我来帮你把左侧的参数表单填好，只需告诉我：\n"
     "1. 你的**全省位次**是多少？\n"
     "2. 选了哪**三门**选考科目？\n"
@@ -398,7 +398,7 @@ with st.expander("💬 AI 对话顾问", expanded=True):
     if "ai_parsed" in st.session_state:
         _p = st.session_state["ai_parsed"]
         st.divider()
-        st.markdown("**小芸提取到的参数，确认后填入表单：**")
+        st.markdown("**小明提取到的参数，确认后填入表单：**")
         _pc1, _pc2 = st.columns(2)
         with _pc1:
             st.write(f"位次：**{_p.get('rank', '—')}**")
@@ -450,7 +450,6 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                 "role": "assistant",
                 "content": (
                     "收到！参数已填入左侧表单，推荐志愿正在生成 🎯\n\n"
-                    "我是**小志**，接下来由我为你服务。\n\n"
                     "志愿生成后，在这个对话框下方会出现两个按钮：\n"
                     "- **生成总体报告** — 分析整体冲稳保方案\n"
                     "- **解释此条志愿** — 选一条志愿深度解析\n\n"
@@ -508,7 +507,7 @@ if not _form_ready:
 if len(selected_subjects) != 3:
     st.info(
         f"请选择恰好 3 门选考科目（当前 {len(selected_subjects)} 门）\n\n"
-        "可以在上方 **AI 对话顾问** 中用自然语言告诉小芸你的情况，她会帮你自动填写。"
+        "可以在上方 **AI 对话顾问** 中用自然语言告诉小明你的情况，他会帮你自动填写。"
     )
     st.stop()
 
@@ -590,21 +589,22 @@ with st.spinner("生成推荐志愿…"):
         total=int(volunteer_total),
     )
 
-# Store context for AI advisor; inject 小志 handoff on first generation
+# Store context for AI advisor; rerun once so expander shows quick-action buttons
 _first_recommendation = "_advisor_ctx" not in st.session_state
 st.session_state["_advisor_ctx"] = recommendation
-if _first_recommendation and not st.session_state.get("_advisor_intro_sent"):
-    st.session_state["_advisor_intro_sent"] = True
-    _xiozhi_intro = (
-        "志愿表出来了，我来接手 📊 我是**小志**，志愿顾问。\n\n"
-        "你可以：\n"
-        "- 点下方「**在对话中生成报告**」，我来分析整体冲稳保方案\n"
-        "- 选中某条志愿后点「**解释此条**」，我来深度解析这条志愿\n"
-        "- 直接问我任何问题，比如：这几个学校就业怎么样？能不能更激进一点？\n\n"
-        "有问题随时说！"
-    )
-    st.session_state["ai_chat"].append({"role": "assistant", "content": _xiozhi_intro})
-    st.rerun()
+if _first_recommendation:
+    if not st.session_state.get("_advisor_intro_sent"):
+        st.session_state["_advisor_intro_sent"] = True
+        _xm_intro = (
+            "志愿表出来了，我来帮你分析 📊\n\n"
+            "你可以：\n"
+            "- 点下方「**生成总体报告**」，我来分析整体冲稳保方案\n"
+            "- 选中某条志愿后点「**解释此条志愿**」，我来深度解析\n"
+            "- 直接问我任何问题，比如：这几个学校就业怎么样？能不能更激进一点？\n\n"
+            "有问题随时说！"
+        )
+        st.session_state["ai_chat"].append({"role": "assistant", "content": _xm_intro})
+    st.rerun()  # always rerun so quick-action buttons become visible
 
 # ─── 漏斗指标 ────────────────────────────────────────────────────────────────
 

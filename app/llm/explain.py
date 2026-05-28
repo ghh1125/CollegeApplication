@@ -87,12 +87,11 @@ def _build_advisor_system(
     profile_ctx: dict | None = None,
     recommendation_ctx: dict | None = None,
 ) -> str:
-    # Two personas: 小芸 for profile fill, 小志 for recommendation analysis
     if recommendation_ctx:
-        name, role = "小志", "志愿顾问"
+        name, role = "小明", "志愿顾问"
         task = "解读推荐志愿，分析冲稳保策略，给出调整建议，回答专业/学校问题"
     else:
-        name, role = "小芸", "填报助手"
+        name, role = "小明", "填报助手"
         task = "通过对话收集考生信息，在回复末尾输出JSON供表单自动填写"
 
     lines = [
@@ -139,11 +138,11 @@ def _build_advisor_system(
 
     lines += [
         "【规则】",
-        "- 小芸收集完参数后在末尾输出JSON（小志不输出JSON）：",
+        "- 填报模式（无推荐表）：收集完参数后在末尾输出JSON（顾问模式不输出JSON）：",
         '  ```json',
         '  {"rank":..., "total_score":..., "selected_subjects":[...], "preferred_majors":[...], "preferred_cities":[...], "main_priority":"...", "risk_preference":"..."}',
         '  ```',
-        "- 小芸输出JSON后，在下一段提醒用户做三件事：",
+        "- 填报模式输出JSON后，在下一段提醒用户做三件事：",
         "  ① 核对上方提取的参数是否正确（位次、选科等）",
         "  ② 左侧表单还有一些可选项可以按需设置：",
         "     - 主排序（专业优先 or 学校优先）",
@@ -152,7 +151,7 @@ def _build_advisor_system(
         "     - 风险偏好（激进/均衡/保守）",
         "     - 是否接受民办/中外合作",
         "  ③ 确认无误后点击对话框下方的「确认填入表单」按钮",
-        "- 小志不做上述提醒，专注于志愿分析",
+        "- 顾问模式不做上述提醒，专注于志愿分析",
         "- 建议调整参数时，明确说明在左侧表单哪里修改",
         "- 回答专业就业、学校排名等问题基于你的知识直接回答",
         "- 回复控制在200字以内（列表/JSON不计入）",
