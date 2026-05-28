@@ -100,15 +100,25 @@ def get_major_score(
 
 
 def get_school_score(program: dict, preferred_schools: list) -> int:
-    """Score a program by school preference and school level."""
+    """Score a program by school preference and school level.
 
+    软科排名 is the primary signal; 985/211 adds a small bonus.
+    This ensures a well-ranked 211 can outrank a weak 985.
+    """
     if program.get("school_name") in preferred_schools:
-        return 100
+        return 200
+
+    ruanke = program.get("ruanke_rank")
+    base = max(0, round(100 - ruanke * 0.2)) if ruanke else 30
+
     if program.get("is_985"):
-        return 90
-    if program.get("is_211") or program.get("is_double_first_class"):
-        return 80
-    return 55
+        bonus = 10
+    elif program.get("is_211") or program.get("is_double_first_class"):
+        bonus = 5
+    else:
+        bonus = 0
+
+    return base + bonus
 
 
 def sort_candidates(
