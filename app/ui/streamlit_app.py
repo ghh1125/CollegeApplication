@@ -48,6 +48,12 @@ st.title("🎓 高考志愿筛选（面向浙江高考）")
 
 SUBJECT_ORDER = ["物理", "化学", "生物", "历史", "地理", "思想政治", "技术"]
 
+_SUBJECT_ALIAS = {
+    "政治": "思想政治", "思政": "思想政治", "马克思": "思想政治",
+    "生物学": "生物",
+    "信息技术": "技术", "通用技术": "技术", "信息": "技术",
+}
+
 
 @st.cache_data(ttl=3600)
 def _load_major_options() -> list[str]:
@@ -478,7 +484,8 @@ with st.expander("💬 AI 对话顾问", expanded=True):
             if _p.get("total_score"):
                 _fill["w_total_score"] = max(200, min(750, int(_p["total_score"])))
             if _p.get("selected_subjects"):
-                _fill["w_subjects"] = [s for s in _p["selected_subjects"] if s in SUBJECT_ORDER][:3]
+                _normalized = [_SUBJECT_ALIAS.get(s, s) for s in _p["selected_subjects"]]
+                _fill["w_subjects"] = [s for s in _normalized if s in SUBJECT_ORDER][:3]
             _mp = _p.get("main_priority")
             if _mp == "专业优先" and not _p.get("preferred_majors"):
                 _mp = "学校优先"
