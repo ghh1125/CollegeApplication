@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -152,6 +153,15 @@ def _dynamic_text_list(
     return normalize_items(values)
 
 
+# ─── 预加载 + AI填报pending处理（必须在所有widget渲染前执行） ─────────────────
+
+_all_major_options = _load_major_options()
+
+if "_pending_fill" in st.session_state:
+    _pf = st.session_state.pop("_pending_fill")
+    for _k, _v in _pf.items():
+        st.session_state[_k] = _v
+
 # ─── 侧边栏 ──────────────────────────────────────────────────────────────────
 
 with st.sidebar:
@@ -166,24 +176,26 @@ with st.sidebar:
 
     st.divider()
     st.header("📋 考生信息")
-    rank = st.number_input("全省位次", 1, 400_000, 36_500, step=100)
-    total_score = st.number_input("总分", 200, 750, 626, step=1)
+    rank = st.number_input("全省位次", 1, 400_000, value=36_500, step=100, key="w_rank")
+    total_score = st.number_input("总分", 200, 750, value=626, step=1, key="w_total_score")
     selected_subjects = st.multiselect(
         "选考科目（选 3 门）", SUBJECT_ORDER,
         default=["物理", "化学", "生物"], max_selections=3,
+        key="w_subjects",
     )
 
     st.divider()
     st.header("推荐策略")
-    main_priority = st.selectbox("主排序", ["专业优先", "学校优先"], index=0)
+    main_priority = st.selectbox("主排序", ["专业优先", "学校优先"], index=0, key="w_main_priority")
 
     if main_priority == "专业优先":
-        major_options = _load_major_options()
+        major_options = _all_major_options
         selected_majors_from_list = st.multiselect(
             "想报的专业",
             options=major_options,
             default=[],
             placeholder='搜索专业名，如"计算机"…',
+            key="w_majors_list",
         )
         preferred_major_input = selected_majors_from_list + _dynamic_text_list(
             "手动补充关键词",
@@ -206,7 +218,7 @@ with st.sidebar:
         excluded_major_input = []
 
     city_first = st.checkbox("同层级内城市优先", value=True)
-    risk_preference = st.selectbox("风险偏好", ["激进", "均衡", "保守"], index=1)
+    risk_preference = st.selectbox("风险偏好", ["激进", "均衡", "保守"], index=1, key="w_risk")
     volunteer_total = st.number_input("志愿数量", 1, 80, 80, step=1)
 
     st.divider()
@@ -230,6 +242,7 @@ with st.sidebar:
         options=_all_provinces,
         default=[],
         placeholder="搜索省份…",
+        key="w_provinces",
     )
     _city_options = sorted({
         city
@@ -241,6 +254,7 @@ with st.sidebar:
         options=_city_options,
         default=[],
         placeholder="搜索城市…" if _selected_provinces else "请先选省份，或直接搜索全部城市",
+        key="w_cities",
     )
     limit_to_preferred_cities = st.checkbox(
         "只看这些城市",
@@ -262,6 +276,126 @@ with st.sidebar:
     accept_sino_foreign = st.checkbox("接受中外合作专业", value=False)
     accept_private = st.checkbox("接受民办学校", value=True)
     excluded_schools_raw = st.text_input("排除学校（精确名）", value="")
+
+# ─── AI 智能填报助手 ──────────────────────────────────────────────────────────
+
+def _parse_json_from_text(text: str) -> dict | None:
+    match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except Exception:
+            return None
+    return None
+
+
+_chat_open = not bool(st.session_state.get("ai_chat"))
+with st.expander("🤖 AI 智能填报助手", expanded=_chat_open):
+    if "ai_chat" not in st.session_state:
+        st.session_state["ai_chat"] = []
+
+    _chat_container = st.container(height=320)
+    with _chat_container:
+        if not st.session_state["ai_chat"]:
+            st.info(
+                "**我是小智，你的高考志愿填报助手** 👋\n\n"
+                "我会通过几个问题帮你填写左侧参数表单，你只需要用自然语言告诉我：\n"
+                "- 你的全省位次是多少？\n"
+                "- 选了哪三门选考科目？\n"
+                "- 有没有偏好的专业或城市？\n\n"
+                "直接在下方输入框开始聊天吧！"
+            )
+        for _m in st.session_state["ai_chat"]:
+            with st.chat_message(_m["role"]):
+                st.write(_m["content"])
+
+    _input_n = st.session_state.get("_ai_input_n", 0)
+    _c1, _c2, _c3 = st.columns([6, 1, 1])
+    with _c1:
+        _user_msg = st.text_input(
+            "输入",
+            key=f"_ai_msg_{_input_n}",
+            placeholder="例如：我位次8000，选了物理化学生物，想学计算机，偏好北京上海…",
+            label_visibility="collapsed",
+        )
+    with _c2:
+        _send = st.button("发送", use_container_width=True, key="ai_send")
+    with _c3:
+        _clear_chat = st.button("清除", use_container_width=True, key="ai_clear")
+
+    if _clear_chat:
+        st.session_state["ai_chat"] = []
+        st.session_state.pop("ai_parsed", None)
+        st.session_state["_ai_input_n"] = _input_n + 1
+        st.rerun()
+
+    if _send and _user_msg.strip():
+        if not _effective_api_key:
+            st.warning("请在左侧填入百炼 API Key 才能使用 AI 助手")
+        else:
+            from app.llm.explain import chat_extract_profile
+            _msg_content = _user_msg.strip()
+            st.session_state["ai_chat"].append({"role": "user", "content": _msg_content})
+            st.session_state["_ai_input_n"] = _input_n + 1
+            with _chat_container:
+                with st.chat_message("assistant"):
+                    _response = st.write_stream(
+                        chat_extract_profile(st.session_state["ai_chat"], api_key=_effective_api_key)
+                    )
+            st.session_state["ai_chat"].append({"role": "assistant", "content": _response})
+            _parsed = _parse_json_from_text(_response)
+            if _parsed:
+                st.session_state["ai_parsed"] = _parsed
+            st.rerun()
+
+    if "ai_parsed" in st.session_state:
+        _p = st.session_state["ai_parsed"]
+        st.divider()
+        st.markdown("**提取到的参数：**")
+        _pc1, _pc2 = st.columns(2)
+        with _pc1:
+            st.write(f"位次：**{_p.get('rank', '—')}**")
+            st.write(f"选考科目：**{', '.join(_p.get('selected_subjects', []))}**")
+            st.write(f"主排序：**{_p.get('main_priority', '—')}**")
+            st.write(f"风险偏好：**{_p.get('risk_preference', '—')}**")
+        with _pc2:
+            st.write(f"偏好专业：**{', '.join(_p.get('preferred_majors', [])) or '未指定'}**")
+            st.write(f"偏好城市：**{', '.join(_p.get('preferred_cities', [])) or '未指定'}**")
+
+        if st.button("确认填入表单", type="primary", key="ai_confirm"):
+            _fill: dict = {}
+            if _p.get("rank"):
+                _fill["w_rank"] = max(1, min(400_000, int(_p["rank"])))
+            if _p.get("total_score"):
+                _fill["w_total_score"] = max(200, min(750, int(_p["total_score"])))
+            if _p.get("selected_subjects"):
+                _fill["w_subjects"] = [s for s in _p["selected_subjects"] if s in SUBJECT_ORDER][:3]
+            if _p.get("main_priority") in ["专业优先", "学校优先"]:
+                _fill["w_main_priority"] = _p["main_priority"]
+            if _p.get("risk_preference") in ["激进", "均衡", "保守"]:
+                _fill["w_risk"] = _p["risk_preference"]
+            if _p.get("preferred_majors"):
+                _matched: list[str] = []
+                for _kw in _p["preferred_majors"]:
+                    if _kw in _all_major_options:
+                        _matched.append(_kw)
+                    else:
+                        _matched.extend(o for o in _all_major_options if _kw in o)
+                _fill["w_majors_list"] = list(dict.fromkeys(_matched))
+                if _fill["w_majors_list"] and "w_main_priority" not in _fill:
+                    _fill["w_main_priority"] = "专业优先"
+            if _p.get("preferred_cities"):
+                _prov_map = _load_province_city_map()
+                _all_cities = {c for cs in _prov_map.values() for c in cs}
+                _valid_cities = [c for c in _p["preferred_cities"] if c in _all_cities]
+                if _valid_cities:
+                    _fill["w_cities"] = _valid_cities
+                    _city_to_prov = {c: pv for pv, cs in _prov_map.items() for c in cs}
+                    _fill["w_provinces"] = list(dict.fromkeys(
+                        _city_to_prov[c] for c in _valid_cities if c in _city_to_prov
+                    ))
+            st.session_state["_pending_fill"] = _fill
+            st.rerun()
 
 # ─── 校验 ────────────────────────────────────────────────────────────────────
 
