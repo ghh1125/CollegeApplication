@@ -195,7 +195,7 @@ with st.sidebar:
         st.divider()
         st.header("📋 考生信息")
         rank = st.number_input("全省位次", 1, 400_000, value=36_500, step=100, key="w_rank")
-        total_score = st.number_input("总分", 200, 750, value=626, step=1, key="w_total_score")
+        total_score = st.number_input("总分", 200, 750, value=None, step=1, placeholder="选填", key="w_total_score")
         selected_subjects = st.multiselect(
             "选考科目（选 3 门）", SUBJECT_ORDER,
             default=[], max_selections=3,
@@ -302,7 +302,7 @@ with st.sidebar:
 # 表单未就绪时提供后备变量，供对话框的 _profile_ctx 使用
 if not _form_ready:
     rank = st.session_state.get("w_rank", 1)
-    total_score = st.session_state.get("w_total_score", 600)
+    total_score = st.session_state.get("w_total_score") or 600
     selected_subjects = st.session_state.get("w_subjects", [])
     main_priority = st.session_state.get("w_main_priority", "专业优先")
     risk_preference = st.session_state.get("w_risk", "均衡")
@@ -607,7 +607,7 @@ excluded_schools = normalize_items([excluded_schools_raw])
 
 try:
     profile = StudentProfile(
-        rank=int(rank), total_score=int(total_score),
+        rank=int(rank), total_score=int(total_score or 600),
         selected_subjects=selected_subjects,
         constraints=Constraints(
             accept_private=accept_private,
