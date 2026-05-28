@@ -560,18 +560,18 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                     "profile": _fn_profile,
                 }
                 st.rerun()
-        _qa_sel = st.selectbox(
+        _qa_sel_label = st.selectbox(
             "选择要解释的志愿",
-            range(len(_qa_labels)),
-            format_func=lambda i: _qa_labels[i],
+            options=_qa_labels,
             label_visibility="collapsed",
             key="chat_vol_select",
         )
+        _qa_idx = _qa_labels.index(_qa_sel_label) if _qa_sel_label in _qa_labels else 0
         if st.button("💬 解释此条志愿", use_container_width=True, key="btn_explain"):
             if not _effective_api_key:
                 st.warning("请先填入左侧百炼 API Key")
             else:
-                _qv = _qa_vols[_qa_sel]
+                _qv = _qa_vols[_qa_idx]
                 st.session_state["_ai_fn_inject"] = {
                     "fn": "explain_volunteer",
                     "label": f"💬 解释第{_qv.get('volunteer_no')}条：{_qv.get('school_name')}·{_qv.get('major_name')}",
