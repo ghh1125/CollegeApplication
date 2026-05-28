@@ -38,8 +38,8 @@ from app.llm.explain import chat_with_advisor, search_web, should_search
 
 # ─── 页面配置 ────────────────────────────────────────────────────────────────
 
-st.set_page_config(page_title="高考志愿筛选", page_icon="🎓", layout="wide")
-st.title("🎓 高考志愿筛选")
+st.set_page_config(page_title="浙江高考志愿筛选", page_icon="🎓", layout="wide")
+st.title("🎓 高考志愿筛选（面向浙江高考）")
 
 # ─── 辅助 ────────────────────────────────────────────────────────────────────
 
