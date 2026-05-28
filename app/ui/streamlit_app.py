@@ -451,14 +451,53 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                 "content": (
                     "收到！参数已填入左侧表单，推荐志愿正在生成 🎯\n\n"
                     "我是**小志**，接下来由我为你服务。\n\n"
-                    "志愿生成后你可以：\n"
-                    "- 点「**在对话中生成报告**」，我来分析整体冲稳保方案\n"
-                    "- 选中某条志愿点「**解释此条**」，我来深度解析这条\n"
-                    "- 或者直接问我任何问题"
+                    "志愿生成后，在这个对话框下方会出现两个按钮：\n"
+                    "- **生成总体报告** — 分析整体冲稳保方案\n"
+                    "- **解释此条志愿** — 选一条志愿深度解析\n\n"
+                    "也可以直接问我任何问题！"
                 ),
             })
             st.session_state["_advisor_intro_sent"] = True
             st.rerun()
+
+    # Quick actions — only visible after recommendations are generated
+    _ctx = st.session_state.get("_advisor_ctx")
+    if _ctx and _ctx.get("volunteers"):
+        _qa_vols = _ctx["volunteers"]
+        _qa_labels = [
+            f"{v.get('volunteer_no')}. {v.get('school_name')} · {v.get('major_name')}"
+            for v in _qa_vols
+        ]
+        st.divider()
+        if st.button("📊 生成总体报告", use_container_width=True, key="btn_report"):
+            if not _effective_api_key:
+                st.warning("请先填入左侧百炼 API Key")
+            else:
+                st.session_state["_ai_inject"] = (
+                    "请生成一份总体分析报告：评价冲稳保比例是否合理，指出亮点和主要风险点，给出1-2条具体建议。"
+                )
+                st.rerun()
+        _qa_sel = st.selectbox(
+            "选择要解释的志愿",
+            range(len(_qa_labels)),
+            format_func=lambda i: _qa_labels[i],
+            label_visibility="collapsed",
+            key="chat_vol_select",
+        )
+        if st.button("💬 解释此条志愿", use_container_width=True, key="btn_explain"):
+            if not _effective_api_key:
+                st.warning("请先填入左侧百炼 API Key")
+            else:
+                _qv = _qa_vols[_qa_sel]
+                _qgi = _qv.get("gap_info") or {}
+                st.session_state["_ai_inject"] = (
+                    f"请详细解释第{_qv.get('volunteer_no')}条志愿："
+                    f"{_qv.get('school_name')}·{_qv.get('major_name')}，"
+                    f"层级{_qgi.get('tier', '未知')}，均值位次{_qgi.get('weighted_avg', '—')}，"
+                    f"gap{_qgi.get('gap', '—')}，城市{_qv.get('school_city', '未知')}。"
+                    f"请分析：推荐理由、历史趋势稳定性、风险点。"
+                )
+                st.rerun()
 
 # 表单未就绪时在此停止，不渲染后续推荐内容
 if not _form_ready:
@@ -591,15 +630,6 @@ stat_cols[3].metric("保", f"{stats['保']:,}")
 stat_cols[4].metric("垫", f"{stats['垫']:,}")
 stat_cols[5].metric("备选池", f"{stats['备选池']:,}")
 
-if st.button("📊 在对话中生成报告", type="primary"):
-    if not _effective_api_key:
-        st.warning("请在左侧填入百炼 API Key")
-    else:
-        st.session_state["_ai_inject"] = (
-            "请生成一份总体分析报告：评价冲稳保比例是否合理，指出亮点和主要风险点，给出1-2条具体建议。"
-        )
-        st.rerun()
-
 search = st.text_input("🔍 搜索", placeholder="搜索学校或专业…")
 recommend_df = _recommendation_df(recommendation["volunteers"])
 candidate_df = _to_df(final)
@@ -631,30 +661,6 @@ with tab_recommend:
             "⚠":        st.column_config.TextColumn(width="medium"),
         },
     )
-
-    st.divider()
-    st.markdown("**单条志愿解释**")
-    _volunteers = recommendation["volunteers"]
-    _vol_labels = [
-        f"{v.get('volunteer_no')}. {v.get('school_name')} · {v.get('major_name')}"
-        for v in _volunteers
-    ]
-    _selected_label = st.selectbox("选择志愿", _vol_labels, index=0, label_visibility="collapsed")
-    _selected_idx = _vol_labels.index(_selected_label)
-
-    if st.button("💬 解释此条", key="explain_single"):
-        if not _effective_api_key:
-            st.warning("请在左侧填入百炼 API Key")
-        else:
-            _v = _volunteers[_selected_idx]
-            _gi = _v.get("gap_info") or {}
-            st.session_state["_ai_inject"] = (
-                f"请详细解释第{_v.get('volunteer_no')}条志愿：{_v.get('school_name')}·{_v.get('major_name')}，"
-                f"层级{_gi.get('tier', '未知')}，均值位次{_gi.get('weighted_avg', '—')}，"
-                f"gap{_gi.get('gap', '—')}，城市{_v.get('school_city', '未知')}。"
-                f"请分析：推荐理由、历史稳定性、风险点。"
-            )
-            st.rerun()
 
 with tab_candidates:
     warn_cnt = sum(1 for p in final if p.get("_warnings"))
