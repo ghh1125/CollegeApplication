@@ -373,6 +373,13 @@ stat_cols[5].metric("备选池", f"{stats['备选池']:,}")
 
 # ─── LLM 总体报告 ────────────────────────────────────────────────────────────
 
+if "overall_report" in st.session_state:
+    with st.chat_message("assistant"):
+        st.write(st.session_state["overall_report"])
+    if st.button("清除报告", key="clear_report"):
+        del st.session_state["overall_report"]
+        st.rerun()
+
 if st.button("生成总体报告", type="primary"):
     if not _effective_api_key:
         st.warning("请在左侧填入百炼 API Key")
@@ -387,10 +394,12 @@ if st.button("生成总体报告", type="primary"):
                 "risk_preference": risk_preference,
             }
             with st.chat_message("assistant"):
-                st.write_stream(generate_overall_report(
+                result = st.write_stream(generate_overall_report(
                     recommendation["volunteers"], stats, _llm_profile,
                     api_key=_effective_api_key,
                 ))
+            st.session_state["overall_report"] = result
+            st.rerun()
         except Exception as e:
             st.error(f"生成失败：{e}")
 
@@ -435,6 +444,16 @@ with tab_recommend:
     ]
     _selected_label = st.selectbox("选择志愿", _vol_labels, index=0, label_visibility="collapsed")
     _selected_idx = _vol_labels.index(_selected_label)
+    _explain_key = f"explain_{_selected_idx}"
+
+    # show stored explanation for the currently selected volunteer
+    if _explain_key in st.session_state:
+        with st.chat_message("assistant"):
+            st.write(st.session_state[_explain_key])
+        if st.button("清除解释", key="clear_explain"):
+            del st.session_state[_explain_key]
+            st.rerun()
+
     if st.button("生成解释", key="explain_single"):
         if not _effective_api_key:
             st.warning("请在左侧填入百炼 API Key")
@@ -448,10 +467,12 @@ with tab_recommend:
                     "preferred_cities": preferred_cities,
                 }
                 with st.chat_message("assistant"):
-                    st.write_stream(explain_volunteer(
+                    result = st.write_stream(explain_volunteer(
                         _volunteers[_selected_idx], _llm_profile,
                         api_key=_effective_api_key,
                     ))
+                st.session_state[_explain_key] = result
+                st.rerun()
             except Exception as e:
                 st.error(f"生成失败：{e}")
 
