@@ -6,7 +6,7 @@ from openai import OpenAI
 
 from app.config import config
 
-MODEL = "qwen3-235b-a22b"
+MODEL = "qwen3.7-max"
 
 
 def get_client(api_key: str | None = None) -> OpenAI:
