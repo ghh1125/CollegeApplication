@@ -113,8 +113,10 @@ def get_school_score(program: dict, preferred_schools: list) -> int:
 
     if program.get("is_985"):
         bonus = 10
-    elif program.get("is_211") or program.get("is_double_first_class"):
+    elif program.get("is_211"):
         bonus = 5
+    elif program.get("is_double_first_class"):
+        bonus = 2
     else:
         bonus = 0
 
