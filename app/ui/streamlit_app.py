@@ -157,6 +157,7 @@ def _dynamic_text_list(
 # ─── 预加载 + AI填报pending处理（必须在所有widget渲染前执行） ─────────────────
 
 _all_major_options = _load_major_options()
+_form_ready = bool(st.session_state.get("_form_ready", False))
 
 if "_pending_fill" in st.session_state:
     _pf = st.session_state.pop("_pending_fill")
@@ -181,108 +182,122 @@ with st.sidebar:
         "本工具概不承担任何责任。"
     )
 
-    st.divider()
-    st.header("📋 考生信息")
-    rank = st.number_input("全省位次", 1, 400_000, value=36_500, step=100, key="w_rank")
-    total_score = st.number_input("总分", 200, 750, value=626, step=1, key="w_total_score")
-    selected_subjects = st.multiselect(
-        "选考科目（选 3 门）", SUBJECT_ORDER,
-        default=[], max_selections=3,
-        key="w_subjects",
-    )
+    if _form_ready:
+        st.divider()
+        st.header("📋 考生信息")
+        rank = st.number_input("全省位次", 1, 400_000, value=36_500, step=100, key="w_rank")
+        total_score = st.number_input("总分", 200, 750, value=626, step=1, key="w_total_score")
+        selected_subjects = st.multiselect(
+            "选考科目（选 3 门）", SUBJECT_ORDER,
+            default=[], max_selections=3,
+            key="w_subjects",
+        )
 
-    st.divider()
-    st.header("推荐策略")
-    main_priority = st.selectbox("主排序", ["专业优先", "学校优先"], index=0, key="w_main_priority")
+        st.divider()
+        st.header("推荐策略")
+        main_priority = st.selectbox("主排序", ["专业优先", "学校优先"], index=0, key="w_main_priority")
 
-    if main_priority == "专业优先":
-        major_options = _all_major_options
-        selected_majors_from_list = st.multiselect(
-            "想报的专业",
-            options=major_options,
+        if main_priority == "专业优先":
+            major_options = _all_major_options
+            selected_majors_from_list = st.multiselect(
+                "想报的专业",
+                options=major_options,
+                default=[],
+                placeholder='搜索专业名，如"计算机"…',
+                key="w_majors_list",
+            )
+            preferred_major_input = selected_majors_from_list + _dynamic_text_list(
+                "手动补充关键词",
+                "preferred_majors",
+                "例如：人工智能",
+            )
+            limit_to_preferred_majors = st.checkbox(
+                "只看这些专业相关",
+                value=False,
+                disabled=not preferred_major_input,
+            )
+            excluded_major_input = _dynamic_text_list(
+                "不想读的专业",
+                "excluded_majors",
+                "例如：土木工程",
+            )
+        else:
+            preferred_major_input = []
+            limit_to_preferred_majors = False
+            excluded_major_input = []
+
+        city_first = st.checkbox("同层级内城市优先", value=True)
+        risk_preference = st.selectbox("风险偏好", ["激进", "均衡", "保守"], index=1, key="w_risk")
+        volunteer_total = st.number_input("志愿数量", 1, 80, 80, step=1)
+
+        st.divider()
+        st.header("🏫 学校层次")
+        school_levels = st.multiselect(
+            "只看这些层次（不选 = 不限）",
+            ["985", "211", "双一流"],
             default=[],
-            placeholder='搜索专业名，如"计算机"…',
-            key="w_majors_list",
         )
-        preferred_major_input = selected_majors_from_list + _dynamic_text_list(
-            "手动补充关键词",
-            "preferred_majors",
-            "例如：人工智能",
+        preferred_schools_raw = st.text_input(
+            "偏好学校（推荐排序）",
+            value="", placeholder="浙江大学, 上海交通大学",
         )
-        limit_to_preferred_majors = st.checkbox(
-            "只看这些专业相关",
+
+        st.divider()
+        st.header("📍 城市 / 地区")
+        _province_city_map = _load_province_city_map()
+        _all_provinces = sorted(_province_city_map.keys())
+        _selected_provinces = st.multiselect(
+            "选省份",
+            options=_all_provinces,
+            default=[],
+            placeholder="搜索省份…",
+            key="w_provinces",
+        )
+        _city_options = sorted({
+            city
+            for prov in (_selected_provinces or _all_provinces)
+            for city in _province_city_map.get(prov, [])
+        })
+        preferred_cities_input = st.multiselect(
+            "选城市",
+            options=_city_options,
+            default=[],
+            placeholder="搜索城市…" if _selected_provinces else "请先选省份，或直接搜索全部城市",
+            key="w_cities",
+        )
+        limit_to_preferred_cities = st.checkbox(
+            "只看这些城市",
             value=False,
-            disabled=not preferred_major_input,
+            disabled=not preferred_cities_input,
         )
-        excluded_major_input = _dynamic_text_list(
-            "不想读的专业",
-            "excluded_majors",
-            "例如：土木工程",
-        )
+        st.caption("不勾选时，这些城市只影响推荐排序；勾选后会过滤候选池")
+        _ALL_PROVINCES = [
+            "北京", "天津", "上海", "重庆",
+            "河北", "山西", "内蒙古", "辽宁", "吉林", "黑龙江",
+            "江苏", "浙江", "安徽", "福建", "江西", "山东",
+            "河南", "湖北", "湖南", "广东", "广西", "海南",
+            "四川", "贵州", "云南", "西藏", "陕西", "甘肃", "青海", "宁夏", "新疆",
+        ]
+        excluded_regions = st.multiselect("排除省份", _ALL_PROVINCES)
+
+        st.divider()
+        st.header("🚫 其他约束")
+        accept_sino_foreign = st.checkbox("接受中外合作专业", value=False)
+        accept_private = st.checkbox("接受民办学校", value=True)
+        excluded_schools_raw = st.text_input("排除学校（精确名）", value="")
     else:
-        preferred_major_input = []
-        limit_to_preferred_majors = False
-        excluded_major_input = []
+        st.divider()
+        st.info("完成右侧 AI 对话后，参数将在此处显示供你核对和修改。")
 
-    city_first = st.checkbox("同层级内城市优先", value=True)
-    risk_preference = st.selectbox("风险偏好", ["激进", "均衡", "保守"], index=1, key="w_risk")
-    volunteer_total = st.number_input("志愿数量", 1, 80, 80, step=1)
-
-    st.divider()
-    st.header("🏫 学校层次")
-    school_levels = st.multiselect(
-        "只看这些层次（不选 = 不限）",
-        ["985", "211", "双一流"],
-        default=[],
-    )
-    preferred_schools_raw = st.text_input(
-        "偏好学校（推荐排序）",
-        value="", placeholder="浙江大学, 上海交通大学",
-    )
-
-    st.divider()
-    st.header("📍 城市 / 地区")
-    _province_city_map = _load_province_city_map()
-    _all_provinces = sorted(_province_city_map.keys())
-    _selected_provinces = st.multiselect(
-        "选省份",
-        options=_all_provinces,
-        default=[],
-        placeholder="搜索省份…",
-        key="w_provinces",
-    )
-    _city_options = sorted({
-        city
-        for prov in (_selected_provinces or _all_provinces)
-        for city in _province_city_map.get(prov, [])
-    })
-    preferred_cities_input = st.multiselect(
-        "选城市",
-        options=_city_options,
-        default=[],
-        placeholder="搜索城市…" if _selected_provinces else "请先选省份，或直接搜索全部城市",
-        key="w_cities",
-    )
-    limit_to_preferred_cities = st.checkbox(
-        "只看这些城市",
-        value=False,
-        disabled=not preferred_cities_input,
-    )
-    st.caption("不勾选时，这些城市只影响推荐排序；勾选后会过滤候选池")
-    _ALL_PROVINCES = [
-        "北京", "天津", "上海", "重庆",
-        "河北", "山西", "内蒙古", "辽宁", "吉林", "黑龙江",
-        "江苏", "浙江", "安徽", "福建", "江西", "山东",
-        "河南", "湖北", "湖南", "广东", "广西", "海南",
-        "四川", "贵州", "云南", "西藏", "陕西", "甘肃", "青海", "宁夏", "新疆",
-    ]
-    excluded_regions = st.multiselect("排除省份", _ALL_PROVINCES)
-
-    st.divider()
-    st.header("🚫 其他约束")
-    accept_sino_foreign = st.checkbox("接受中外合作专业", value=False)
-    accept_private = st.checkbox("接受民办学校", value=True)
-    excluded_schools_raw = st.text_input("排除学校（精确名）", value="")
+# 表单未就绪时提供后备变量，供对话框的 _profile_ctx 使用
+if not _form_ready:
+    rank = st.session_state.get("w_rank", 1)
+    total_score = st.session_state.get("w_total_score", 600)
+    selected_subjects = st.session_state.get("w_subjects", [])
+    main_priority = st.session_state.get("w_main_priority", "专业优先")
+    risk_preference = st.session_state.get("w_risk", "均衡")
+    preferred_majors: list[str] = []
+    preferred_cities: list[str] = []
 
 # ─── AI 对话顾问 ──────────────────────────────────────────────────────────────
 
@@ -336,6 +351,7 @@ with st.expander("💬 AI 对话顾问", expanded=True):
         st.session_state.pop("ai_parsed", None)
         st.session_state.pop("_advisor_ctx", None)
         st.session_state.pop("_advisor_intro_sent", None)
+        st.session_state.pop("_form_ready", None)
         st.session_state["_ai_input_n"] = _input_n + 1
         st.rerun()
 
@@ -423,6 +439,7 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                         _city_to_prov[c] for c in _valid_cities if c in _city_to_prov
                     ))
             st.session_state["_pending_fill"] = _fill
+            st.session_state["_form_ready"] = True
             st.session_state.pop("ai_parsed", None)
             # Auto-post user confirmation + 小志 handoff
             st.session_state["ai_chat"].append({"role": "user", "content": "同意，参数已确认"})
@@ -439,6 +456,10 @@ with st.expander("💬 AI 对话顾问", expanded=True):
             })
             st.session_state["_advisor_intro_sent"] = True
             st.rerun()
+
+# 表单未就绪时在此停止，不渲染后续推荐内容
+if not _form_ready:
+    st.stop()
 
 # ─── 校验 ────────────────────────────────────────────────────────────────────
 
