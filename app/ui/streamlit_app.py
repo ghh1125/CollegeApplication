@@ -479,8 +479,11 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                 _fill["w_total_score"] = max(200, min(750, int(_p["total_score"])))
             if _p.get("selected_subjects"):
                 _fill["w_subjects"] = [s for s in _p["selected_subjects"] if s in SUBJECT_ORDER][:3]
-            if _p.get("main_priority") in ["专业优先", "学校优先"]:
-                _fill["w_main_priority"] = _p["main_priority"]
+            _mp = _p.get("main_priority")
+            if _mp == "专业优先" and not _p.get("preferred_majors"):
+                _mp = "学校优先"
+            if _mp in ["专业优先", "学校优先"]:
+                _fill["w_main_priority"] = _mp
             if _p.get("risk_preference") in ["激进", "均衡", "保守"]:
                 _fill["w_risk"] = _p["risk_preference"]
             if _p.get("preferred_majors"):
@@ -491,9 +494,9 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                     else:
                         _matched.extend(o for o in _all_major_options if _kw in o)
                 _fill["w_majors_list"] = list(dict.fromkeys(_matched))
-                if _fill["w_majors_list"] and "w_main_priority" not in _fill:
-                    _fill["w_main_priority"] = "专业优先"
                 if _fill["w_majors_list"]:
+                    if "w_main_priority" not in _fill:
+                        _fill["w_main_priority"] = "专业优先"
                     _fill["w_limit_majors"] = True
             if _p.get("preferred_cities"):
                 _prov_map = _load_province_city_map()
