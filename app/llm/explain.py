@@ -74,7 +74,7 @@ def explain_volunteer(volunteer: dict, profile: dict, api_key: str | None = None
     )
     warnings = "  ".join(volunteer.get("_warnings") or [])
 
-    prompt = f"""你是高考志愿规划助手，请用简洁的中文（100字以内）解释为什么推荐以下志愿，并指出风险点。
+    prompt = f"""你是高考志愿规划助手，请用简洁的中文解释为什么推荐以下志愿。
 
 【考生信息】
 - 全省位次：{profile.get("rank")}
@@ -91,11 +91,11 @@ def explain_volunteer(volunteer: dict, profile: dict, api_key: str | None = None
 - 软科排名：{volunteer.get("ruanke_rank") or "未上榜"}
 - 预警：{warnings or "无"}
 
-请按以下结构输出（不要加标题）：
-第一句：层级判断依据（用位次数字说话）
-第二句：历史趋势是否稳定
-第三句：与考生偏好的匹配程度
-第四句（如有风险）：风险提示"""
+请按以下结构输出4句话（不加标题、不加序号）：
+第1句：录取概率判断——用位次数字直接说（如"均值位次X，考生位次Y，gap Z，属于冲/稳/保"）
+第2句：就业倒推——该专业中等毕业生（非顶尖）典型去向和薪资区间是什么，不说"前景不错"等模糊话
+第3句：历史趋势——近年位次是涨是跌还是稳定，数据充足还是不足
+第4句：风险或匹配点——如有预警/数据不足/与偏好不符则点出，否则说与考生偏好的匹配之处"""
 
     return _stream([{"role": "user", "content": prompt}], api_key=api_key)
 
