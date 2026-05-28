@@ -180,7 +180,7 @@ with st.sidebar:
     total_score = st.number_input("总分", 200, 750, value=626, step=1, key="w_total_score")
     selected_subjects = st.multiselect(
         "选考科目（选 3 门）", SUBJECT_ORDER,
-        default=["物理", "化学", "生物"], max_selections=3,
+        default=[], max_selections=3,
         key="w_subjects",
     )
 
@@ -277,7 +277,7 @@ with st.sidebar:
     accept_private = st.checkbox("接受民办学校", value=True)
     excluded_schools_raw = st.text_input("排除学校（精确名）", value="")
 
-# ─── AI 智能填报助手 ──────────────────────────────────────────────────────────
+# ─── AI 对话顾问 ──────────────────────────────────────────────────────────────
 
 def _parse_json_from_text(text: str) -> dict | None:
     match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
@@ -289,22 +289,22 @@ def _parse_json_from_text(text: str) -> dict | None:
     return None
 
 
-_chat_open = not bool(st.session_state.get("ai_chat"))
-with st.expander("🤖 AI 智能填报助手", expanded=_chat_open):
-    if "ai_chat" not in st.session_state:
-        st.session_state["ai_chat"] = []
+_XIAOYU_WELCOME = (
+    "你好！我是**小芸**，你的志愿填报助手 👋\n\n"
+    "我来帮你把左侧的参数表单填好，只需告诉我：\n"
+    "1. 你的**全省位次**是多少？\n"
+    "2. 选了哪**三门**选考科目？\n"
+    "3. 有没有偏好的**专业**或**城市**？\n\n"
+    "直接用自然语言说就好，例如：位次8000，选了物理化学生物，想学计算机，偏好北京"
+)
 
-    _chat_container = st.container(height=320)
+if "ai_chat" not in st.session_state:
+    st.session_state["ai_chat"] = [{"role": "assistant", "content": _XIAOYU_WELCOME}]
+
+_has_inject = "_ai_inject" in st.session_state
+with st.expander("💬 AI 对话顾问", expanded=True):
+    _chat_container = st.container(height=340)
     with _chat_container:
-        if not st.session_state["ai_chat"]:
-            st.info(
-                "**我是小智，你的高考志愿填报助手** 👋\n\n"
-                "我会通过几个问题帮你填写左侧参数表单，你只需要用自然语言告诉我：\n"
-                "- 你的全省位次是多少？\n"
-                "- 选了哪三门选考科目？\n"
-                "- 有没有偏好的专业或城市？\n\n"
-                "直接在下方输入框开始聊天吧！"
-            )
         for _m in st.session_state["ai_chat"]:
             with st.chat_message(_m["role"]):
                 st.write(_m["content"])
@@ -315,7 +315,7 @@ with st.expander("🤖 AI 智能填报助手", expanded=_chat_open):
         _user_msg = st.text_input(
             "输入",
             key=f"_ai_msg_{_input_n}",
-            placeholder="例如：我位次8000，选了物理化学生物，想学计算机，偏好北京上海…",
+            placeholder="直接输入你的情况或问题…",
             label_visibility="collapsed",
         )
     with _c2:
@@ -324,23 +324,44 @@ with st.expander("🤖 AI 智能填报助手", expanded=_chat_open):
         _clear_chat = st.button("清除", use_container_width=True, key="ai_clear")
 
     if _clear_chat:
-        st.session_state["ai_chat"] = []
+        st.session_state["ai_chat"] = [{"role": "assistant", "content": _XIAOYU_WELCOME}]
         st.session_state.pop("ai_parsed", None)
+        st.session_state.pop("_advisor_ctx", None)
+        st.session_state.pop("_advisor_intro_sent", None)
         st.session_state["_ai_input_n"] = _input_n + 1
         st.rerun()
 
-    if _send and _user_msg.strip():
+    # Inject takes priority over user input (report/explain buttons set this)
+    _msg_to_send = None
+    if _has_inject:
+        _msg_to_send = st.session_state.pop("_ai_inject")
+    elif _send and _user_msg.strip():
+        _msg_to_send = _user_msg.strip()
+        st.session_state["_ai_input_n"] = _input_n + 1
+
+    if _msg_to_send:
         if not _effective_api_key:
-            st.warning("请在左侧填入百炼 API Key 才能使用 AI 助手")
+            st.warning("请在左侧填入百炼 API Key 才能使用 AI 功能")
         else:
-            from app.llm.explain import chat_extract_profile
-            _msg_content = _user_msg.strip()
-            st.session_state["ai_chat"].append({"role": "user", "content": _msg_content})
-            st.session_state["_ai_input_n"] = _input_n + 1
+            from app.llm.explain import chat_with_advisor
+            _profile_ctx = {
+                "rank": int(rank),
+                "selected_subjects": selected_subjects,
+                "preferred_majors": [],
+                "preferred_cities": [],
+                "main_priority": main_priority,
+                "risk_preference": risk_preference,
+            }
+            st.session_state["ai_chat"].append({"role": "user", "content": _msg_to_send})
             with _chat_container:
                 with st.chat_message("assistant"):
                     _response = st.write_stream(
-                        chat_extract_profile(st.session_state["ai_chat"], api_key=_effective_api_key)
+                        chat_with_advisor(
+                            st.session_state["ai_chat"],
+                            profile_ctx=_profile_ctx,
+                            recommendation_ctx=st.session_state.get("_advisor_ctx"),
+                            api_key=_effective_api_key,
+                        )
                     )
             st.session_state["ai_chat"].append({"role": "assistant", "content": _response})
             _parsed = _parse_json_from_text(_response)
@@ -351,7 +372,7 @@ with st.expander("🤖 AI 智能填报助手", expanded=_chat_open):
     if "ai_parsed" in st.session_state:
         _p = st.session_state["ai_parsed"]
         st.divider()
-        st.markdown("**提取到的参数：**")
+        st.markdown("**小芸提取到的参数，确认后填入表单：**")
         _pc1, _pc2 = st.columns(2)
         with _pc1:
             st.write(f"位次：**{_p.get('rank', '—')}**")
@@ -395,12 +416,16 @@ with st.expander("🤖 AI 智能填报助手", expanded=_chat_open):
                         _city_to_prov[c] for c in _valid_cities if c in _city_to_prov
                     ))
             st.session_state["_pending_fill"] = _fill
+            st.session_state.pop("ai_parsed", None)
             st.rerun()
 
 # ─── 校验 ────────────────────────────────────────────────────────────────────
 
 if len(selected_subjects) != 3:
-    st.warning(f"请选择恰好 3 门选考科目（当前 {len(selected_subjects)} 门）")
+    st.info(
+        f"请选择恰好 3 门选考科目（当前 {len(selected_subjects)} 门）\n\n"
+        "可以在上方 **AI 对话顾问** 中用自然语言告诉小芸你的情况，她会帮你自动填写。"
+    )
     st.stop()
 
 preferred_cities = preferred_cities_input
@@ -481,6 +506,22 @@ with st.spinner("生成推荐志愿…"):
         total=int(volunteer_total),
     )
 
+# Store context for AI advisor; inject 小志 handoff on first generation
+_first_recommendation = "_advisor_ctx" not in st.session_state
+st.session_state["_advisor_ctx"] = recommendation
+if _first_recommendation and not st.session_state.get("_advisor_intro_sent"):
+    st.session_state["_advisor_intro_sent"] = True
+    _xiozhi_intro = (
+        "志愿表出来了，我来接手 📊 我是**小志**，志愿顾问。\n\n"
+        "你可以：\n"
+        "- 点下方「**在对话中生成报告**」，我来分析整体冲稳保方案\n"
+        "- 选中某条志愿后点「**解释此条**」，我来深度解析这条志愿\n"
+        "- 直接问我任何问题，比如：这几个学校就业怎么样？能不能更激进一点？\n\n"
+        "有问题随时说！"
+    )
+    st.session_state["ai_chat"].append({"role": "assistant", "content": _xiozhi_intro})
+    st.rerun()
+
 # ─── 漏斗指标 ────────────────────────────────────────────────────────────────
 
 total_raw = len(eligible) + len(excl_subj)
@@ -505,37 +546,14 @@ stat_cols[3].metric("保", f"{stats['保']:,}")
 stat_cols[4].metric("垫", f"{stats['垫']:,}")
 stat_cols[5].metric("备选池", f"{stats['备选池']:,}")
 
-# ─── LLM 总体报告 ────────────────────────────────────────────────────────────
-
-if "overall_report" in st.session_state:
-    with st.chat_message("assistant"):
-        st.write(st.session_state["overall_report"])
-    if st.button("清除报告", key="clear_report"):
-        del st.session_state["overall_report"]
-        st.rerun()
-
-if st.button("生成总体报告", type="primary"):
+if st.button("📊 在对话中生成报告", type="primary"):
     if not _effective_api_key:
         st.warning("请在左侧填入百炼 API Key")
     else:
-        try:
-            from app.llm.explain import generate_overall_report
-            _llm_profile = {
-                "rank": int(rank),
-                "selected_subjects": selected_subjects,
-                "preferred_majors": preferred_majors,
-                "preferred_cities": preferred_cities,
-                "risk_preference": risk_preference,
-            }
-            with st.chat_message("assistant"):
-                result = st.write_stream(generate_overall_report(
-                    recommendation["volunteers"], stats, _llm_profile,
-                    api_key=_effective_api_key,
-                ))
-            st.session_state["overall_report"] = result
-            st.rerun()
-        except Exception as e:
-            st.error(f"生成失败：{e}")
+        st.session_state["_ai_inject"] = (
+            "请生成一份总体分析报告：评价冲稳保比例是否合理，指出亮点和主要风险点，给出1-2条具体建议。"
+        )
+        st.rerun()
 
 search = st.text_input("🔍 搜索", placeholder="搜索学校或专业…")
 recommend_df = _recommendation_df(recommendation["volunteers"])
@@ -578,37 +596,20 @@ with tab_recommend:
     ]
     _selected_label = st.selectbox("选择志愿", _vol_labels, index=0, label_visibility="collapsed")
     _selected_idx = _vol_labels.index(_selected_label)
-    _explain_key = f"explain_{_selected_idx}"
 
-    # show stored explanation for the currently selected volunteer
-    if _explain_key in st.session_state:
-        with st.chat_message("assistant"):
-            st.write(st.session_state[_explain_key])
-        if st.button("清除解释", key="clear_explain"):
-            del st.session_state[_explain_key]
-            st.rerun()
-
-    if st.button("生成解释", key="explain_single"):
+    if st.button("💬 解释此条", key="explain_single"):
         if not _effective_api_key:
             st.warning("请在左侧填入百炼 API Key")
         else:
-            try:
-                from app.llm.explain import explain_volunteer
-                _llm_profile = {
-                    "rank": int(rank),
-                    "selected_subjects": selected_subjects,
-                    "preferred_majors": preferred_majors,
-                    "preferred_cities": preferred_cities,
-                }
-                with st.chat_message("assistant"):
-                    result = st.write_stream(explain_volunteer(
-                        _volunteers[_selected_idx], _llm_profile,
-                        api_key=_effective_api_key,
-                    ))
-                st.session_state[_explain_key] = result
-                st.rerun()
-            except Exception as e:
-                st.error(f"生成失败：{e}")
+            _v = _volunteers[_selected_idx]
+            _gi = _v.get("gap_info") or {}
+            st.session_state["_ai_inject"] = (
+                f"请详细解释第{_v.get('volunteer_no')}条志愿：{_v.get('school_name')}·{_v.get('major_name')}，"
+                f"层级{_gi.get('tier', '未知')}，均值位次{_gi.get('weighted_avg', '—')}，"
+                f"gap{_gi.get('gap', '—')}，城市{_v.get('school_city', '未知')}。"
+                f"请分析：推荐理由、历史稳定性、风险点。"
+            )
+            st.rerun()
 
 with tab_candidates:
     warn_cnt = sum(1 for p in final if p.get("_warnings"))

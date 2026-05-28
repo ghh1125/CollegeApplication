@@ -77,42 +77,90 @@ def explain_volunteer(volunteer: dict, profile: dict, api_key: str | None = None
 
 # ─── 对话式填报 ────────────────────────────────────────────────────────────────
 
-_CHAT_SYSTEM = """\
-你是高考志愿填报助手小智。通过多轮对话收集考生信息，最终输出结构化参数。
+def _build_advisor_system(
+    profile_ctx: dict | None = None,
+    recommendation_ctx: dict | None = None,
+) -> str:
+    # Two personas: 小芸 for profile fill, 小志 for recommendation analysis
+    if recommendation_ctx:
+        name, role = "小志", "志愿顾问"
+        task = "解读推荐志愿，分析冲稳保策略，给出调整建议，回答专业/学校问题"
+    else:
+        name, role = "小芸", "填报助手"
+        task = "通过对话收集考生信息，在回复末尾输出JSON供表单自动填写"
 
-需要收集的信息：
-- rank: 全省位次（整数，必填）
-- total_score: 总分（整数，可选）
-- selected_subjects: 选考科目，从[物理,化学,生物,历史,地理,思想政治,技术]选3个（必填）
-- preferred_majors: 偏好专业关键词列表（可为空列表）
-- preferred_cities: 偏好城市列表（可为空列表）
-- main_priority: "专业优先" 或 "学校优先"（必填）
-- risk_preference: "激进"、"均衡" 或 "保守"（必填）
+    lines = [
+        f"你叫{name}，角色是{role}，当前核心任务：{task}。",
+        "整个对话中只有你一个AI，始终以这个角色回复。",
+        "",
+    ]
 
-对话规则：
-1. 第一条消息是系统触发的"开始"，你要做自我介绍并引导用户，不要把这条当作用户消息
-2. 先收集：位次、选考科目（最重要）
-3. 再收集：偏好专业、城市（可跳过）
-4. 最后确认：风险偏好（默认均衡）
-5. 当必填信息齐全后，在回复末尾输出JSON代码块：
-```json
-{"rank": 36500, "total_score": 626, "selected_subjects": ["物理","化学","生物"], "preferred_majors": ["计算机"], "preferred_cities": ["北京"], "main_priority": "专业优先", "risk_preference": "均衡"}
-```
-6. 输出JSON后，请告诉用户"请确认上方参数是否正确，正确的话点击下方'确认填入表单'按钮即可"
-7. 用户说不对时，修正后重新输出完整JSON
+    if profile_ctx and profile_ctx.get("rank"):
+        lines += [
+            "【当前考生信息】",
+            f"- 全省位次：{profile_ctx.get('rank')}",
+            f"- 选考科目：{'、'.join(profile_ctx.get('selected_subjects') or [])}",
+            f"- 偏好专业：{'、'.join(profile_ctx.get('preferred_majors') or []) or '未指定'}",
+            f"- 偏好城市：{'、'.join(profile_ctx.get('preferred_cities') or []) or '未指定'}",
+            f"- 主排序：{profile_ctx.get('main_priority', '未设置')}",
+            f"- 风险偏好：{profile_ctx.get('risk_preference', '未设置')}",
+            "",
+        ]
+    else:
+        lines += [
+            "【当前状态】参数未填，引导用户提供：位次、选考科目（必填），偏好专业/城市/风险偏好（选填）",
+            "",
+        ]
 
-每次回复不超过120字（JSON不计入），语言亲切简洁\
-"""
+    if recommendation_ctx:
+        vols = recommendation_ctx.get("volunteers") or []
+        stats = recommendation_ctx.get("stats") or {}
+        lines += [
+            "【当前推荐志愿表】",
+            f"总计{stats.get('total', 0)}条  "
+            f"冲{stats.get('冲', 0)} 稳{stats.get('稳', 0)} 保{stats.get('保', 0)} 垫{stats.get('垫', 0)}",
+            "序 层级 学校·专业 均值位次 gap 城市",
+        ]
+        for v in vols:
+            gi = v.get("gap_info") or {}
+            lines.append(
+                f"{v.get('volunteer_no')}.[{gi.get('tier', '')}] "
+                f"{v.get('school_name')}·{v.get('major_name')} "
+                f"均值:{gi.get('weighted_avg', '—')} gap:{gi.get('gap', '—')} "
+                f"{v.get('school_city', '')}"
+            )
+        lines.append("")
+
+    lines += [
+        "【规则】",
+        "- 小芸收集完参数后在末尾输出JSON（小志不输出JSON）：",
+        '  ```json',
+        '  {"rank":..., "total_score":..., "selected_subjects":[...], "preferred_majors":[...], "preferred_cities":[...], "main_priority":"...", "risk_preference":"..."}',
+        '  ```',
+        "- 建议调整参数时，明确说明在左侧表单哪里修改",
+        "- 回答专业就业、学校排名等问题基于你的知识直接回答",
+        "- 回复控制在200字以内（列表/JSON不计入）",
+    ]
+
+    return "\n".join(lines)
 
 
-def chat_extract_profile(messages: list[dict], api_key: str | None = None):
+def chat_with_advisor(
+    messages: list[dict],
+    profile_ctx: dict | None = None,
+    recommendation_ctx: dict | None = None,
+    api_key: str | None = None,
+):
     """
-    Multi-turn conversation to extract a structured student profile.
-    Yields text chunks; final assistant turn ends with a ```json ... ``` block.
-    messages: list of {role, content} dicts (no system message — added here).
+    Unified advisor chat: handles profile fill, recommendation analysis,
+    and open-ended Q&A about schools/majors in a single conversation.
+
+    messages: list of {role, content} — no system message (added here).
+    profile_ctx: current sidebar form values.
+    recommendation_ctx: full recommendation dict from build_recommendations().
     """
-    full_messages = [{"role": "system", "content": _CHAT_SYSTEM}] + messages
-    return _stream(full_messages, api_key=api_key)
+    system = _build_advisor_system(profile_ctx, recommendation_ctx)
+    return _stream([{"role": "system", "content": system}] + messages, api_key=api_key)
 
 
 # ─── 总体报告 ──────────────────────────────────────────────────────────────────
