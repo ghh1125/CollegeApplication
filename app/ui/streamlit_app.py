@@ -155,6 +155,16 @@ def _dynamic_text_list(
 # ─── 侧边栏 ──────────────────────────────────────────────────────────────────
 
 with st.sidebar:
+    st.header("🔑 AI 设置")
+    _user_api_key = st.text_input(
+        "百炼 API Key（可选，用于生成解释）",
+        type="password",
+        placeholder="sk-...",
+        help="填入后才能使用 AI 解释功能。Key 仅在本次会话中使用，不会保存。",
+    )
+    _effective_api_key = _user_api_key.strip() or None
+
+    st.divider()
     st.header("📋 考生信息")
     rank = st.number_input("全省位次", 1, 400_000, 36_500, step=100)
     total_score = st.number_input("总分", 200, 750, 626, step=1)
@@ -361,6 +371,29 @@ stat_cols[3].metric("保", f"{stats['保']:,}")
 stat_cols[4].metric("垫", f"{stats['垫']:,}")
 stat_cols[5].metric("备选池", f"{stats['备选池']:,}")
 
+# ─── LLM 总体报告 ────────────────────────────────────────────────────────────
+
+if st.button("生成总体报告", type="primary"):
+    if not _effective_api_key:
+        st.warning("请在左侧填入百炼 API Key")
+    else:
+        try:
+            from app.llm.explain import generate_overall_report
+            _llm_profile = {
+                "rank": int(rank),
+                "selected_subjects": selected_subjects,
+                "preferred_majors": preferred_majors,
+                "preferred_cities": preferred_cities,
+                "risk_preference": risk_preference,
+            }
+            with st.chat_message("assistant"):
+                st.write_stream(generate_overall_report(
+                    recommendation["volunteers"], stats, _llm_profile,
+                    api_key=_effective_api_key,
+                ))
+        except Exception as e:
+            st.error(f"生成失败：{e}")
+
 search = st.text_input("🔍 搜索", placeholder="搜索学校或专业…")
 recommend_df = _recommendation_df(recommendation["volunteers"])
 candidate_df = _to_df(final)
@@ -392,6 +425,35 @@ with tab_recommend:
             "⚠":        st.column_config.TextColumn(width="medium"),
         },
     )
+
+    st.divider()
+    st.markdown("**单条志愿解释**")
+    _volunteers = recommendation["volunteers"]
+    _vol_labels = [
+        f"{v.get('volunteer_no')}. {v.get('school_name')} · {v.get('major_name')}"
+        for v in _volunteers
+    ]
+    _selected_label = st.selectbox("选择志愿", _vol_labels, index=0, label_visibility="collapsed")
+    _selected_idx = _vol_labels.index(_selected_label)
+    if st.button("生成解释", key="explain_single"):
+        if not _effective_api_key:
+            st.warning("请在左侧填入百炼 API Key")
+        else:
+            try:
+                from app.llm.explain import explain_volunteer
+                _llm_profile = {
+                    "rank": int(rank),
+                    "selected_subjects": selected_subjects,
+                    "preferred_majors": preferred_majors,
+                    "preferred_cities": preferred_cities,
+                }
+                with st.chat_message("assistant"):
+                    st.write_stream(explain_volunteer(
+                        _volunteers[_selected_idx], _llm_profile,
+                        api_key=_effective_api_key,
+                    ))
+            except Exception as e:
+                st.error(f"生成失败：{e}")
 
 with tab_candidates:
     warn_cnt = sum(1 for p in final if p.get("_warnings"))

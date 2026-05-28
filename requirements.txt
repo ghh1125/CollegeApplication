@@ -1,4 +1,5 @@
 streamlit>=1.57
+openai>=1.0
 pandas
 pydantic>=2
 pydantic-settings
