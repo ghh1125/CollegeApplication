@@ -57,7 +57,7 @@ def _stream(messages: list[dict], api_key: str | None = None):
 
 # ─── 单条志愿解释 ──────────────────────────────────────────────────────────────
 
-def explain_volunteer(volunteer: dict, profile: dict, api_key: str | None = None):
+def explain_volunteer(volunteer: dict, profile: dict, search_results: list[str] | None = None, api_key: str | None = None):
     """
     Generate a plain-language explanation for a single recommended program.
 
@@ -73,6 +73,10 @@ def explain_volunteer(volunteer: dict, profile: dict, api_key: str | None = None
         if h.get("min_rank")
     )
     warnings = "  ".join(volunteer.get("_warnings") or [])
+
+    search_block = ""
+    if search_results:
+        search_block = "\n【就业参考数据（优先引用，不编造）】\n" + "\n".join(f"- {r}" for r in search_results) + "\n"
 
     prompt = f"""你是高考志愿规划助手，请用简洁的中文解释为什么推荐以下志愿。
 
@@ -90,12 +94,14 @@ def explain_volunteer(volunteer: dict, profile: dict, api_key: str | None = None
 - 加权均值位次：{gap.get("weighted_avg")}，与考生位次差：{gap.get("gap")}
 - 软科排名：{volunteer.get("ruanke_rank") or "未上榜"}
 - 预警：{warnings or "无"}
+{search_block}
+【禁止输出的词】：前景不错、就业面广、高度契合、相对稳定、值得关注、综合来看
 
-请按以下结构输出4句话（不加标题、不加序号）：
-第1句：录取概率判断——用位次数字直接说（如"均值位次X，考生位次Y，gap Z，属于冲/稳/保"）
-第2句：就业倒推——该专业中等毕业生（非顶尖）典型去向和薪资区间是什么，不说"前景不错"等模糊话
-第3句：历史趋势——近年位次是涨是跌还是稳定，数据充足还是不足
-第4句：风险或匹配点——如有预警/数据不足/与偏好不符则点出，否则说与考生偏好的匹配之处"""
+请输出4句话（不加标题、不加序号）：
+第1句：录取概率——均值位次X考生位次Y gap Z 属于冲/稳/保，直接说数字
+第2句：就业倒推——优先引用上方搜索数据说去向和薪资；无数据则写"就业数据待查"，不编造数字
+第3句：历史趋势——直接引用历史位次数字说涨跌，若只有1年数据则说参考价值有限
+第4句：风险或匹配——有预警则点出，无预警则说与考生选科/偏好的契合情况"""
 
     return _stream([{"role": "user", "content": prompt}], api_key=api_key)
 
@@ -212,11 +218,10 @@ def generate_overall_report(
     volunteers: list[dict],
     stats: dict,
     profile: dict,
+    search_results: list[str] | None = None,
     api_key: str | None = None,
 ):
-    """
-    Generate an overall analysis report for the entire 80-volunteer list.
-    """
+    """Generate an overall analysis report for the entire volunteer list."""
     # Summarize tier distribution
     tier_detail: dict[str, list[str]] = {}
     for v in volunteers:
@@ -245,19 +250,19 @@ def generate_overall_report(
         if names
     )
 
-    prompt = f"""你是高考志愿规划助手，请用300字以内对以下志愿表做总体分析，语言简洁，给家长看。
+    search_block = ""
+    if search_results:
+        search_block = "\n【主要专业就业参考数据（优先引用，不编造）】\n" + "\n".join(f"- {r}" for r in search_results) + "\n"
+
+    prompt = f"""你是高考志愿规划助手，给家长看这份{stats.get("total")}个志愿的分析报告。语言直接，不说废话。
 
 【考生信息】
-- 全省位次：{profile.get("rank")}
+- 全省位次：{profile.get("rank")}  风险偏好：{profile.get("risk_preference", "均衡")}
 - 选考科目：{"、".join(profile.get("selected_subjects", []))}
-- 偏好专业：{"、".join(profile.get("preferred_majors", [])) or "未指定"}
-- 偏好城市：{"、".join(profile.get("preferred_cities", [])) or "未指定"}
-- 风险偏好：{profile.get("risk_preference", "均衡")}
 
 【志愿统计】
-- 总计：{stats.get("total")}个志愿
-- 冲：{stats.get("冲")}  稳：{stats.get("稳")}  保：{stats.get("保")}  垫：{stats.get("垫")}
-- 数据不足：{no_history_count}个  需核对：{warning_count}个
+- 冲{stats.get("冲")} 稳{stats.get("稳")} 保{stats.get("保")} 垫{stats.get("垫")}
+- 数据不足：{no_history_count}个  有预警：{warning_count}个
 
 【层级明细】
 {tier_summary}
@@ -267,11 +272,13 @@ def generate_overall_report(
 
 【学校分布Top5】
 {", ".join(f"{s}({n}个)" for s, n in top_schools)}
+{search_block}
+【禁止输出的词】：比例合理、高度聚焦、利于发展、整体来看、综合考量、值得注意
 
-请输出：
-1. 整体评价（冲稳保比例是否合理，一句话结论）
-2. 亮点（最匹配考生偏好的部分）
-3. 风险提示（需要家长特别注意的地方）
-4. 建议（1-2条行动建议）"""
+请直接分4段输出（不加标题序号）：
+第1段：一句话点出这份志愿表最关键的问题或优势，用具体数字（冲稳保垫各几条）
+第2段：主要专业方向的就业实际情况——优先引用搜索数据，说普通毕业生去哪、挣多少；无数据则写"就业数据待查"
+第3段：最需要家长注意的1-2个具体风险，点到具体志愿（如"第X条XXX"）
+第4段：1条最重要的可执行建议，说清楚做什么、在哪做"""
 
     return _stream([{"role": "user", "content": prompt}], api_key=api_key)

@@ -380,6 +380,17 @@ with st.expander("💬 AI 对话顾问", expanded=True):
             with _chat_container:
                 with st.chat_message("user"):
                     st.write(_fn_label)
+            if _fn_type == "explain_volunteer":
+                _major = _fn_inject["volunteer"].get("major_name", "")
+                with st.spinner(f"🔍 搜索 {_major} 就业数据…"):
+                    _fn_search = search_web(f"{_major} 就业去向 薪资 2025")
+            else:
+                from collections import Counter as _Counter
+                _top_major = (_Counter(
+                    v.get("major_name", "") for v in _fn_inject["volunteers"]
+                ).most_common(1) or [("", 0)])[0][0]
+                with st.spinner(f"🔍 搜索 {_top_major} 就业数据…"):
+                    _fn_search = search_web(f"{_top_major} 就业去向 薪资 2025") if _top_major else []
             with _chat_container:
                 with st.chat_message("assistant"):
                     if _fn_type == "explain_volunteer":
@@ -387,6 +398,7 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                             explain_volunteer(
                                 _fn_inject["volunteer"],
                                 _fn_inject["profile"],
+                                search_results=_fn_search,
                                 api_key=_effective_api_key,
                             )
                         )
@@ -396,6 +408,7 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                                 _fn_inject["volunteers"],
                                 _fn_inject["stats"],
                                 _fn_inject["profile"],
+                                search_results=_fn_search,
                                 api_key=_effective_api_key,
                             )
                         )
