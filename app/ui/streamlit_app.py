@@ -1,0 +1,428 @@
+"""Streamlit 志愿筛选界面。运行：streamlit run app/ui/streamlit_app.py"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+import pandas as pd
+import streamlit as st
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from app.models.profile import (
+    Constraints,
+    CityPreference,
+    MajorPreference,
+    Preferences,
+    SchoolPreference,
+    StudentProfile,
+)
+from app.pipeline.filter import (
+    resolve_school_city,
+    filter_by_city,
+    filter_by_constraints,
+    filter_by_major_keywords,
+    filter_by_school_level,
+    filter_by_subject,
+)
+from app.pipeline.recommend import build_recommendations, history_rank_columns
+from app.ui.form_helpers import normalize_items, split_major_preferences
+from app.db import get_conn
+
+
+# ─── 页面配置 ────────────────────────────────────────────────────────────────
+
+st.set_page_config(page_title="高考志愿筛选", page_icon="🎓", layout="wide")
+st.title("🎓 高考志愿筛选")
+
+# ─── 辅助 ────────────────────────────────────────────────────────────────────
+
+SUBJECT_ORDER = ["物理", "化学", "生物", "历史", "地理", "思想政治", "技术"]
+
+
+@st.cache_data(ttl=3600)
+def _load_major_options() -> list[str]:
+    """Load major names: standard catalog + all actual programs from admission_plan."""
+    with get_conn() as conn:
+        std = {r[0] for r in conn.execute("SELECT name FROM major_description").fetchall()}
+        actual = {r[0] for r in conn.execute("SELECT DISTINCT major_name FROM admission_plan").fetchall()}
+    return sorted(std | actual)
+
+
+@st.cache_data(ttl=3600)
+def _load_province_city_map() -> dict[str, list[str]]:
+    """Return {province: sorted list of cities} from school_master."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT province, city FROM school_master "
+            "WHERE province IS NOT NULL AND province != '' "
+            "AND city IS NOT NULL AND city != '' "
+            "ORDER BY province, city"
+        ).fetchall()
+    mapping: dict[str, list[str]] = {}
+    for province, city in rows:
+        mapping.setdefault(province, []).append(city)
+    return mapping
+
+
+def _fmt_req(req_json: str | None) -> str:
+    try:
+        req = json.loads(req_json or "{}")
+    except Exception:
+        return "不限"
+    t = req.get("type", "NONE")
+    subs = req.get("subjects", [])
+    if t == "NONE":      return "不限"
+    if t == "UNKNOWN":   return "❓"
+    if t == "ALL_REQUIRED": return " + ".join(subs) + "（均须）"
+    if t == "ANY_ONE":   return " / ".join(subs) + "（任一）"
+    return " / ".join(subs) or "自定义"
+
+
+def _to_df(programs: list[dict]) -> pd.DataFrame:
+    return pd.DataFrame([
+        {
+            "学校":      p.get("school_name", ""),
+            "城市":      resolve_school_city(p.get("school_name", "")),
+            "专业":      p.get("major_name", ""),
+            "选科要求":  _fmt_req(p.get("subject_requirement_json")),
+            "⚠":        "  ".join(p.get("_warnings") or []),
+        }
+        for p in programs
+    ])
+
+
+def _recommendation_df(programs: list[dict]) -> pd.DataFrame:
+    return pd.DataFrame([
+        {
+            "序号":      p.get("volunteer_no") or index,
+            "层级":      (p.get("gap_info") or {}).get("tier", ""),
+            "学校":      p.get("school_name", ""),
+            "城市":      p.get("school_city") or resolve_school_city(p.get("school_name", "")),
+            "专业":      p.get("major_name", ""),
+            **history_rank_columns(p),
+            "均值位次":  (p.get("gap_info") or {}).get("weighted_avg"),
+            "gap":       (p.get("gap_info") or {}).get("gap"),
+            "历史年数":  (p.get("gap_info") or {}).get("data_years"),
+            "选科要求":  _fmt_req(p.get("subject_requirement_json")),
+            "⚠":        "  ".join(p.get("_warnings") or []),
+        }
+        for index, p in enumerate(programs, start=1)
+    ])
+
+
+def _filter_df(df: pd.DataFrame, keyword: str) -> pd.DataFrame:
+    if not keyword:
+        return df
+    mask = df["学校"].str.contains(keyword, na=False) | df["专业"].str.contains(keyword, na=False)
+    return df[mask]
+
+
+def _dynamic_text_list(
+    label: str,
+    key: str,
+    placeholder: str,
+    defaults: list[str] | None = None,
+) -> list[str]:
+    count_key = f"{key}_count"
+    initial = defaults or [""]
+    if count_key not in st.session_state:
+        st.session_state[count_key] = max(1, len(initial))
+        for index, value in enumerate(initial):
+            st.session_state.setdefault(f"{key}_{index}", value)
+
+    st.markdown(f"**{label}**")
+    values = []
+    for index in range(st.session_state[count_key]):
+        values.append(
+            st.text_input(
+                f"{label}{index + 1}",
+                key=f"{key}_{index}",
+                placeholder=placeholder,
+                label_visibility="collapsed",
+            )
+        )
+    if st.button(f"+ 添加{label}", key=f"{key}_add"):
+        st.session_state[count_key] += 1
+        st.rerun()
+    return normalize_items(values)
+
+
+# ─── 侧边栏 ──────────────────────────────────────────────────────────────────
+
+with st.sidebar:
+    st.header("📋 考生信息")
+    rank = st.number_input("全省位次", 1, 400_000, 36_500, step=100)
+    total_score = st.number_input("总分", 200, 750, 626, step=1)
+    selected_subjects = st.multiselect(
+        "选考科目（选 3 门）", SUBJECT_ORDER,
+        default=["物理", "化学", "生物"], max_selections=3,
+    )
+
+    st.divider()
+    st.header("推荐策略")
+    main_priority = st.selectbox("主排序", ["专业优先", "学校优先"], index=0)
+
+    if main_priority == "专业优先":
+        major_options = _load_major_options()
+        selected_majors_from_list = st.multiselect(
+            "想报的专业",
+            options=major_options,
+            default=[],
+            placeholder='搜索专业名，如"计算机"…',
+        )
+        preferred_major_input = selected_majors_from_list + _dynamic_text_list(
+            "手动补充关键词",
+            "preferred_majors",
+            "例如：人工智能",
+        )
+        limit_to_preferred_majors = st.checkbox(
+            "只看这些专业相关",
+            value=False,
+            disabled=not preferred_major_input,
+        )
+        excluded_major_input = _dynamic_text_list(
+            "不想读的专业",
+            "excluded_majors",
+            "例如：土木工程",
+        )
+    else:
+        preferred_major_input = []
+        limit_to_preferred_majors = False
+        excluded_major_input = []
+
+    city_first = st.checkbox("同层级内城市优先", value=True)
+    risk_preference = st.selectbox("风险偏好", ["激进", "均衡", "保守"], index=1)
+    volunteer_total = st.number_input("志愿数量", 1, 80, 80, step=1)
+
+    st.divider()
+    st.header("🏫 学校层次")
+    school_levels = st.multiselect(
+        "只看这些层次（不选 = 不限）",
+        ["985", "211", "双一流"],
+        default=[],
+    )
+    preferred_schools_raw = st.text_input(
+        "偏好学校（推荐排序）",
+        value="", placeholder="浙江大学, 上海交通大学",
+    )
+
+    st.divider()
+    st.header("📍 城市 / 地区")
+    _province_city_map = _load_province_city_map()
+    _all_provinces = sorted(_province_city_map.keys())
+    _selected_provinces = st.multiselect(
+        "选省份",
+        options=_all_provinces,
+        default=[],
+        placeholder="搜索省份…",
+    )
+    _city_options = sorted({
+        city
+        for prov in (_selected_provinces or _all_provinces)
+        for city in _province_city_map.get(prov, [])
+    })
+    preferred_cities_input = st.multiselect(
+        "选城市",
+        options=_city_options,
+        default=[],
+        placeholder="搜索城市…" if _selected_provinces else "请先选省份，或直接搜索全部城市",
+    )
+    limit_to_preferred_cities = st.checkbox(
+        "只看这些城市",
+        value=False,
+        disabled=not preferred_cities_input,
+    )
+    st.caption("不勾选时，这些城市只影响推荐排序；勾选后会过滤候选池")
+    _ALL_PROVINCES = [
+        "北京", "天津", "上海", "重庆",
+        "河北", "山西", "内蒙古", "辽宁", "吉林", "黑龙江",
+        "江苏", "浙江", "安徽", "福建", "江西", "山东",
+        "河南", "湖北", "湖南", "广东", "广西", "海南",
+        "四川", "贵州", "云南", "西藏", "陕西", "甘肃", "青海", "宁夏", "新疆",
+    ]
+    excluded_regions = st.multiselect("排除省份", _ALL_PROVINCES)
+
+    st.divider()
+    st.header("🚫 其他约束")
+    accept_sino_foreign = st.checkbox("接受中外合作专业", value=False)
+    accept_private = st.checkbox("接受民办学校", value=True)
+    excluded_schools_raw = st.text_input("排除学校（精确名）", value="")
+
+# ─── 校验 ────────────────────────────────────────────────────────────────────
+
+if len(selected_subjects) != 3:
+    st.warning(f"请选择恰好 3 门选考科目（当前 {len(selected_subjects)} 门）")
+    st.stop()
+
+preferred_cities = preferred_cities_input
+city_filters = preferred_cities if limit_to_preferred_cities else []
+preferred_majors, preferred_categories = split_major_preferences(preferred_major_input)
+major_kws = preferred_major_input if limit_to_preferred_majors else []
+excluded_majors = excluded_major_input
+preferred_schools = normalize_items([preferred_schools_raw])
+excluded_schools = normalize_items([excluded_schools_raw])
+
+# ─── 核心过滤（选科 + 硬约束） ───────────────────────────────────────────────
+
+try:
+    profile = StudentProfile(
+        rank=int(rank), total_score=int(total_score),
+        selected_subjects=selected_subjects,
+        constraints=Constraints(
+            accept_private=accept_private,
+            accept_sino_foreign=accept_sino_foreign,
+        ),
+        preferences=Preferences(
+            cities=CityPreference(
+                preferred=preferred_cities,
+                excluded_regions=excluded_regions,
+            ),
+            majors=MajorPreference(
+                preferred_majors=preferred_majors,
+                preferred_categories=preferred_categories,
+                excluded_majors=excluded_majors,
+            ),
+            schools=SchoolPreference(
+                preferred_schools=preferred_schools,
+                excluded_schools=excluded_schools,
+            ),
+        ),
+        priority_mode=main_priority,
+        risk_preference=risk_preference,
+    )
+except Exception as e:
+    st.error(f"输入有误：{e}")
+    st.stop()
+
+with st.spinner("计算中…"):
+    eligible, excl_subj = filter_by_subject(profile, year=2025)
+    pool, excl_const    = filter_by_constraints(eligible, profile)
+
+# ─── 叠加 AND 过滤 ────────────────────────────────────────────────────────────
+
+steps: list[tuple[str, int]] = [
+    ("选科", len(pool)),
+]
+
+if school_levels:
+    pool, dropped = filter_by_school_level(pool, school_levels)
+    steps.append(("+".join(school_levels), len(pool)))
+
+if city_filters:
+    pool, dropped = filter_by_city(pool, city_filters)
+    steps.append(("城市", len(pool)))
+
+if major_kws:
+    pool, dropped = filter_by_major_keywords(pool, major_kws)
+    steps.append(("专业词", len(pool)))
+
+final = pool
+
+with st.spinner("生成推荐志愿…"):
+    recommendation = build_recommendations(
+        final,
+        profile,
+        main_priority=main_priority,
+        city_first=city_first,
+        preferred_majors=preferred_majors,
+        preferred_categories=preferred_categories,
+        preferred_schools=preferred_schools,
+        preferred_cities=preferred_cities,
+        risk_preference=risk_preference,
+        total=int(volunteer_total),
+    )
+
+# ─── 漏斗指标 ────────────────────────────────────────────────────────────────
+
+total_raw = len(eligible) + len(excl_subj)
+st.markdown("### 过滤漏斗")
+cols = st.columns(2 + len(steps))
+cols[0].metric("全量", f"{total_raw:,}")
+cols[1].metric("选科后", f"{len(eligible):,}", f"−{len(excl_subj)}")
+for i, (label, cnt) in enumerate(steps):
+    prev = len(eligible) if i == 0 else steps[i-1][1]
+    cols[2 + i].metric(label, f"{cnt:,}", f"−{prev - cnt}" if prev != cnt else "")
+
+# ─── 结果表 ───────────────────────────────────────────────────────────────────
+
+st.divider()
+stats = recommendation["stats"]
+st.markdown("### 推荐志愿")
+stat_cols = st.columns(6)
+stat_cols[0].metric("推荐", f"{stats['total']:,}")
+stat_cols[1].metric("冲", f"{stats['冲']:,}")
+stat_cols[2].metric("稳", f"{stats['稳']:,}")
+stat_cols[3].metric("保", f"{stats['保']:,}")
+stat_cols[4].metric("垫", f"{stats['垫']:,}")
+stat_cols[5].metric("备选池", f"{stats['备选池']:,}")
+
+search = st.text_input("🔍 搜索", placeholder="搜索学校或专业…")
+recommend_df = _recommendation_df(recommendation["volunteers"])
+candidate_df = _to_df(final)
+reserve_df = _recommendation_df(recommendation["reserve"])
+if search.strip():
+    keyword = search.strip()
+    recommend_df = _filter_df(recommend_df, keyword)
+    candidate_df = _filter_df(candidate_df, keyword)
+    reserve_df = _filter_df(reserve_df, keyword)
+
+tab_recommend, tab_candidates, tab_reserve = st.tabs(["推荐志愿", "候选池", "备选池"])
+
+with tab_recommend:
+    st.dataframe(
+        recommend_df, width="stretch", hide_index=True, height=620,
+        column_config={
+            "序号":      st.column_config.NumberColumn(width="small"),
+            "层级":      st.column_config.TextColumn(width="small"),
+            "学校":      st.column_config.TextColumn(width="medium"),
+            "城市":      st.column_config.TextColumn(width="small"),
+            "专业":      st.column_config.TextColumn(width="large"),
+            "2025位次":  st.column_config.TextColumn(width="small"),
+            "2024位次":  st.column_config.TextColumn(width="small"),
+            "2023位次":  st.column_config.TextColumn(width="small"),
+            "均值位次":  st.column_config.NumberColumn(width="small"),
+            "gap":       st.column_config.NumberColumn(width="small"),
+            "历史年数":  st.column_config.NumberColumn(width="small"),
+            "选科要求":  st.column_config.TextColumn(width="medium"),
+            "⚠":        st.column_config.TextColumn(width="medium"),
+        },
+    )
+
+with tab_candidates:
+    warn_cnt = sum(1 for p in final if p.get("_warnings"))
+    st.caption(f"候选池 {len(final):,} 条" + (f"，其中 {warn_cnt} 条需核对" if warn_cnt else ""))
+    st.dataframe(
+        candidate_df, width="stretch", hide_index=True, height=620,
+        column_config={
+            "学校":      st.column_config.TextColumn(width="medium"),
+            "城市":      st.column_config.TextColumn(width="small"),
+            "专业":      st.column_config.TextColumn(width="large"),
+            "选科要求":  st.column_config.TextColumn(width="medium"),
+            "⚠":        st.column_config.TextColumn(width="medium"),
+        },
+    )
+
+with tab_reserve:
+    st.dataframe(
+        reserve_df, width="stretch", hide_index=True, height=620,
+        column_config={
+            "序号":      st.column_config.NumberColumn(width="small"),
+            "层级":      st.column_config.TextColumn(width="small"),
+            "学校":      st.column_config.TextColumn(width="medium"),
+            "城市":      st.column_config.TextColumn(width="small"),
+            "专业":      st.column_config.TextColumn(width="large"),
+            "2025位次":  st.column_config.TextColumn(width="small"),
+            "2024位次":  st.column_config.TextColumn(width="small"),
+            "2023位次":  st.column_config.TextColumn(width="small"),
+            "均值位次":  st.column_config.NumberColumn(width="small"),
+            "gap":       st.column_config.NumberColumn(width="small"),
+            "历史年数":  st.column_config.NumberColumn(width="small"),
+            "选科要求":  st.column_config.TextColumn(width="medium"),
+            "⚠":        st.column_config.TextColumn(width="medium"),
+        },
+    )

@@ -1,0 +1,18 @@
+[project]
+name = "college-application"
+version = "0.1.0"
+description = "College application data pipeline."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas",
+    "openpyxl",
+    "python-dotenv",
+    "openai",
+    "pydantic>=2",
+    "pydantic-settings",
+    "requests",
+    "beautifulsoup4",
+    "lxml",
+    "streamlit>=1.57",
+]
