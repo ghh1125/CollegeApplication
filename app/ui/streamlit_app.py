@@ -169,6 +169,8 @@ def _dynamic_text_list(
 
 _all_major_options = _load_major_options()
 _form_ready = bool(st.session_state.get("_form_ready", False))
+# Pop the rerun flag early so it only takes effect for one run
+_reco_rerun_pending = st.session_state.pop("_reco_rerun_pending", False)
 
 if "_pending_fill" in st.session_state:
     _pf = st.session_state.pop("_pending_fill")
@@ -679,16 +681,13 @@ with st.spinner("生成推荐志愿…"):
         total=int(volunteer_total),
     )
 
-# Store context for AI advisor; rerun whenever recommendations change so buttons reflect latest data
-_old_fingerprint = st.session_state.get("_advisor_ctx_fp")
-_new_fingerprint = (
-    recommendation.get("stats", {}).get("total", 0),
-    len(recommendation.get("volunteers", [])),
-)
+# Store context for AI advisor; rerun once after each new computation so buttons always reflect latest data.
+# _reco_rerun_pending was popped at the top of the script; if True we're already in the triggered rerun
+# and should NOT rerun again (that would loop forever).
 _first_recommendation = "_advisor_ctx" not in st.session_state
 st.session_state["_advisor_ctx"] = recommendation
-st.session_state["_advisor_ctx_fp"] = _new_fingerprint
-if _first_recommendation or _old_fingerprint != _new_fingerprint:
+
+if not _reco_rerun_pending:
     if _first_recommendation and not st.session_state.get("_advisor_intro_sent"):
         st.session_state["_advisor_intro_sent"] = True
         _xm_intro = (
@@ -700,6 +699,7 @@ if _first_recommendation or _old_fingerprint != _new_fingerprint:
             "有问题随时说！"
         )
         st.session_state["ai_chat"].append({"role": "assistant", "content": _xm_intro})
+    st.session_state["_reco_rerun_pending"] = True
     st.rerun()  # rerun so quick-action buttons reflect latest volunteers
 
 # ─── 漏斗指标 ────────────────────────────────────────────────────────────────
