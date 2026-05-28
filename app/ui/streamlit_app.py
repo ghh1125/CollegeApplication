@@ -417,6 +417,20 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                     ))
             st.session_state["_pending_fill"] = _fill
             st.session_state.pop("ai_parsed", None)
+            # Auto-post user confirmation + 小志 handoff
+            st.session_state["ai_chat"].append({"role": "user", "content": "同意，参数已确认"})
+            st.session_state["ai_chat"].append({
+                "role": "assistant",
+                "content": (
+                    "收到！参数已填入左侧表单，推荐志愿正在生成 🎯\n\n"
+                    "我是**小志**，接下来由我为你服务。\n\n"
+                    "志愿生成后你可以：\n"
+                    "- 点「**在对话中生成报告**」，我来分析整体冲稳保方案\n"
+                    "- 选中某条志愿点「**解释此条**」，我来深度解析这条\n"
+                    "- 或者直接问我任何问题"
+                ),
+            })
+            st.session_state["_advisor_intro_sent"] = True
             st.rerun()
 
 # ─── 校验 ────────────────────────────────────────────────────────────────────
