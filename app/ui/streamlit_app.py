@@ -33,7 +33,7 @@ from app.pipeline.filter import (
 from app.pipeline.recommend import build_recommendations, history_rank_columns
 from app.ui.form_helpers import normalize_items, split_major_preferences
 from app.db import get_conn
-from app.llm.explain import chat_with_advisor
+from app.llm.explain import chat_with_advisor, search_web, should_search
 
 
 # ─── 页面配置 ────────────────────────────────────────────────────────────────
@@ -379,6 +379,10 @@ with st.expander("💬 AI 对话顾问", expanded=True):
             with _chat_container:
                 with st.chat_message("user"):
                     st.write(_msg_to_send)
+            _search_results = None
+            if should_search(_msg_to_send) and st.session_state.get("_advisor_ctx"):
+                with st.spinner("🔍 查询最新数据…"):
+                    _search_results = search_web(_msg_to_send)
             with _chat_container:
                 with st.chat_message("assistant"):
                     _response = st.write_stream(
@@ -386,6 +390,7 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                             st.session_state["ai_chat"],
                             profile_ctx=_profile_ctx,
                             recommendation_ctx=st.session_state.get("_advisor_ctx"),
+                            search_results=_search_results,
                             api_key=_effective_api_key,
                         )
                     )

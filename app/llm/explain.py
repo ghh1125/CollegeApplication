@@ -18,6 +18,25 @@ def get_client(api_key: str | None = None) -> Any:
 
 MODEL = "qwen3.7-max"
 
+SEARCH_KEYWORDS = ["就业", "薪资", "工资", "前景", "行情", "替代", "招聘", "行业", "待遇", "毕业去向"]
+
+
+def should_search(message: str) -> bool:
+    return any(kw in message for kw in SEARCH_KEYWORDS)
+
+
+def search_web(query: str, max_results: int = 3) -> list[str]:
+    try:
+        from duckduckgo_search import DDGS
+        with DDGS() as ddgs:
+            results = list(ddgs.text(f"{query} 2025", max_results=max_results))
+        return [
+            f"{r['title']}: {r['body'][:250]}"
+            for r in results if r.get("body")
+        ]
+    except Exception:
+        return []
+
 
 def _stream(messages: list[dict], api_key: str | None = None):
     """Yield text chunks, skipping reasoning/thinking tokens."""
@@ -86,6 +105,7 @@ def explain_volunteer(volunteer: dict, profile: dict, api_key: str | None = None
 def _build_advisor_system(
     profile_ctx: dict | None = None,
     recommendation_ctx: dict | None = None,
+    search_results: list[str] | None = None,
 ) -> str:
     if recommendation_ctx:
         name, role = "小明", "志愿顾问"
@@ -136,6 +156,21 @@ def _build_advisor_system(
             )
         lines.append("")
 
+    if recommendation_ctx:
+        lines += [
+            "【分析框架】",
+            "- 就业倒推法：解释志愿/专业时先给中等毕业生（非顶尖）的典型去向和薪资区间，不说「前景不错」等模糊话",
+            "- 中位数原则：看20-50%普通毕业生5年后的实际情况，不引用极端顶尖案例",
+            "- 家庭背景分流：用户问开放性问题时先反问家庭背景和试错成本，再给针对性建议",
+            "- 表达规则：第一句直接给结论，引用具体数字，不先铺垫四段再给判断",
+            "",
+        ]
+
+    if search_results:
+        lines += ["【实时搜索数据（优先引用，不编造数字）】"]
+        lines += [f"- {r}" for r in search_results]
+        lines += [""]
+
     lines += [
         "【规则】",
         "- 填报模式（无推荐表）：收集完参数后在末尾输出JSON（顾问模式不输出JSON）：",
@@ -164,17 +199,10 @@ def chat_with_advisor(
     messages: list[dict],
     profile_ctx: dict | None = None,
     recommendation_ctx: dict | None = None,
+    search_results: list[str] | None = None,
     api_key: str | None = None,
 ):
-    """
-    Unified advisor chat: handles profile fill, recommendation analysis,
-    and open-ended Q&A about schools/majors in a single conversation.
-
-    messages: list of {role, content} — no system message (added here).
-    profile_ctx: current sidebar form values.
-    recommendation_ctx: full recommendation dict from build_recommendations().
-    """
-    system = _build_advisor_system(profile_ctx, recommendation_ctx)
+    system = _build_advisor_system(profile_ctx, recommendation_ctx, search_results)
     return _stream([{"role": "system", "content": system}] + messages, api_key=api_key)
 
 
