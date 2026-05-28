@@ -67,11 +67,13 @@ def _load_major_options() -> list[str]:
 @st.cache_data(ttl=3600)
 def _load_province_city_map() -> dict[str, list[str]]:
     """Return {province: sorted list of cities} from school_master."""
+    _INVALID = {"军校", ""}
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT DISTINCT province, city FROM school_master "
             "WHERE province IS NOT NULL AND province != '' "
             "AND city IS NOT NULL AND city != '' "
+            "AND province NOT IN ('军校') AND city NOT IN ('军校') "
             "ORDER BY province, city"
         ).fetchall()
     mapping: dict[str, list[str]] = {}
@@ -269,18 +271,12 @@ with st.sidebar:
             for city in _province_city_map.get(prov, [])
         })
         preferred_cities_input = st.multiselect(
-            "选城市",
+            "进一步指定城市（不选则包含所选省份全部城市）",
             options=_city_options,
             default=[],
             placeholder="搜索城市…" if _selected_provinces else "请先选省份，或直接搜索全部城市",
             key="w_cities",
         )
-        limit_to_preferred_cities = st.checkbox(
-            "只看这些城市",
-            value=False,
-            disabled=not preferred_cities_input,
-        )
-        st.caption("不勾选时，这些城市只影响推荐排序；勾选后会过滤候选池")
         _ALL_PROVINCES = [
             "北京", "天津", "上海", "重庆",
             "河北", "山西", "内蒙古", "辽宁", "吉林", "黑龙江",
@@ -596,7 +592,17 @@ if len(selected_subjects) != 3:
     st.stop()
 
 preferred_cities = preferred_cities_input
-city_filters = preferred_cities if limit_to_preferred_cities else []
+# Auto-filter: specific cities → filter by cities; province only → filter by all cities in province; neither → no filter
+if preferred_cities_input:
+    city_filters = preferred_cities_input
+elif _selected_provinces:
+    city_filters = sorted({
+        city
+        for prov in _selected_provinces
+        for city in _province_city_map.get(prov, [])
+    })
+else:
+    city_filters = []
 preferred_majors, preferred_categories = split_major_preferences(preferred_major_input)
 major_kws = preferred_major_input if limit_to_preferred_majors else []
 excluded_majors = excluded_major_input
@@ -673,11 +679,17 @@ with st.spinner("生成推荐志愿…"):
         total=int(volunteer_total),
     )
 
-# Store context for AI advisor; rerun once so expander shows quick-action buttons
+# Store context for AI advisor; rerun whenever recommendations change so buttons reflect latest data
+_old_fingerprint = st.session_state.get("_advisor_ctx_fp")
+_new_fingerprint = (
+    recommendation.get("stats", {}).get("total", 0),
+    len(recommendation.get("volunteers", [])),
+)
 _first_recommendation = "_advisor_ctx" not in st.session_state
 st.session_state["_advisor_ctx"] = recommendation
-if _first_recommendation:
-    if not st.session_state.get("_advisor_intro_sent"):
+st.session_state["_advisor_ctx_fp"] = _new_fingerprint
+if _first_recommendation or _old_fingerprint != _new_fingerprint:
+    if _first_recommendation and not st.session_state.get("_advisor_intro_sent"):
         st.session_state["_advisor_intro_sent"] = True
         _xm_intro = (
             "志愿表出来了，我来帮你分析 📊\n\n"
@@ -688,7 +700,7 @@ if _first_recommendation:
             "有问题随时说！"
         )
         st.session_state["ai_chat"].append({"role": "assistant", "content": _xm_intro})
-    st.rerun()  # always rerun so quick-action buttons become visible
+    st.rerun()  # rerun so quick-action buttons reflect latest volunteers
 
 # ─── 漏斗指标 ────────────────────────────────────────────────────────────────
 
