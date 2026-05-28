@@ -33,7 +33,10 @@ from app.pipeline.filter import (
 from app.pipeline.recommend import build_recommendations, history_rank_columns
 from app.ui.form_helpers import normalize_items, split_major_preferences
 from app.db import get_conn
-from app.llm.explain import chat_with_advisor, search_web, should_search
+from app.llm.explain import (
+    chat_with_advisor, search_web, should_search,
+    explain_volunteer, generate_overall_report,
+)
 
 
 # ─── 页面配置 ────────────────────────────────────────────────────────────────
@@ -325,6 +328,7 @@ if "ai_chat" not in st.session_state:
     st.session_state["ai_chat"] = [{"role": "assistant", "content": _XIAOYU_WELCOME}]
 
 _has_inject = "_ai_inject" in st.session_state
+_has_fn_inject = "_ai_fn_inject" in st.session_state
 with st.expander("💬 AI 对话顾问", expanded=True):
     _chat_container = st.container(height=340)
     with _chat_container:
@@ -355,13 +359,48 @@ with st.expander("💬 AI 对话顾问", expanded=True):
         st.session_state["_ai_input_n"] = _input_n + 1
         st.rerun()
 
-    # Inject takes priority over user input (report/explain buttons set this)
+    # fn_inject: buttons that call dedicated functions (explain / report)
     _msg_to_send = None
-    if _has_inject:
+    _fn_inject = None
+    if _has_fn_inject:
+        _fn_inject = st.session_state.pop("_ai_fn_inject")
+    elif _has_inject:
         _msg_to_send = st.session_state.pop("_ai_inject")
     elif _send and _user_msg.strip():
         _msg_to_send = _user_msg.strip()
         st.session_state["_ai_input_n"] = _input_n + 1
+
+    if _fn_inject:
+        if not _effective_api_key:
+            st.warning("请在左侧填入百炼 API Key 才能使用 AI 功能")
+        else:
+            _fn_type = _fn_inject["fn"]
+            _fn_label = _fn_inject["label"]
+            st.session_state["ai_chat"].append({"role": "user", "content": _fn_label})
+            with _chat_container:
+                with st.chat_message("user"):
+                    st.write(_fn_label)
+            with _chat_container:
+                with st.chat_message("assistant"):
+                    if _fn_type == "explain_volunteer":
+                        _response = st.write_stream(
+                            explain_volunteer(
+                                _fn_inject["volunteer"],
+                                _fn_inject["profile"],
+                                api_key=_effective_api_key,
+                            )
+                        )
+                    else:  # generate_report
+                        _response = st.write_stream(
+                            generate_overall_report(
+                                _fn_inject["volunteers"],
+                                _fn_inject["stats"],
+                                _fn_inject["profile"],
+                                api_key=_effective_api_key,
+                            )
+                        )
+            st.session_state["ai_chat"].append({"role": "assistant", "content": _response})
+            st.rerun()
 
     if _msg_to_send:
         if not _effective_api_key:
@@ -474,13 +513,24 @@ with st.expander("💬 AI 对话顾问", expanded=True):
             for v in _qa_vols
         ]
         st.divider()
+        _fn_profile = {
+            "rank": int(rank),
+            "selected_subjects": selected_subjects,
+            "preferred_majors": [],
+            "preferred_cities": [],
+            "risk_preference": risk_preference,
+        }
         if st.button("📊 生成总体报告", use_container_width=True, key="btn_report"):
             if not _effective_api_key:
                 st.warning("请先填入左侧百炼 API Key")
             else:
-                st.session_state["_ai_inject"] = (
-                    "请生成一份总体分析报告：评价冲稳保比例是否合理，指出亮点和主要风险点，给出1-2条具体建议。"
-                )
+                st.session_state["_ai_fn_inject"] = {
+                    "fn": "generate_report",
+                    "label": "📊 生成总体分析报告",
+                    "volunteers": _ctx["volunteers"],
+                    "stats": _ctx["stats"],
+                    "profile": _fn_profile,
+                }
                 st.rerun()
         _qa_sel = st.selectbox(
             "选择要解释的志愿",
@@ -494,14 +544,12 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                 st.warning("请先填入左侧百炼 API Key")
             else:
                 _qv = _qa_vols[_qa_sel]
-                _qgi = _qv.get("gap_info") or {}
-                st.session_state["_ai_inject"] = (
-                    f"请详细解释第{_qv.get('volunteer_no')}条志愿："
-                    f"{_qv.get('school_name')}·{_qv.get('major_name')}，"
-                    f"层级{_qgi.get('tier', '未知')}，均值位次{_qgi.get('weighted_avg', '—')}，"
-                    f"gap{_qgi.get('gap', '—')}，城市{_qv.get('school_city', '未知')}。"
-                    f"请分析：推荐理由、历史趋势稳定性、风险点。"
-                )
+                st.session_state["_ai_fn_inject"] = {
+                    "fn": "explain_volunteer",
+                    "label": f"💬 解释第{_qv.get('volunteer_no')}条：{_qv.get('school_name')}·{_qv.get('major_name')}",
+                    "volunteer": _qv,
+                    "profile": _fn_profile,
+                }
                 st.rerun()
 
 # 表单未就绪时在此停止，不渲染后续推荐内容
