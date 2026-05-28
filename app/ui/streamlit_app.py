@@ -33,6 +33,7 @@ from app.pipeline.filter import (
 from app.pipeline.recommend import build_recommendations, history_rank_columns
 from app.ui.form_helpers import normalize_items, split_major_preferences
 from app.db import get_conn
+from app.llm.explain import chat_with_advisor
 
 
 # ─── 页面配置 ────────────────────────────────────────────────────────────────
@@ -343,7 +344,6 @@ with st.expander("💬 AI 对话顾问", expanded=True):
         if not _effective_api_key:
             st.warning("请在左侧填入百炼 API Key 才能使用 AI 功能")
         else:
-            from app.llm.explain import chat_with_advisor
             _profile_ctx = {
                 "rank": int(rank),
                 "selected_subjects": selected_subjects,
