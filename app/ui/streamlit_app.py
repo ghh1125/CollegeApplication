@@ -377,6 +377,9 @@ with st.expander("💬 AI 对话顾问", expanded=True):
             }
             st.session_state["ai_chat"].append({"role": "user", "content": _msg_to_send})
             with _chat_container:
+                with st.chat_message("user"):
+                    st.write(_msg_to_send)
+            with _chat_container:
                 with st.chat_message("assistant"):
                     _response = st.write_stream(
                         chat_with_advisor(
