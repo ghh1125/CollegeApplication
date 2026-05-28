@@ -218,6 +218,7 @@ with st.sidebar:
                 "只看这些专业相关",
                 value=False,
                 disabled=not preferred_major_input,
+                key="w_limit_majors",
             )
             excluded_major_input = _dynamic_text_list(
                 "不想读的专业",
@@ -488,6 +489,8 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                 _fill["w_majors_list"] = list(dict.fromkeys(_matched))
                 if _fill["w_majors_list"] and "w_main_priority" not in _fill:
                     _fill["w_main_priority"] = "专业优先"
+                if _fill["w_majors_list"]:
+                    _fill["w_limit_majors"] = True
             if _p.get("preferred_cities"):
                 _prov_map = _load_province_city_map()
                 _all_cities = {c for cs in _prov_map.values() for c in cs}
