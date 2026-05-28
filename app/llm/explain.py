@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
-from openai import OpenAI
+from typing import Any
 
 from app.config import config
 
-MODEL = "qwen3.7-max"
 
-
-def get_client(api_key: str | None = None) -> OpenAI:
+def get_client(api_key: str | None = None) -> Any:
     key = api_key or config.require_dashscope_api_key()
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise RuntimeError("openai package is required for LLM calls.") from exc
     return OpenAI(api_key=key, base_url=config.dashscope_base_url)
+
+
+MODEL = "qwen3.7-max"
 
 
 def _stream(messages: list[dict], api_key: str | None = None):
@@ -24,8 +29,9 @@ def _stream(messages: list[dict], api_key: str | None = None):
         stream=True,
     )
     for chunk in resp:
+        if not chunk.choices:
+            continue
         delta = chunk.choices[0].delta
-        # skip reasoning_content (thinking tokens), only yield final answer
         if delta.content:
             yield delta.content
 
