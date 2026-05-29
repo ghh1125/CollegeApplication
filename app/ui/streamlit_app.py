@@ -818,7 +818,7 @@ if major_kws and (stats.get("冲", 0) + stats.get("稳", 0)) < 25:
 if not preferred_majors and not preferred_categories:
     st.warning(
         "💡 你没有填写专业偏好，志愿按城市档+学校排名排序，结果可能较分散。"
-        "建议在左侧「偏好专业」填写目标方向（如"计算机"），让推荐更聚焦。"
+        "建议在左侧「偏好专业」填写目标方向（如「计算机」），让推荐更聚焦。"
     )
 
 search = st.text_input("🔍 搜索", placeholder="搜索学校或专业…")
