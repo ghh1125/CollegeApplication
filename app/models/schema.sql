@@ -132,6 +132,15 @@ CREATE TABLE IF NOT EXISTS major_admission_rule (
     CONSTRAINT major_admission_rule_unique UNIQUE (year, school_name, major_name)
 );
 
+CREATE TABLE IF NOT EXISTS discipline_evaluation (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    discipline_code TEXT NOT NULL,
+    discipline_name TEXT NOT NULL,
+    school_name TEXT NOT NULL,
+    grade TEXT NOT NULL,
+    UNIQUE(discipline_code, school_name)
+);
+
 CREATE TABLE IF NOT EXISTS major_description (
     special_id   INTEGER PRIMARY KEY,
     name         TEXT NOT NULL,
