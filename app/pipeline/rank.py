@@ -117,7 +117,7 @@ MAJOR_DISCIPLINE_MAP: dict[str, str] = {
     # 生物 → 0710
     "生物科学": "0710", "生物技术": "0710",
     "生物工程": "0710", "生物信息学": "0710",
-    "生物制药": "0710",
+    "生物制药": "0710", "生物统计学": "0710",
     # 环境 → 0830
     "环境科学": "0830", "环境工程": "0830",
     "环境监测技术": "0830",
@@ -397,7 +397,7 @@ def _major_level(
     """Ordinal major-preference level.
 
     4  exact or expand-matched preferred major
-    3  keyword substring match in preferred_majors
+    3  keyword substring match in preferred_majors (same academic cluster only)
     2  matched preferred_categories (by DB field or discipline code)
     1  affine discipline — same academic cluster as a preferred category/major
     0  unrelated
@@ -410,10 +410,29 @@ def _major_level(
         return 4
     if expanded_major_names and (name in expanded_major_names or raw_name in expanded_major_names):
         return 4
-    if any(kw and (kw in name or kw in raw_name) for kw in preferred_majors):
-        return 3
 
     disc_code = _lookup_discipline_code(name, raw_name)
+
+    # Build preferred disc codes once; reused by keyword guard and affine check.
+    preferred_disc_codes: set[str] = set()
+    for cat in preferred_categories:
+        preferred_disc_codes |= _CATEGORY_DISCIPLINE_CODES.get(cat, frozenset())
+    for m in preferred_majors:
+        code = _lookup_discipline_code(m)
+        if code:
+            preferred_disc_codes.add(code)
+
+    # Level 3: keyword match, guarded by cluster alignment.
+    # Cross-cluster hits (e.g. "统计" in "生物统计学" for an econ student) fall through.
+    if any(kw and (kw in name or kw in raw_name) for kw in preferred_majors):
+        if not disc_code or not preferred_disc_codes:
+            return 3
+        if disc_code in preferred_disc_codes:
+            return 3
+        for cluster in _AFFINITY_CLUSTERS:
+            if disc_code in cluster and cluster & preferred_disc_codes:
+                return 3
+        # cross-cluster keyword match — fall through to category/affine checks
 
     if preferred_categories:
         if category in preferred_categories:
@@ -422,15 +441,6 @@ def _major_level(
             for cat in preferred_categories:
                 if disc_code in _CATEGORY_DISCIPLINE_CODES.get(cat, frozenset()):
                     return 2
-
-    # Collect all preferred discipline codes (from categories + majors)
-    preferred_disc_codes: set[str] = set()
-    for cat in preferred_categories:
-        preferred_disc_codes |= _CATEGORY_DISCIPLINE_CODES.get(cat, frozenset())
-    for m in preferred_majors:
-        code = _lookup_discipline_code(m)
-        if code:
-            preferred_disc_codes.add(code)
 
     if disc_code and preferred_disc_codes:
         for cluster in _AFFINITY_CLUSTERS:
@@ -669,6 +679,11 @@ def _enrich_with_history(candidates: list[dict], year: int, conn: Any) -> list[d
     major_category_by_name = _load_major_categories(conn)
     discipline_grades, school_best_grades = _load_discipline_grades(conn)
 
+    _PUBLIC_KEYS = ("year", "min_rank", "min_score", "plan_count")
+
+    def _strip(records: list[dict]) -> list[dict]:
+        return [{k: r[k] for k in _PUBLIC_KEYS} for r in records]
+
     enriched: list[dict] = []
     for program in candidates:
         item = dict(program)
@@ -685,19 +700,8 @@ def _enrich_with_history(candidates: list[dict], year: int, conn: Any) -> list[d
             "",
         )
 
-        # Name-based match is authoritative: same school + same normalized major name
-        # across all years, unaffected by code reuse.
-        # Code-based fallback is only used when no name match exists, and only for
-        # records where the stored major name actually matches (codes get reused).
-        # Name-based match is authoritative: same school + same normalized major name
-        # across all years, unaffected by code reuse.
-        # Code-based fallback is only used when no name match exists, and only for
-        # records where the stored major name actually matches (codes get reused).
-        _PUBLIC_KEYS = ("year", "min_rank", "min_score", "plan_count")
-
-        def _strip(records: list[dict]) -> list[dict]:
-            return [{k: r[k] for k in _PUBLIC_KEYS} for r in records]
-
+        # Name-based lookup is authoritative; code fallback is filtered by stored name
+        # to reject rows where the code was reused for a different major in earlier years.
         name_history = history_by_name.get((school_name, normalized_major_name), [])
         if name_history:
             item["history"] = _strip(name_history)

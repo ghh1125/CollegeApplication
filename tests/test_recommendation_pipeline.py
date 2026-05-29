@@ -160,6 +160,42 @@ class RankPipelineTests(unittest.TestCase):
         self.assertEqual(ranks_by_year.get(2023), 8437,  "2023 rank should be 8437 (计算机类), not 9970 (新闻传播学类)")
         self.assertEqual(len(history), 3, "should have exactly 3 matched rows")
 
+    def test_major_level_keyword_cross_cluster_demoted(self) -> None:
+        """'统计' in preferred_majors must not promote 生物统计学 to level=3 for an econ student.
+
+        生物统计学 → disc_code 0710 (bio); econ preferred → {0201, 0202, 0701}.
+        0710 is not in the econ/math cluster → keyword match falls through → level=0.
+        """
+        from app.pipeline.rank import _major_level
+
+        program = {
+            "normalized_major_name": "生物统计学",
+            "major_name": "生物统计学",
+            "major_category": "统计学类",
+        }
+        level = _major_level(
+            program,
+            preferred_majors=["统计"],
+            preferred_categories=["经济学类", "金融学类"],
+        )
+        self.assertLess(level, 3, "生物统计学 should not be labeled 目标专业 for an econ student")
+
+    def test_major_level_keyword_same_cluster_kept_at_3(self) -> None:
+        """'统计' in preferred_majors should keep 统计学 at level=3 (0701 matches 0701)."""
+        from app.pipeline.rank import _major_level
+
+        program = {
+            "normalized_major_name": "统计学",
+            "major_name": "统计学",
+            "major_category": "数学类",
+        }
+        level = _major_level(
+            program,
+            preferred_majors=["统计"],
+            preferred_categories=["经济学类"],
+        )
+        self.assertEqual(level, 3, "统计学 should remain level=3 for a student who prefers 统计")
+
     def test_sort_candidates_preserves_tier_order_and_sorts_inside_tier(self) -> None:
         from app.pipeline.rank import sort_candidates
 
