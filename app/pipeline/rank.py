@@ -229,6 +229,36 @@ _DISCIPLINE_KEYWORD_RULES: list[tuple[str, str]] = [
 ]
 
 
+# Maps user-entered preferred_categories (ending in "类") → sets of discipline codes.
+# Used as fallback when major_category DB field is empty.
+_CATEGORY_DISCIPLINE_CODES: dict[str, frozenset[str]] = {
+    "计算机类":        frozenset({"0812", "0835"}),
+    "电子信息类":      frozenset({"0809", "0810"}),
+    "自动化类":        frozenset({"0811"}),
+    "电气类":          frozenset({"0808"}),
+    "机械类":          frozenset({"0802"}),
+    "仪器类":          frozenset({"0804"}),
+    "材料类":          frozenset({"0805"}),
+    "化工类":          frozenset({"0817"}),
+    "土木类":          frozenset({"0814"}),
+    "建筑类":          frozenset({"0813"}),
+    "数学类":          frozenset({"0701"}),
+    "物理学类":        frozenset({"0702"}),
+    "化学类":          frozenset({"0703"}),
+    "生物科学类":      frozenset({"0710"}),
+    "环境科学类":      frozenset({"0830"}),
+    "经济学类":        frozenset({"0201"}),
+    "金融学类":        frozenset({"0202"}),
+    "法学类":          frozenset({"0301"}),
+    "新闻传播学类":    frozenset({"0503"}),
+    "中国语言文学类":  frozenset({"0501"}),
+    "外国语言文学类":  frozenset({"0502"}),
+    "医学类":          frozenset({"1002", "1003", "1004", "1005", "1007", "1008", "1010", "1011"}),
+    "管理科学类":      frozenset({"1201"}),
+    "工商管理类":      frozenset({"1202"}),
+}
+
+
 def _lookup_discipline_code(normalized_name: str, raw_name: str = "") -> str | None:
     """
     Map a major name to its 第四轮 discipline code.
@@ -329,8 +359,16 @@ def _major_level(
         return 4
     if any(kw and (kw in name or kw in raw_name) for kw in preferred_majors):
         return 3
-    if category in preferred_categories:
-        return 2
+    if preferred_categories:
+        # Try DB-populated category field first
+        if category in preferred_categories:
+            return 2
+        # Fallback: infer via discipline code (major_category DB field is often empty)
+        disc_code = _lookup_discipline_code(name, raw_name)
+        if disc_code:
+            for cat in preferred_categories:
+                if disc_code in _CATEGORY_DISCIPLINE_CODES.get(cat, frozenset()):
+                    return 2
     return 1
 
 
