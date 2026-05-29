@@ -94,6 +94,42 @@ _REPORT_PARA4 = {
 }
 
 
+def _city_quality_tier(source_name: str) -> str:
+    """Return 'official' / 'wiki' / 'template' based on source_name."""
+    if not source_name:
+        return "template"
+    if "统计局" in source_name or "统计公报" in source_name:
+        return "official"
+    if "维基" in source_name or "Wikipedia" in source_name:
+        return "wiki"
+    return "template"
+
+
+def _city_profile_block(city_profile: dict) -> str:
+    """Build the city profile line for the prompt, labelled by data quality tier."""
+    source = city_profile.get("source_name") or ""
+    tier = _city_quality_tier(source)
+    summary = city_profile.get("summary") or "暂无"
+    gdp = city_profile.get("gdp") or ""
+    pop = city_profile.get("population") or ""
+
+    if tier == "official":
+        return (
+            f"城市画像（官方统计）：{summary}；"
+            f"GDP：{gdp}；常住人口：{pop}；"
+            f"来源：{city_profile.get('source_url') or source}"
+        )
+    if tier == "wiki":
+        gdp_str = f"GDP约{gdp}（百科参考，勿作权威依据）" if gdp else "GDP：暂无"
+        pop_str = f"人口约{pop}（百科参考）" if pop else "人口：暂无"
+        return (
+            f"城市画像（百科参考，数据供参考，不作强依据）：{summary}；"
+            f"{gdp_str}；{pop_str}"
+        )
+    # template
+    return f"城市画像（仅城市层级）：{summary}；GDP/产业数据待补充"
+
+
 def explain_volunteer(
     volunteer: dict,
     profile: dict,
@@ -144,7 +180,7 @@ def explain_volunteer(
 【本地结构化画像（来自数据库，优先引用，不编造）】
 - 学校画像：{school_profile.get("summary") or "暂无"}；标签：{school_profile.get("tags") or "暂无"}；来源：{school_profile.get("source_url") or "暂无"}
 - 专业画像：{major_profile.get("summary") or "暂无"}；就业/去向：{major_profile.get("career_direction") or "暂无"}；fallback：{major_profile.get("fallback_from") or "无"}；来源：{major_profile.get("source_url") or "暂无"}
-- 城市画像：{city_profile.get("summary") or "暂无"}；GDP：{city_profile.get("gdp") or "暂无"}；常住人口：{city_profile.get("population") or "暂无"}；来源：{city_profile.get("source_url") or "暂无"}
+- {_city_profile_block(city_profile)}
 {search_block}
 【禁止输出的词】：前景不错、就业面广、高度契合、相对稳定、值得关注、综合来看
 
