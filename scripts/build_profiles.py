@@ -468,6 +468,144 @@ def build_major_profile_rows(description_rows: list[dict]) -> list[dict]:
     return [row for row in result if row["major_name"]]
 
 
+WIKI_CITY_RAW_PATH = RAW_DIR / "city_wiki_raw.json"
+WIKI_UA = "Mozilla/5.0 (CollegeApplication data builder; +https://github.com/ghh1125)"
+
+
+def _parse_wiki_city_page(html: str) -> dict:
+    """Extract GDP, population, and industry summary from a Wikipedia city page."""
+    infobox_m = re.search(r'<table[^>]*infobox[^>]*>(.*?)</table>', html, re.DOTALL)
+    result: dict = {}
+    if infobox_m:
+        rows = re.findall(
+            r'<th[^>]*>(.*?)</th>\s*<td[^>]*>(.*?)</td>',
+            infobox_m.group(1), re.DOTALL,
+        )
+        def _cell(t: str) -> str:
+            t = re.sub(r'<[^>]+>|&#\w+;|&\w+;', ' ', t)
+            return re.sub(r'\s+', ' ', t).strip()
+
+        def _extract_num(val: str, unit: str) -> str:
+            """Extract the largest number before a unit, ignoring footnote digits."""
+            # Find all candidate numbers before the unit
+            pattern = rf'([\d,，]+\.?\d*)\s*(?:\d\s+)?{unit}'
+            matches = re.findall(pattern, val)
+            if not matches:
+                return ""
+            # Take the largest number (handles cases like "218.6 1 萬人" where 1 is a footnote)
+            best = max(matches, key=lambda x: float(x.replace('，', '').replace(',', '') or '0'))
+            return best.replace('，', '').replace(',', '')
+
+        for th, td in rows:
+            key = _cell(th)
+            val = _cell(td)
+            if '国内生产总值' in key and '人均' not in key and not result.get('gdp'):
+                num = _extract_num(val, '亿')
+                if num:
+                    result['gdp'] = num + '亿元'
+            if '常住' in key and '•' in key and '密度' not in key and '城镇' not in key and '城區' not in key:
+                num = _extract_num(val, '[萬万]')
+                if num and not result.get('population'):
+                    result['population'] = num + '万人'
+
+    # Industry: search for 经济 section anchor → collect nearby <p> tags
+    econ_idx = html.find('id="经济"')
+    if econ_idx < 0:
+        econ_idx = html.find('id="产业"')
+    if econ_idx >= 0:
+        section_html = html[econ_idx:econ_idx + 6000]
+        # Stop at next major heading
+        next_h = re.search(r'<h[23][^>]*>', section_html[50:])
+        if next_h:
+            section_html = section_html[:50 + next_h.start()]
+        paras = re.findall(r'<p[^>]*>(.*?)</p>', section_html, re.DOTALL)
+        texts = []
+        for p in paras:
+            t = re.sub(r'<[^>]+>|&#\w+;|&\w+;|\[.*?\]', ' ', p)
+            t = re.sub(r'\s+', ' ', t).strip()
+            if len(t) > 25 and not re.match(r'^@media|^\.mw', t):
+                texts.append(t)
+        result['industry'] = '。'.join(texts[:2])[:200] if texts else ''
+
+    return result
+
+
+def _fetch_wiki_city_profile(province: str, city: str, timeout: int = 10) -> dict | None:
+    """Fetch and parse a single city's Wikipedia page."""
+    candidates = [f"{city}市", city] if province not in ("北京", "上海", "天津", "重庆") else [f"{province}市"]
+    for name in candidates:
+        url = f"https://zh.wikipedia.org/wiki/{name}"
+        try:
+            r = requests.get(url, headers={"User-Agent": WIKI_UA}, timeout=timeout)
+        except Exception:
+            continue
+        if r.status_code != 200:
+            continue
+        # Only skip if THIS page is a disambiguation page (not just links to one)
+        if re.search(r'<title>[^<]*[（(]\s*消歧义\s*[）)]', r.text) or \
+           'Wikipedia:消歧义页面' in r.text:
+            continue
+        data = _parse_wiki_city_page(r.text)
+        if data.get('gdp') or data.get('population'):
+            return {
+                "gdp": data.get("gdp", ""),
+                "population": data.get("population", ""),
+                "industry_summary": data.get("industry", ""),
+                "employment_summary": "",
+                "source_name": f"维基百科·{name}",
+                "source_url": url,
+            }
+    return None
+
+
+def fetch_city_wiki_profiles(
+    city_rows: list[dict],
+    workers: int = 12,
+) -> dict[tuple[str, str], dict]:
+    """
+    Fetch Wikipedia city profiles for cities not already in OFFICIAL_CITY_FACTS.
+    Returns {(province, city): wiki_data_dict}.
+    Caches raw results to WIKI_CITY_RAW_PATH to avoid re-fetching.
+    """
+    targets = list({
+        (_clean(row.get("province")), _clean(row.get("city") or row.get("city_name")))
+        for row in city_rows
+        if _clean(row.get("province")) and (_clean(row.get("city") or row.get("city_name", "")))
+        and (_clean(row.get("province")), _clean(row.get("city") or row.get("city_name", ""))) not in OFFICIAL_CITY_FACTS
+    })
+
+    # Load cache
+    cached: dict[str, dict] = {}
+    if WIKI_CITY_RAW_PATH.exists():
+        cached = json.loads(WIKI_CITY_RAW_PATH.read_text(encoding="utf-8"))
+
+    results: dict[tuple[str, str], dict] = {}
+    to_fetch = [(prov, city) for prov, city in targets if f"{prov}|{city}" not in cached]
+
+    if to_fetch:
+        print(f"  Fetching {len(to_fetch)} cities from Wikipedia (cache has {len(cached)})…")
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(_fetch_wiki_city_profile, prov, city): (prov, city)
+                for prov, city in to_fetch
+            }
+            for i, future in enumerate(as_completed(futures), 1):
+                prov, city = futures[future]
+                data = future.result()
+                cached[f"{prov}|{city}"] = data or {}
+                if i % 50 == 0:
+                    print(f"    {i}/{len(to_fetch)} done, {sum(1 for v in cached.values() if v)} hits")
+
+        RAW_DIR.mkdir(parents=True, exist_ok=True)
+        WIKI_CITY_RAW_PATH.write_text(json.dumps(cached, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    for prov, city in targets:
+        data = cached.get(f"{prov}|{city}")
+        if data:
+            results[(prov, city)] = data
+    return results
+
+
 def _city_tier_label(city: str) -> tuple[int, str]:
     from app.pipeline.rank import CITY_TIER
 
@@ -476,8 +614,11 @@ def _city_tier_label(city: str) -> tuple[int, str]:
     return tier, label_by_tier[tier]
 
 
-def build_city_profile_rows(city_rows: list[dict]) -> list[dict]:
-    """Build city_profile rows from structural data plus official fact seeds."""
+def build_city_profile_rows(
+    city_rows: list[dict],
+    wiki_data: dict[tuple[str, str], dict] | None = None,
+) -> list[dict]:
+    """Build city_profile rows: official hand-curated → Wikipedia → template fallback."""
 
     seen: set[tuple[str, str]] = set()
     profiles: list[dict] = []
@@ -494,7 +635,10 @@ def build_city_profile_rows(city_rows: list[dict]) -> list[dict]:
             base_summary += "，是省会/直辖市核心城市"
         base_summary += f"，按系统城市分层为{tier_label}。"
 
-        official = OFFICIAL_CITY_FACTS.get((province, city), {})
+        official = OFFICIAL_CITY_FACTS.get((province, city))
+        wiki = (wiki_data or {}).get((province, city)) if not official else None
+        source = official or wiki or {}
+
         profiles.append(
             {
                 "city_name": city,
@@ -502,13 +646,13 @@ def build_city_profile_rows(city_rows: list[dict]) -> list[dict]:
                 "city_tier": tier,
                 "tier_label": tier_label,
                 "is_capital": is_capital,
-                "summary": official.get("summary") or base_summary,
-                "gdp": official.get("gdp", ""),
-                "population": official.get("population", ""),
-                "industry_summary": official.get("industry_summary", ""),
-                "employment_summary": official.get("employment_summary", ""),
-                "source_name": official.get("source_name") or "项目内置城市分层规则",
-                "source_url": official.get("source_url", ""),
+                "summary": source.get("summary") or base_summary,
+                "gdp": source.get("gdp", ""),
+                "population": source.get("population", ""),
+                "industry_summary": source.get("industry_summary", ""),
+                "employment_summary": source.get("employment_summary", ""),
+                "source_name": source.get("source_name") or "项目内置城市分层规则",
+                "source_url": source.get("source_url", ""),
                 "fetched_at": datetime.now().isoformat(timespec="seconds"),
             }
         )
@@ -539,6 +683,7 @@ def _upsert_many(conn: Any, table: str, rows: list[dict], conflict_columns: tupl
 def build_profiles(
     school_limit: int | None = None,
     fetch_schools: bool = True,
+    fetch_cities: bool = True,
     workers: int = 24,
 ) -> dict[str, int]:
     """Create profile tables and populate them from available source data."""
@@ -568,7 +713,8 @@ def build_profiles(
             """,
         )
         major_profiles = build_major_profile_rows(major_rows)
-        city_profiles = build_city_profile_rows(city_rows)
+        wiki_city_data = fetch_city_wiki_profiles(city_rows, workers=workers) if fetch_cities else {}
+        city_profiles = build_city_profile_rows(city_rows, wiki_data=wiki_city_data)
 
         _upsert_many(conn, "school_profile", school_profiles, ("school_name",))
         _upsert_many(conn, "major_profile", major_profiles, ("major_name",))
@@ -586,11 +732,13 @@ def main() -> None:
     parser.add_argument("--school-limit", type=int, default=None, help="Limit school profile fetches for testing.")
     parser.add_argument("--workers", type=int, default=24)
     parser.add_argument("--no-fetch-schools", action="store_true", help="Reuse data/raw/school_profiles_raw.json.")
+    parser.add_argument("--no-fetch-cities", action="store_true", help="Skip Wikipedia city fetch (use cache or template).")
     args = parser.parse_args()
 
     counts = build_profiles(
         school_limit=args.school_limit,
         fetch_schools=not args.no_fetch_schools,
+        fetch_cities=not args.no_fetch_cities,
         workers=args.workers,
     )
     for table, count in counts.items():
