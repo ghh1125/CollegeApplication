@@ -15,6 +15,23 @@ TIER_ORDER = ["冲", "稳", "保", "垫", "高危冲", "数据不足"]
 # 第四轮学科评估 grade → ordinal score (higher = better)
 GRADE_ORDER = {"A+": 9, "A": 8, "A-": 7, "B+": 6, "B": 5, "B-": 4, "C+": 3, "C": 2, "C-": 1}
 
+# City economic tier (higher = better economic base / job market)
+# 5: 北上; 4: 广深; 3: 新一线; 2: 二线; 1: 其他
+CITY_TIER: dict[str, int] = {
+    # 一线
+    "北京": 5, "上海": 5,
+    "广州": 4, "深圳": 4,
+    # 新一线（2024）
+    "成都": 3, "杭州": 3, "重庆": 3, "武汉": 3, "西安": 3,
+    "苏州": 3, "南京": 3, "长沙": 3, "天津": 3, "郑州": 3,
+    "东莞": 3, "青岛": 3, "沈阳": 3, "宁波": 3, "昆明": 3,
+    # 二线
+    "福州": 2, "无锡": 2, "合肥": 2, "南宁": 2, "济南": 2,
+    "长春": 2, "哈尔滨": 2, "温州": 2, "石家庄": 2, "贵阳": 2,
+    "南昌": 2, "太原": 2, "厦门": 2, "大连": 2, "南通": 2,
+    "烟台": 2, "常州": 2, "珠海": 2, "兰州": 2, "呼和浩特": 2,
+}
+
 # Maps normalized undergraduate major name → 第四轮 discipline code.
 # Exact match tried first; substring fallback catches name variants.
 MAJOR_DISCIPLINE_MAP: dict[str, str] = {
@@ -169,6 +186,14 @@ def _major_level(
     return 1
 
 
+def _city_key(program: dict, preferred_cities: list) -> tuple[int, int]:
+    """(in_preferred_list, city_tier) — higher is better on both."""
+    city = program.get("school_city", "")
+    in_preferred = 1 if city in preferred_cities else 0
+    tier = CITY_TIER.get(city, 1)
+    return (in_preferred, tier)
+
+
 def _school_quality_key(program: dict, preferred_schools: list) -> tuple[int, int]:
     """(discipline_grade_score, -ruanke_rank) — higher is better on both."""
     if program.get("school_name") in preferred_schools:
@@ -231,7 +256,7 @@ def sort_candidates(
     def sort_key(program: dict) -> tuple:
         major = _major_level(program, preferred_majors, preferred_categories, expanded_major_names)
         school = _school_quality_key(program, preferred_schools)
-        city = 1 if program.get("school_city") in preferred_cities else 0
+        city = _city_key(program, preferred_cities)
         ratio = (program.get("gap_info") or {}).get("ratio")
         gap = -abs(ratio) if ratio is not None else -1.0
 
