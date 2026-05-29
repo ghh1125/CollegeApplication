@@ -220,7 +220,7 @@ with st.sidebar:
         with st.container(border=True):
             st.markdown("**偏好设置**")
             selected_majors_from_list = st.multiselect(
-                "偏好专业（排序优先，填了会过滤）",
+                "偏好专业（排序优先）",
                 options=_all_major_options,
                 default=[],
                 placeholder='搜索专业名，如"计算机"…',
@@ -231,21 +231,39 @@ with st.sidebar:
                 "preferred_majors",
                 "例如：人工智能",
             )
-            limit_to_preferred_majors = bool(preferred_major_input)
+            limit_to_preferred_majors = bool(preferred_major_input) and st.checkbox(
+                "只看这些专业",
+                value=False,
+                key="w_limit_majors",
+                disabled=not bool(preferred_major_input),
+            )
 
             _province_city_map = _load_province_city_map()
             _all_cities_flat = sorted({c for cs in _province_city_map.values() for c in cs})
             preferred_cities_sort_input = st.multiselect(
-                "偏好城市（排序优先，不过滤候选池）",
+                "偏好城市（排序优先）",
                 options=_all_cities_flat,
                 default=[],
                 placeholder="搜索城市…",
                 key="w_preferred_cities_sort",
             )
+            limit_to_preferred_cities = bool(preferred_cities_sort_input) and st.checkbox(
+                "只看这些城市",
+                value=False,
+                key="w_limit_cities",
+                disabled=not bool(preferred_cities_sort_input),
+            )
 
             preferred_schools_raw = st.text_input(
-                "偏好学校（排序加分）",
+                "偏好学校（排序优先）",
                 value="", placeholder="浙江大学, 上海交通大学",
+            )
+            _has_pref_schools = bool(preferred_schools_raw.strip())
+            limit_to_preferred_schools = _has_pref_schools and st.checkbox(
+                "只看这些学校",
+                value=False,
+                key="w_limit_schools",
+                disabled=not _has_pref_schools,
             )
             risk_preference = st.selectbox("风险偏好", ["激进", "均衡", "保守"], index=1, key="w_risk")
             volunteer_total = st.number_input("志愿数量", 1, 80, 80, step=1)
@@ -312,6 +330,9 @@ if not _form_ready:
     preferred_major_input: list[str] = []
     excluded_major_input: list[str] = []
     limit_to_preferred_majors = False
+    limit_to_preferred_cities = False
+    limit_to_preferred_schools = False
+    preferred_schools_raw = ""
 
 # ─── AI 对话顾问 ──────────────────────────────────────────────────────────────
 
@@ -599,8 +620,10 @@ if main_priority not in ("专业优先", "学校优先", "城市优先"):
     st.stop()
 
 preferred_cities = preferred_cities_sort_input  # soft sort preference only
-# Hard pool filter: specific cities > province expansion > no filter
-if preferred_cities_input:
+# Hard pool filter: 只看城市 checkbox > specific cities (hard filter) > province expansion > none
+if limit_to_preferred_cities:
+    city_filters = preferred_cities_sort_input
+elif preferred_cities_input:
     city_filters = preferred_cities_input
 elif _selected_provinces:
     city_filters = sorted({
@@ -669,6 +692,10 @@ if city_filters:
 if major_kws:
     pool, dropped = filter_by_major_keywords(pool, major_kws)
     steps.append(("专业词", len(pool)))
+
+if limit_to_preferred_schools and preferred_schools:
+    pool = [p for p in pool if p.get("school_name") in set(preferred_schools)]
+    steps.append(("指定学校", len(pool)))
 
 final = pool
 
