@@ -153,6 +153,30 @@ class RankPipelineTests(unittest.TestCase):
         # Within 冲: major match outranks city match
         self.assertLess(ids.index("rush-major"), ids.index("rush-city"))
 
+    def test_build_sort_reason_summarizes_ranking_signals(self) -> None:
+        from app.pipeline.rank import build_sort_reason
+
+        reason = build_sort_reason(
+            {
+                "school_name": "杭州测试大学",
+                "school_city": "杭州",
+                "major_name": "计算机科学与技术",
+                "normalized_major_name": "计算机科学与技术",
+                "ruanke_rank": 50,
+                "gap_info": {"tier": "冲", "gap": -500},
+            },
+            main_priority="学校优先",
+            preferred_majors=["计算机科学与技术"],
+            preferred_categories=[],
+            preferred_cities=["杭州"],
+        )
+
+        self.assertTrue(reason.startswith("冲；学校优先："))
+        self.assertIn("匹配偏好专业", reason)
+        self.assertIn("匹配偏好城市杭州", reason)
+        self.assertIn("软科第50", reason)
+        self.assertIn("gap -500", reason)
+
 
 class BuilderPipelineTests(unittest.TestCase):
     """Behavioral tests for app.pipeline.builder."""
@@ -319,6 +343,8 @@ class RecommendationServiceTests(unittest.TestCase):
         self.assertEqual([v["id"] for v in city_mode["volunteers"]], ["city", "ranked"])
         # 学校优先: ruanke_rank is primary (ranked=50 > city=None) → "ranked" comes first
         self.assertEqual([v["id"] for v in school_mode["volunteers"]], ["ranked", "city"])
+        self.assertIn("sort_reason", school_mode["volunteers"][0])
+        self.assertIn("学校优先", school_mode["volunteers"][0]["sort_reason"])
 
 
 if __name__ == "__main__":

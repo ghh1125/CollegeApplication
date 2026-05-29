@@ -120,6 +120,7 @@ def _recommendation_df(programs: list[dict]) -> pd.DataFrame:
             **history_rank_columns(p),
             "均值位次":  (p.get("gap_info") or {}).get("weighted_avg"),
             "gap":       (p.get("gap_info") or {}).get("gap"),
+            "排序理由":  p.get("sort_reason", ""),
             "历史年数":  (p.get("gap_info") or {}).get("data_years"),
             "选科要求":  _fmt_req(p.get("subject_requirement_json")),
             "⚠":        "  ".join(p.get("_warnings") or []),

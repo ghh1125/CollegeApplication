@@ -5,7 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from app.pipeline.builder import build_volunteer_list
-from app.pipeline.rank import calculate_gap, enrich_with_history, sort_candidates
+from app.pipeline.rank import (
+    build_sort_reason,
+    calculate_gap,
+    enrich_with_history,
+    sort_candidates,
+)
 
 
 def expand_major_keywords(keywords: list[str], conn: Any) -> set[str]:
@@ -90,14 +95,25 @@ def build_recommendations(
             expanded_major_names=expanded_major_names,
         )
 
-        return build_volunteer_list(
+        result = build_volunteer_list(
             sorted_candidates,
             risk_preference=risk_preference or profile.risk_preference,
             total=total,
         )
+        for collection_name in ("volunteers", "reserve"):
+            for program in result.get(collection_name, []):
+                program["sort_reason"] = build_sort_reason(
+                    program,
+                    main_priority=main_priority,
+                    preferred_majors=preferred_majors,
+                    preferred_categories=preferred_categories,
+                    preferred_cities=preferred_cities,
+                    preferred_schools=preferred_schools,
+                    expanded_major_names=expanded_major_names,
+                )
+        return result
 
     if conn is not None:
         return _run(conn)
     with get_conn() as managed_conn:
         return _run(managed_conn)
-
