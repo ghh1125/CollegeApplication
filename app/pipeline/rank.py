@@ -264,14 +264,19 @@ def sort_candidates(
         ratio = (program.get("gap_info") or {}).get("ratio")
         gap = -abs(ratio) if ratio is not None else -1.0
 
-        # If user explicitly specified a secondary preference, promote it above school quality.
-        # 专业优先 + 指定城市 → (major, city, school, gap)
-        # 学校优先 + 指定城市 → (school, city, major, gap)
-        # 城市优先 + 指定专业 → (city, major, school, gap)
+        # Boost explicitly-specified secondary preferences above school quality.
+        # Rule: if you specified it, it gets pos 2; major beats city for the pos-2 slot.
+        #
+        # 专业优先: city boost when has_city (major is already primary)
+        # 学校优先: major stays at pos 2 whenever has_major; city only gets pos 2 when
+        #           user specified city but NOT major
+        # 城市优先: major boost when has_major (city is already primary)
         if main_priority == "专业优先":
             return (major, city, school, gap) if has_city else (major, school, city, gap)
         elif main_priority == "学校优先":
-            return (school, city, major, gap) if has_city else (school, major, city, gap)
+            if has_city and not has_major:
+                return (school, city, major, gap)
+            return (school, major, city, gap)
         else:  # 城市优先
             return (city, major, school, gap) if has_major else (city, school, major, gap)
 
