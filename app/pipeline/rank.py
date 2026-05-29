@@ -197,12 +197,15 @@ def _city_key(program: dict, preferred_cities: list) -> tuple[int, int]:
 def _school_quality_key(program: dict, preferred_schools: list, major_first: bool = False) -> tuple[int, int]:
     """
     School quality signal — two orderings:
-      major_first=True  (专业优先): disc_grade leads → rewards discipline strength in that subject
-      major_first=False (学校优先): ruanke leads    → rewards overall school brand/ranking
+      major_first=True  (专业优先): disc_grade leads, falls back to school_best_grade
+      major_first=False (学校优先): ruanke leads, disc_grade as tiebreaker
     """
     if program.get("school_name") in preferred_schools:
         return (1000, 1000)
     disc_grade = GRADE_ORDER.get(program.get("discipline_grade") or "", 0)
+    # Fall back to the school's best discipline grade when specific one is missing
+    if disc_grade == 0:
+        disc_grade = GRADE_ORDER.get(program.get("school_best_grade") or "", 0)
     ruanke = program.get("ruanke_rank")
     ruanke_score = -ruanke if ruanke else -999
     if major_first:
@@ -320,7 +323,7 @@ def _enrich_with_history(candidates: list[dict], year: int, conn: Any) -> list[d
     history_by_code, history_by_name = _load_history_indexes(conn, year)
     location_by_school = _load_school_locations(conn)
     major_category_by_name = _load_major_categories(conn)
-    discipline_grades = _load_discipline_grades(conn)
+    discipline_grades, school_best_grades = _load_discipline_grades(conn)
 
     enriched: list[dict] = []
     for program in candidates:
@@ -358,6 +361,7 @@ def _enrich_with_history(candidates: list[dict], year: int, conn: Any) -> list[d
 
         disc_code = _lookup_discipline_code(normalized_major_name)
         item["discipline_grade"] = discipline_grades.get((school_name, disc_code), "") if disc_code else ""
+        item["school_best_grade"] = school_best_grades.get(school_name, "")
 
         enriched.append(item)
 
@@ -419,12 +423,22 @@ def _load_major_categories(conn: Any) -> dict[str, str]:
     }
 
 
-def _load_discipline_grades(conn: Any) -> dict[tuple[str, str], str]:
-    """Return {(school_name, discipline_code): grade} from discipline_evaluation."""
+def _load_discipline_grades(conn: Any) -> tuple[dict[tuple[str, str], str], dict[str, str]]:
+    """
+    Return (by_school_disc, school_best):
+      by_school_disc: {(school_name, discipline_code): grade}
+      school_best:    {school_name: best_grade}  — highest grade across all disciplines
+    """
     try:
         rows = conn.execute(
             "SELECT school_name, discipline_code, grade FROM discipline_evaluation"
         ).fetchall()
-        return {(str(row[0]), str(row[1])): str(row[2]) for row in rows}
+        by_school_disc = {(str(r[0]), str(r[1])): str(r[2]) for r in rows}
+        school_best: dict[str, str] = {}
+        for school, _disc, grade in rows:
+            school = str(school)
+            if school not in school_best or GRADE_ORDER.get(grade, 0) > GRADE_ORDER.get(school_best[school], 0):
+                school_best[school] = grade
+        return by_school_disc, school_best
     except Exception:
-        return {}
+        return {}, {}

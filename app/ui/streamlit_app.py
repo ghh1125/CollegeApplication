@@ -216,6 +216,10 @@ with st.sidebar:
                 key="w_main_priority",
                 label_visibility="collapsed",
             )
+            st.caption(
+                "专业优先：先看专业匹配；未指定目标专业时，按对应学科评估排序。"
+                "学校优先：先看学校排名/层次。城市优先：先看偏好城市。"
+            )
 
         with st.container(border=True):
             st.markdown("**偏好设置**")
@@ -237,6 +241,10 @@ with st.sidebar:
                 key="w_limit_majors",
                 disabled=not bool(preferred_major_input),
             )
+            if main_priority == "专业优先" and not preferred_major_input:
+                st.caption("未填写偏好专业时，专业优先不会猜你的专业喜好，而是按各专业对应的学科评估排序。")
+            elif preferred_major_input and not limit_to_preferred_majors:
+                st.caption("当前这些专业只影响排序；勾选“只看这些专业”后才会过滤候选池。")
 
             _province_city_map = _load_province_city_map()
             _all_cities_flat = sorted({c for cs in _province_city_map.values() for c in cs})
@@ -749,6 +757,11 @@ for i, (label, cnt) in enumerate(steps):
 st.divider()
 stats = recommendation["stats"]
 st.markdown("### 推荐志愿")
+st.caption(
+    f"当前排序：{main_priority}；"
+    f"专业限制：{'只看已选专业' if major_kws else '不限制专业'}；"
+    f"城市限制：{'只看已选地区' if city_filters else '不限制城市'}。"
+)
 stat_cols = st.columns(6)
 stat_cols[0].metric("推荐", f"{stats['total']:,}")
 stat_cols[1].metric("冲", f"{stats['冲']:,}")
