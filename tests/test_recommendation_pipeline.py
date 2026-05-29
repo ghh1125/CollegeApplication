@@ -27,6 +27,15 @@ class RankPipelineTests(unittest.TestCase):
         self.assertEqual(result["tier"], "稳")
         self.assertEqual(result["data_years"], 2)
 
+    def test_calculate_gap_returns_cushion_tier_for_very_safe_programs(self) -> None:
+        from app.pipeline.rank import calculate_gap
+
+        # ratio = (80000 - 36500) / 80000 = 0.54375 > 0.40 → 垫
+        result = calculate_gap(36500, [{"year": 2025, "min_rank": 80000}])
+
+        self.assertEqual(result["tier"], "垫")
+        self.assertGreater(result["ratio"], 0.40)
+
     def test_calculate_gap_handles_missing_history(self) -> None:
         from app.pipeline.rank import calculate_gap
 
@@ -120,6 +129,12 @@ class RankPipelineTests(unittest.TestCase):
                 "major_name": "计算机科学与技术",
                 "gap_info": {"tier": "冲"},
             },
+            {
+                "id": "cushion",
+                "school_city": "杭州",
+                "major_name": "计算机科学与技术",
+                "gap_info": {"tier": "垫"},
+            },
         ]
 
         sorted_candidates = sort_candidates(
@@ -132,10 +147,12 @@ class RankPipelineTests(unittest.TestCase):
             preferred_cities=["杭州"],
         )
 
-        self.assertEqual(
-            [candidate["id"] for candidate in sorted_candidates],
-            ["rush-city", "rush-major", "steady-top"],
-        )
+        ids = [candidate["id"] for candidate in sorted_candidates]
+        # 冲 must come before 稳, 稳 before 垫
+        self.assertLess(ids.index("rush-major"), ids.index("steady-top"))
+        self.assertLess(ids.index("steady-top"), ids.index("cushion"))
+        # Within 冲: major match outranks city match
+        self.assertLess(ids.index("rush-major"), ids.index("rush-city"))
 
 
 class BuilderPipelineTests(unittest.TestCase):

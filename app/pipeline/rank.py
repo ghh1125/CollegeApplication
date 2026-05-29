@@ -16,7 +16,7 @@ SCHOOL_QUALITY_SCORE = {
     "is_double_first_class": 80,
 }
 
-TIER_ORDER = ["冲", "稳", "保", "高危冲", "数据不足"]
+TIER_ORDER = ["冲", "稳", "保", "垫", "高危冲", "数据不足"]
 
 
 def calculate_gap(student_rank: int, history: list[dict]) -> dict:
@@ -48,7 +48,9 @@ def calculate_gap(student_rank: int, history: list[dict]) -> dict:
     gap = weighted_avg - student_rank
     ratio = gap / weighted_avg
 
-    if ratio > 0.15:
+    if ratio > 0.40:
+        tier = "垫"
+    elif ratio > 0.15:
         tier = "保"
     elif 0 < ratio <= 0.15:
         tier = "稳"
