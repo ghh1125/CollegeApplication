@@ -209,7 +209,7 @@ with st.sidebar:
         st.divider()
         st.header("推荐策略")
         main_priority = st.selectbox(
-            "主排序（必选）",
+            "主排序",
             ["请选择…", "专业优先", "学校优先", "城市优先"],
             index=0,
             key="w_main_priority",
@@ -487,7 +487,7 @@ with st.expander("💬 AI 对话顾问", expanded=True):
             _mp = _p.get("main_priority")
             if _mp == "专业优先" and not _p.get("preferred_majors"):
                 _mp = "学校优先"
-            if _mp in ["专业优先", "学校优先"]:
+            if _mp in ["专业优先", "学校优先", "城市优先"]:
                 _fill["w_main_priority"] = _mp
             if _p.get("risk_preference") in ["激进", "均衡", "保守"]:
                 _fill["w_risk"] = _p["risk_preference"]
