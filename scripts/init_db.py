@@ -23,6 +23,9 @@ TABLE_NAMES = (
     "admission_rule",
     "major_admission_rule",
     "major_subject_requirement",
+    "school_profile",
+    "major_profile",
+    "city_profile",
 )
 SQLITE_REQUIRED_COLUMNS = {
     "admission_plan": {

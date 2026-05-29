@@ -155,6 +155,61 @@ CREATE TABLE IF NOT EXISTS major_description (
     updated_at   TEXT
 );
 
+CREATE TABLE IF NOT EXISTS school_profile (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    school_name TEXT NOT NULL,
+    school_id TEXT,
+    summary TEXT,
+    content TEXT,
+    tags TEXT,
+    motto TEXT,
+    founded_year TEXT,
+    school_type TEXT,
+    school_nature TEXT,
+    education_level TEXT,
+    master_count INTEGER,
+    doctor_count INTEGER,
+    academician_count INTEGER,
+    ruanke_rank INTEGER,
+    source_name TEXT DEFAULT '阳光高考',
+    source_url TEXT,
+    fetched_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(school_name)
+);
+
+CREATE TABLE IF NOT EXISTS major_profile (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    major_name TEXT NOT NULL,
+    special_id INTEGER,
+    summary TEXT,
+    learn_what TEXT,
+    career_direction TEXT,
+    keywords TEXT,
+    fallback_from TEXT,
+    source_name TEXT DEFAULT '阳光高考',
+    source_url TEXT,
+    fetched_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(major_name)
+);
+
+CREATE TABLE IF NOT EXISTS city_profile (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    city_name TEXT NOT NULL,
+    province TEXT,
+    city_tier INTEGER,
+    tier_label TEXT,
+    is_capital INTEGER DEFAULT 0,
+    summary TEXT,
+    gdp TEXT,
+    population TEXT,
+    industry_summary TEXT,
+    employment_summary TEXT,
+    source_name TEXT,
+    source_url TEXT,
+    fetched_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(city_name, province)
+);
+
 CREATE TABLE IF NOT EXISTS major_subject_requirement (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     normalized_major_name TEXT NOT NULL,

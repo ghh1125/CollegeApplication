@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.pipeline.builder import build_volunteer_list
+from app.pipeline.profiles import enrich_with_profiles
 from app.pipeline.rank import (
     build_sort_reason,
     calculate_gap,
@@ -82,6 +83,7 @@ def build_recommendations(
         expanded_major_names = expand_major_keywords(preferred_majors, db_conn)
 
         enriched = enrich_with_history(candidates, year=year, conn=db_conn)
+        enriched = enrich_with_profiles(enriched, db_conn)
         for program in enriched:
             program["gap_info"] = calculate_gap(profile.rank, program["history"])
 

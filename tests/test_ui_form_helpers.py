@@ -61,6 +61,8 @@ class FormHelperTests(unittest.TestCase):
 
         reason = format_sort_reason_for_display(
             {
+                "school_name": "浙江大学",
+                "major_name": "应用生物科学",
                 "school_city": "杭州",
                 "ruanke_rank": 3,
                 "gap_info": {"tier": "冲", "gap": -538},
@@ -68,7 +70,9 @@ class FormHelperTests(unittest.TestCase):
             "学校优先",
         )
 
-        self.assertEqual(reason, "冲；学校优先：软科第3；gap -538")
+        self.assertTrue(reason.startswith("冲；学校优先：浙江大学：软科第3"))
+        self.assertIn("应用生物科学：专业画像待补充", reason)
+        self.assertIn("风险：gap -538", reason)
 
 
 if __name__ == "__main__":

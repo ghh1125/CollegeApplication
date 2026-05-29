@@ -73,6 +73,9 @@ def explain_volunteer(volunteer: dict, profile: dict, search_results: list[str] 
         if h.get("min_rank")
     )
     warnings = "  ".join(volunteer.get("_warnings") or [])
+    school_profile = volunteer.get("school_profile") or {}
+    major_profile = volunteer.get("major_profile") or {}
+    city_profile = volunteer.get("city_profile") or {}
 
     search_block = ""
     if search_results:
@@ -94,6 +97,11 @@ def explain_volunteer(volunteer: dict, profile: dict, search_results: list[str] 
 - 加权均值位次：{gap.get("weighted_avg")}，与考生位次差：{gap.get("gap")}
 - 软科排名：{volunteer.get("ruanke_rank") or "未上榜"}
 - 预警：{warnings or "无"}
+
+【本地结构化画像（来自数据库，优先引用，不编造）】
+- 学校画像：{school_profile.get("summary") or "暂无"}；标签：{school_profile.get("tags") or "暂无"}；来源：{school_profile.get("source_url") or "暂无"}
+- 专业画像：{major_profile.get("summary") or "暂无"}；就业/去向：{major_profile.get("career_direction") or "暂无"}；fallback：{major_profile.get("fallback_from") or "无"}；来源：{major_profile.get("source_url") or "暂无"}
+- 城市画像：{city_profile.get("summary") or "暂无"}；GDP：{city_profile.get("gdp") or "暂无"}；常住人口：{city_profile.get("population") or "暂无"}；来源：{city_profile.get("source_url") or "暂无"}
 {search_block}
 【禁止输出的词】：前景不错、就业面广、高度契合、相对稳定、值得关注、综合来看
 

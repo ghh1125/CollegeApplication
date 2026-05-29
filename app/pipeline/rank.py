@@ -244,63 +244,32 @@ def build_sort_reason(
     expanded_major_names: set | None = None,
 ) -> str:
     """Build a short deterministic explanation for why a program ranks where it does."""
+    from app.pipeline.profiles import build_profile_sort_reason
 
     preferred_cities = preferred_cities or []
     preferred_schools = preferred_schools or []
-
-    gap_info = program.get("gap_info") or {}
-    tier = gap_info.get("tier", "数据不足")
-    details: list[str] = []
+    item = dict(program)
 
     major_level = _major_level(
-        program,
+        item,
         preferred_majors,
         preferred_categories,
         expanded_major_names,
     )
     if major_level == 4:
-        details.append("匹配偏好专业")
+        item["_major_match_label"] = "匹配偏好专业"
     elif major_level == 3:
-        details.append("匹配专业关键词")
+        item["_major_match_label"] = "匹配专业关键词"
     elif major_level == 2:
-        details.append("匹配偏好专业类")
-    elif main_priority == "专业优先":
-        discipline_grade = program.get("discipline_grade") or ""
-        school_best_grade = program.get("school_best_grade") or ""
-        if discipline_grade:
-            details.append(f"学科评估{discipline_grade}")
-        elif school_best_grade:
-            details.append(f"学校最佳学科{school_best_grade}")
-        else:
-            details.append("未指定偏好专业")
+        item["_major_match_label"] = "匹配偏好专业类"
 
-    school_name = program.get("school_name")
-    if school_name in preferred_schools:
-        details.append("匹配偏好学校")
-    else:
-        ruanke_rank = program.get("ruanke_rank")
-        if ruanke_rank:
-            details.append(f"软科第{ruanke_rank}")
-        elif program.get("is_985"):
-            details.append("985")
-        elif program.get("is_211"):
-            details.append("211")
-        elif program.get("is_double_first_class"):
-            details.append("双一流")
-
-    city = program.get("school_city") or ""
+    if item.get("school_name") in preferred_schools:
+        item["_school_match_label"] = "匹配偏好学校"
+    city = item.get("school_city") or ""
     if city in preferred_cities:
-        details.append(f"匹配偏好城市{city}")
-    elif main_priority == "城市优先" and city:
-        details.append(city)
+        item["_city_match_label"] = f"匹配偏好城市{city}"
 
-    gap = gap_info.get("gap")
-    if gap is not None:
-        details.append(f"gap {gap}")
-    else:
-        details.append("历史位次不足")
-
-    return f"{tier}；{main_priority}：" + "；".join(details)
+    return build_profile_sort_reason(item, main_priority)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
