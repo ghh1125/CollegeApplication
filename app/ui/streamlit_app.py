@@ -31,7 +31,7 @@ from app.pipeline.filter import (
     filter_by_subject,
 )
 from app.pipeline.recommend import build_recommendations, history_rank_columns
-from app.ui.form_helpers import normalize_items, split_major_preferences
+from app.ui.form_helpers import normalize_items, queue_ai_message, split_major_preferences
 from app.db import get_conn
 from app.llm.explain import (
     chat_with_advisor, search_web, should_search,
@@ -406,15 +406,17 @@ with st.expander("💬 AI 对话顾问", expanded=True):
         st.rerun()
 
     # fn_inject: buttons that call dedicated functions (explain / report)
+    if _send and queue_ai_message(st.session_state, _user_msg, _input_n):
+        st.rerun()
+
     _msg_to_send = None
     _fn_inject = None
     if _has_fn_inject:
         _fn_inject = st.session_state.pop("_ai_fn_inject")
     elif _has_inject:
         _msg_to_send = st.session_state.pop("_ai_inject")
-    elif _send and _user_msg.strip():
-        _msg_to_send = _user_msg.strip()
-        st.session_state["_ai_input_n"] = _input_n + 1
+    elif "_ai_pending_msg" in st.session_state:
+        _msg_to_send = st.session_state.pop("_ai_pending_msg")
 
     if _fn_inject:
         if not _effective_api_key:

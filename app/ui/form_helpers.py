@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import MutableMapping
+from typing import Any
 
 
 def normalize_items(values: list[str]) -> list[str]:
@@ -27,3 +29,18 @@ def split_major_preferences(values: list[str]) -> tuple[list[str], list[str]]:
     categories = [item for item in items if item.endswith("类")]
     majors = [item for item in items if item not in categories]
     return majors, categories
+
+
+def queue_ai_message(
+    state: MutableMapping[str, Any],
+    message: str,
+    input_index: int,
+) -> bool:
+    """Queue a chat message and advance the dynamic input key so the box clears."""
+
+    text = str(message or "").strip()
+    if not text:
+        return False
+    state["_ai_pending_msg"] = text
+    state["_ai_input_n"] = input_index + 1
+    return True
