@@ -459,29 +459,40 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                 else:
                     with st.spinner(f"🔍 搜索 {_top_major} 就业数据…"):
                         _fn_search = search_web(f"{_top_major} 就业去向 薪资 2025") if _top_major else []
-            with _chat_container:
-                with st.chat_message("assistant"):
-                    if _fn_type == "explain_volunteer":
-                        _response = st.write_stream(
-                            explain_volunteer(
-                                _fn_inject["volunteer"],
-                                _fn_inject["profile"],
-                                search_results=_fn_search,
-                                main_priority=_fn_inject.get("main_priority", "学校优先"),
-                                api_key=_effective_api_key,
+            try:
+                with _chat_container:
+                    with st.chat_message("assistant"):
+                        if _fn_type == "explain_volunteer":
+                            _response = st.write_stream(
+                                explain_volunteer(
+                                    _fn_inject["volunteer"],
+                                    _fn_inject["profile"],
+                                    search_results=_fn_search,
+                                    main_priority=_fn_inject.get("main_priority", "学校优先"),
+                                    api_key=_effective_api_key,
+                                )
                             )
-                        )
-                    else:  # generate_report
-                        _response = st.write_stream(
-                            generate_overall_report(
-                                _fn_inject["volunteers"],
-                                _fn_inject["stats"],
-                                _fn_inject["profile"],
-                                search_results=_fn_search,
-                                main_priority=_fn_inject.get("main_priority", "学校优先"),
-                                api_key=_effective_api_key,
+                        else:  # generate_report
+                            _response = st.write_stream(
+                                generate_overall_report(
+                                    _fn_inject["volunteers"],
+                                    _fn_inject["stats"],
+                                    _fn_inject["profile"],
+                                    search_results=_fn_search,
+                                    main_priority=_fn_inject.get("main_priority", "学校优先"),
+                                    api_key=_effective_api_key,
+                                )
                             )
-                        )
+                if not _response:
+                    _response = "⚠️ AI 未返回内容，请稍后重试或检查 API Key 是否有效。"
+                    with _chat_container:
+                        with st.chat_message("assistant"):
+                            st.write(_response)
+            except Exception as _e:
+                _response = f"⚠️ 生成失败：{_e}"
+                with _chat_container:
+                    with st.chat_message("assistant"):
+                        st.write(_response)
             st.session_state["ai_chat"].append({"role": "assistant", "content": _response})
             st.rerun()
 
