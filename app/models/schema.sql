@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS school_master (
     city TEXT,
     school_level TEXT,
     school_type TEXT,
+    ruanke_rank INTEGER,
     created_at TEXT DEFAULT (datetime('now')),
     CONSTRAINT school_master_unique UNIQUE (school_code)
 );
@@ -129,6 +130,20 @@ CREATE TABLE IF NOT EXISTS major_admission_rule (
     human_verified INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     CONSTRAINT major_admission_rule_unique UNIQUE (year, school_name, major_name)
+);
+
+CREATE TABLE IF NOT EXISTS major_description (
+    special_id   INTEGER PRIMARY KEY,
+    name         TEXT NOT NULL,
+    national_code TEXT,
+    level1       TEXT,
+    level2       TEXT,
+    level3       TEXT,
+    is_what      TEXT,
+    learn_what   TEXT,
+    do_what      TEXT,
+    keywords     TEXT,
+    updated_at   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS major_subject_requirement (

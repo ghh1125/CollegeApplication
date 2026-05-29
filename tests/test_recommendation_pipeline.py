@@ -245,20 +245,23 @@ class RecommendationServiceTests(unittest.TestCase):
             total_score=626,
             selected_subjects=["物理", "化学", "生物"],
         )
+        # Both candidates share the same preferred major so major_score is tied at 100.
+        # city_first should break the tie in favour of "city"; ruanke_rank should break
+        # the tie in favour of "ranked" when city_first=False.
         candidates = [
-            {
-                "id": "major",
-                "school_code": "0002",
-                "school_name": "兰州测试大学",
-                "major_code": "002",
-                "major_name": "计算机科学与技术",
-            },
             {
                 "id": "city",
                 "school_code": "0001",
                 "school_name": "杭州测试大学",
                 "major_code": "001",
-                "major_name": "新闻传播学类",
+                "major_name": "计算机科学与技术",
+            },
+            {
+                "id": "ranked",
+                "school_code": "0002",
+                "school_name": "兰州测试大学",
+                "major_code": "002",
+                "major_name": "计算机科学与技术",
             },
         ]
 
@@ -266,12 +269,12 @@ class RecommendationServiceTests(unittest.TestCase):
             execute_schema(conn, load_schema_sql())
             conn.executemany(
                 """
-                INSERT INTO school_master (school_code, school_name, province, city)
-                VALUES (?, ?, '测试省', ?)
+                INSERT INTO school_master (school_code, school_name, province, city, ruanke_rank)
+                VALUES (?, ?, '测试省', ?, ?)
                 """,
                 [
-                    ("0001", "杭州测试大学", "杭州"),
-                    ("0002", "兰州测试大学", "兰州"),
+                    ("0001", "杭州测试大学", "杭州", None),   # in preferred city, no ruanke rank
+                    ("0002", "兰州测试大学", "兰州", 50),     # better ruanke rank, wrong city
                 ],
             )
             conn.executemany(
@@ -283,7 +286,7 @@ class RecommendationServiceTests(unittest.TestCase):
                 VALUES (2025, '浙江', '普通类', ?, ?, ?, ?, 620, 36000, 10)
                 """,
                 [
-                    ("0001", "杭州测试大学", "001", "新闻传播学类"),
+                    ("0001", "杭州测试大学", "001", "计算机科学与技术"),
                     ("0002", "兰州测试大学", "002", "计算机科学与技术"),
                 ],
             )
@@ -301,7 +304,7 @@ class RecommendationServiceTests(unittest.TestCase):
                 total=2,
                 conn=conn,
             )
-            major_first = build_recommendations(
+            school_first = build_recommendations(
                 candidates,
                 profile,
                 main_priority="专业优先",
@@ -315,8 +318,10 @@ class RecommendationServiceTests(unittest.TestCase):
                 conn=conn,
             )
 
-        self.assertEqual([v["id"] for v in city_first["volunteers"]], ["city", "major"])
-        self.assertEqual([v["id"] for v in major_first["volunteers"]], ["major", "city"])
+        # Same major score → city is tiebreaker when city_first=True
+        self.assertEqual([v["id"] for v in city_first["volunteers"]], ["city", "ranked"])
+        # Same major score → ruanke_rank is tiebreaker when city_first=False
+        self.assertEqual([v["id"] for v in school_first["volunteers"]], ["ranked", "city"])
 
 
 if __name__ == "__main__":

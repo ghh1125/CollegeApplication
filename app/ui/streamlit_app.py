@@ -720,6 +720,12 @@ stat_cols[3].metric("保", f"{stats['保']:,}")
 stat_cols[4].metric("垫", f"{stats['垫']:,}")
 stat_cols[5].metric("备选池", f"{stats['备选池']:,}")
 
+if major_kws and (stats.get("冲", 0) + stats.get("稳", 0)) < 25:
+    st.info(
+        "当前专业限制较严格，符合条件的冲/稳志愿不足，已用保底志愿补齐。"
+        "如需更多冲稳选项，可适当放宽偏好专业或取消专业限制。"
+    )
+
 search = st.text_input("🔍 搜索", placeholder="搜索学校或专业…")
 recommend_df = _recommendation_df(recommendation["volunteers"])
 candidate_df = _to_df(final)
