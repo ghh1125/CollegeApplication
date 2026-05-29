@@ -57,19 +57,22 @@ def _stream(messages: list[dict], api_key: str | None = None):
 
 # ─── 单条志愿解释 ──────────────────────────────────────────────────────────────
 
-_EXPLAIN_SENTENCE2 = {
-    "专业优先": (
-        '第2句：专业深度——学科评估等级（如有）+ 这个专业普通毕业生（非顶尖）典型去向和薪资区间；'
-        '优先引用上方搜索数据；无数据则写"就业数据待查"'
-    ),
-    "学校优先": (
-        '第2句：学校深度——软科排名/层次 + 该校毕业生整体就业质量、平均薪资或典型雇主；'
-        '优先引用上方搜索数据；无数据则写"就业数据待查"'
-    ),
-    "城市优先": (
-        '第2句：城市深度——城市 GDP/产业结构 + 这个专业在该城市的就业吸纳情况和薪资水平；'
-        '优先引用上方搜索数据；无数据则写"就业数据待查"'
-    ),
+_EXPLAIN_4_SENTENCES = {
+    "专业优先": """\
+第1句：专业切入——先点出这个专业的学科评估等级（若有），再说录取概率（均值位次X，考生位次Y，gap Z，属于冲/稳/保），一句话说清楚
+第2句：专业深度——这个专业普通毕业生（非顶尖）典型去向和薪资区间；优先引用上方搜索数据；无数据则写"就业数据待查"
+第3句：历史趋势——直接引用历史位次数字说该专业录取线涨跌，若只有1年数据则说参考价值有限
+第4句：专业匹配——引用上方推荐理由里的专业相关内容，说明该专业与考生偏好的契合情况；有预警则点出""",
+    "学校优先": """\
+第1句：学校切入——先点出软科排名（若有）和学校层次，再说录取概率（均值位次X，考生位次Y，gap Z，属于冲/稳/保），一句话说清楚
+第2句：学校深度——该校毕业生整体就业质量、平均薪资或典型雇主；优先引用上方搜索数据；无数据则写"就业数据待查"
+第3句：历史趋势——直接引用历史位次数字说该校该专业录取线涨跌，若只有1年数据则说参考价值有限
+第4句：学校匹配——引用上方推荐理由里的学校相关内容，说明该学校层次是否达到考生预期；有预警则点出""",
+    "城市优先": """\
+第1句：城市切入——先点出城市经济层级和GDP规模，再说录取概率（均值位次X，考生位次Y，gap Z，属于冲/稳/保），一句话说清楚
+第2句：城市深度——城市产业结构 + 这个专业在该城市的就业吸纳情况和薪资水平；优先引用上方搜索数据；无数据则写"就业数据待查"
+第3句：历史趋势——直接引用历史位次数字说录取线涨跌，若只有1年数据则说参考价值有限
+第4句：城市匹配——引用上方推荐理由里的城市相关内容，说明该城市是否符合考生地区预期；有预警则点出""",
 }
 
 _REPORT_PARA2 = {
@@ -85,6 +88,18 @@ _REPORT_PARA2 = {
         '第2段：城市深度——分析Top城市的产业结构和就业市场，说这些城市对志愿表中主要专业'
         '的吸纳能力和薪资水平；优先引用搜索数据，无数据则写"就业数据待查"'
     ),
+}
+
+_REPORT_PARA1 = {
+    "专业优先": "第1段：从专业角度点出整体——志愿表覆盖了哪几个专业方向、各方向的学科评估等级分布如何，用具体数字（冲稳保垫各几条）",
+    "学校优先": "第1段：从学校角度点出整体——志愿表的学校层次分布（985/211/双一流/普通本科各几条），用具体数字（冲稳保垫各几条）",
+    "城市优先": "第1段：从城市角度点出整体——志愿表覆盖了哪几个城市/地区、各城市经济层级分布如何，用具体数字（冲稳保垫各几条）",
+}
+
+_REPORT_PARA3 = {
+    "专业优先": '第3段：专业风险——最需要家长注意的1-2个专业选择风险，点到具体志愿（如"第X条XXX"），重点说专业就业或冷热门风险',
+    "学校优先": '第3段：学校风险——最需要家长注意的1-2个学校选择风险，点到具体志愿（如"第X条XXX"），重点说学校层次落差或数据不足风险',
+    "城市优先": '第3段：地区风险——最需要家长注意的1-2个地区分布风险，点到具体志愿（如"第X条XXX"），重点说城市就业市场或地区集中度风险',
 }
 
 _REPORT_PARA4 = {
@@ -155,6 +170,7 @@ def explain_volunteer(
     school_profile = volunteer.get("school_profile") or {}
     major_profile = volunteer.get("major_profile") or {}
     city_profile = volunteer.get("city_profile") or {}
+    sort_reason = volunteer.get("sort_reason") or ""
 
     search_block = ""
     if search_results:
@@ -167,6 +183,10 @@ def explain_volunteer(
 - 选考科目：{"、".join(profile.get("selected_subjects", []))}
 - 偏好专业：{"、".join(profile.get("preferred_majors", [])) or "未指定"}
 - 偏好城市：{"、".join(profile.get("preferred_cities", [])) or "未指定"}
+- 主排序：{main_priority}
+
+【推荐理由（系统按{main_priority}自动生成，务必引用此内容解释推荐原因）】
+{sort_reason or "暂无"}
 
 【志愿信息】
 - 学校：{volunteer.get("school_name")}（{volunteer.get("school_city")}）
@@ -184,11 +204,8 @@ def explain_volunteer(
 {search_block}
 【禁止输出的词】：前景不错、就业面广、高度契合、相对稳定、值得关注、综合来看
 
-请输出4句话（不加标题、不加序号）：
-第1句：录取概率——均值位次X考生位次Y gap Z 属于冲/稳/保，直接说数字
-{_EXPLAIN_SENTENCE2.get(main_priority, _EXPLAIN_SENTENCE2["学校优先"])}
-第3句：历史趋势——直接引用历史位次数字说涨跌，若只有1年数据则说参考价值有限
-第4句：风险或匹配——有预警则点出，无预警则说与考生选科/偏好的契合情况"""
+请按以下要求输出4句话（不加标题、不加序号）：
+{_EXPLAIN_4_SENTENCES.get(main_priority, _EXPLAIN_4_SENTENCES["学校优先"])}"""
 
     return _stream([{"role": "user", "content": prompt}], api_key=api_key)
 
@@ -331,6 +348,17 @@ def generate_overall_report(
             f"{v.get('school_name')}·{v.get('major_name')}"
         )
 
+    # Top-3 per tier with their sort reasons (for report context)
+    top_reasons_lines = []
+    for tier in ["冲", "稳", "保"]:
+        tier_vols = [v for v in volunteers if (v.get("gap_info") or {}).get("tier") == tier]
+        for v in tier_vols[:3]:
+            reason = (v.get("sort_reason") or "").split("；", 1)[-1]  # strip tier prefix
+            top_reasons_lines.append(
+                f"[{tier}]{v.get('volunteer_no')}.{v.get('school_name')}·{v.get('major_name')}：{reason[:80]}"
+            )
+    top_reasons_block = "\n".join(top_reasons_lines) if top_reasons_lines else "暂无"
+
     # Collect risk flags
     warning_count = sum(1 for v in volunteers if v.get("_warnings"))
     no_history_count = sum(
@@ -360,6 +388,10 @@ def generate_overall_report(
 【考生信息】
 - 全省位次：{profile.get("rank")}  风险偏好：{profile.get("risk_preference", "均衡")}
 - 选考科目：{"、".join(profile.get("selected_subjects", []))}
+- 主排序：{main_priority}
+
+【冲稳保代表志愿推荐理由（系统按{main_priority}自动生成，报告中直接引用这些具体依据）】
+{top_reasons_block}
 
 【志愿统计】
 - 冲{stats.get("冲")} 稳{stats.get("稳")} 保{stats.get("保")} 垫{stats.get("垫")}
@@ -377,9 +409,9 @@ def generate_overall_report(
 【禁止输出的词】：比例合理、高度聚焦、利于发展、整体来看、综合考量、值得注意
 
 请直接分4段输出（不加标题序号）：
-第1段：一句话点出这份志愿表最关键的问题或优势，用具体数字（冲稳保垫各几条）
+{_REPORT_PARA1.get(main_priority, _REPORT_PARA1["学校优先"])}
 {_REPORT_PARA2.get(main_priority, _REPORT_PARA2["学校优先"])}
-第3段：最需要家长注意的1-2个具体风险，点到具体志愿（如"第X条XXX"）
+{_REPORT_PARA3.get(main_priority, _REPORT_PARA3["学校优先"])}
 {_REPORT_PARA4.get(main_priority, _REPORT_PARA4["学校优先"])}"""
 
     return _stream([{"role": "user", "content": prompt}], api_key=api_key)
