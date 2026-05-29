@@ -107,6 +107,59 @@ class RankPipelineTests(unittest.TestCase):
         self.assertTrue(enriched[0]["is_211"])
         self.assertTrue(enriched[0]["is_double_first_class"])
 
+    def test_enrich_with_history_prefers_name_over_code_to_avoid_cross_year_mismatch(self) -> None:
+        """Code reuse regression: 中央财经大学 code 014 was reused across years for different majors.
+
+        2025: 1165/014 → 计算机类 (rank 10942)
+        2024: 1165/014 → 法学     (rank  7180)   ← wrong if matched by code
+        2024: 1165/015 → 计算机类 (rank  9200)   ← correct 2024 data
+        2023: 1165/014 → 新闻传播学类 (rank 9970) ← wrong if matched by code
+        2023: 1165/015 → 计算机类 (rank  8437)   ← correct 2023 data
+
+        Name-based matching must return only the 计算机类 rows (10942/9200/8437).
+        """
+        from app.pipeline.rank import enrich_with_history
+        from scripts.init_db import execute_schema, load_schema_sql
+
+        candidate = {
+            "school_code": "1165",
+            "school_name": "中央财经大学",
+            "major_code": "014",
+            "major_name": "计算机类",
+        }
+        with sqlite3.connect(":memory:") as conn:
+            execute_schema(conn, load_schema_sql())
+            conn.execute(
+                "INSERT INTO school_master (school_code, school_name, province, city) "
+                "VALUES ('1165', '中央财经大学', '北京', '北京')"
+            )
+            conn.executemany(
+                """
+                INSERT INTO historical_cutoff (
+                    year, province, batch, school_code, school_name,
+                    major_code, major_name, min_score, min_rank, plan_count
+                ) VALUES (?, '北京', '普通类', '1165', '中央财经大学', ?, ?, 600, ?, 10)
+                """,
+                [
+                    (2025, "014", "计算机类",     10942),
+                    (2024, "014", "法学",          7180),  # code reuse — wrong match
+                    (2024, "015", "计算机类",      9200),  # correct 2024 row
+                    (2023, "014", "新闻传播学类",  9970),  # code reuse — wrong match
+                    (2023, "015", "计算机类",      8437),  # correct 2023 row
+                ],
+            )
+
+            enriched = enrich_with_history([candidate], year=2025, conn=conn)
+
+        history = enriched[0]["history"]
+        ranks_by_year = {r["year"]: r["min_rank"] for r in history}
+
+        # Must match by name → correct rows only
+        self.assertEqual(ranks_by_year.get(2025), 10942, "2025 rank should be 10942")
+        self.assertEqual(ranks_by_year.get(2024), 9200,  "2024 rank should be 9200 (计算机类), not 7180 (法学)")
+        self.assertEqual(ranks_by_year.get(2023), 8437,  "2023 rank should be 8437 (计算机类), not 9970 (新闻传播学类)")
+        self.assertEqual(len(history), 3, "should have exactly 3 matched rows")
+
     def test_sort_candidates_preserves_tier_order_and_sorts_inside_tier(self) -> None:
         from app.pipeline.rank import sort_candidates
 

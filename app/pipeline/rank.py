@@ -608,10 +608,26 @@ def _enrich_with_history(candidates: list[dict], year: int, conn: Any) -> list[d
             "",
         )
 
-        item["history"] = history_by_code.get(
-            (school_code, major_code),
-            history_by_name.get((school_name, normalized_major_name), []),
-        )
+        # Name-based match is authoritative: same school + same normalized major name
+        # across all years, unaffected by code reuse.
+        # Code-based fallback is only used when no name match exists, and only for
+        # records where the stored major name actually matches (codes get reused).
+        # Name-based match is authoritative: same school + same normalized major name
+        # across all years, unaffected by code reuse.
+        # Code-based fallback is only used when no name match exists, and only for
+        # records where the stored major name actually matches (codes get reused).
+        _PUBLIC_KEYS = ("year", "min_rank", "min_score", "plan_count")
+
+        def _strip(records: list[dict]) -> list[dict]:
+            return [{k: r[k] for k in _PUBLIC_KEYS} for r in records]
+
+        name_history = history_by_name.get((school_name, normalized_major_name), [])
+        if name_history:
+            item["history"] = _strip(name_history)
+        else:
+            code_records = history_by_code.get((school_code, major_code), [])
+            matched = [r for r in code_records if r.get("_norm_major_name") == normalized_major_name]
+            item["history"] = _strip(matched)
 
         province, city, ruanke_rank = location_by_school.get(school_name, ("", "", None))
         item["school_province"] = item.get("school_province") or province
@@ -655,14 +671,16 @@ def _load_history_indexes(
     by_code: dict[tuple[str, str], list[dict]] = {}
     by_name: dict[tuple[str, str], list[dict]] = {}
     for row in rows:
+        norm = normalize_major_name(row[4])
         record = {
             "year": row[0],
             "min_rank": row[6],
             "min_score": row[5],
             "plan_count": row[7],
+            "_norm_major_name": norm,  # used to validate code-fallback matches
         }
         by_code.setdefault((str(row[1] or ""), str(row[3] or "")), []).append(record)
-        by_name.setdefault((str(row[2] or ""), normalize_major_name(row[4])), []).append(record)
+        by_name.setdefault((str(row[2] or ""), norm), []).append(record)
     return by_code, by_name
 
 
