@@ -207,7 +207,7 @@ with st.sidebar:
         )
 
         st.divider()
-        st.header("推荐策略")
+        st.header("🎯 排序偏好")
         main_priority = st.selectbox(
             "主排序",
             ["请选择…", "专业优先", "学校优先", "城市优先"],
@@ -215,52 +215,53 @@ with st.sidebar:
             key="w_main_priority",
         )
 
-        if main_priority == "专业优先":
-            major_options = _all_major_options
-            selected_majors_from_list = st.multiselect(
-                "想报的专业",
-                options=major_options,
-                default=[],
-                placeholder='搜索专业名，如"计算机"…',
-                key="w_majors_list",
-            )
-            preferred_major_input = selected_majors_from_list + _dynamic_text_list(
-                "手动补充关键词",
-                "preferred_majors",
-                "例如：人工智能",
-            )
-            limit_to_preferred_majors = bool(preferred_major_input)
-            excluded_major_input = _dynamic_text_list(
-                "不想读的专业",
-                "excluded_majors",
-                "例如：土木工程",
-            )
-        else:
-            preferred_major_input = []
-            limit_to_preferred_majors = False
-            excluded_major_input = []
+        selected_majors_from_list = st.multiselect(
+            "偏好专业（排序优先，填了会过滤）",
+            options=_all_major_options,
+            default=[],
+            placeholder='搜索专业名，如"计算机"…',
+            key="w_majors_list",
+        )
+        preferred_major_input = selected_majors_from_list + _dynamic_text_list(
+            "手动补充关键词",
+            "preferred_majors",
+            "例如：人工智能",
+        )
+        limit_to_preferred_majors = bool(preferred_major_input)
 
+        _province_city_map = _load_province_city_map()
+        _all_cities_flat = sorted({c for cs in _province_city_map.values() for c in cs})
+        preferred_cities_sort_input = st.multiselect(
+            "偏好城市（排序优先，不过滤候选池）",
+            options=_all_cities_flat,
+            default=[],
+            placeholder="搜索城市…",
+            key="w_preferred_cities_sort",
+        )
+
+        preferred_schools_raw = st.text_input(
+            "偏好学校（排序加分）",
+            value="", placeholder="浙江大学, 上海交通大学",
+        )
         risk_preference = st.selectbox("风险偏好", ["激进", "均衡", "保守"], index=1, key="w_risk")
         volunteer_total = st.number_input("志愿数量", 1, 80, 80, step=1)
 
-        st.divider()
-        st.header("🏫 学校层次")
-        school_levels = st.multiselect(
-            "只看这些层次（不选 = 不限）",
-            ["985", "211", "双一流"],
-            default=[],
-        )
-        preferred_schools_raw = st.text_input(
-            "偏好学校（推荐排序）",
-            value="", placeholder="浙江大学, 上海交通大学",
+        excluded_major_input = _dynamic_text_list(
+            "排除专业",
+            "excluded_majors",
+            "例如：土木工程",
         )
 
         st.divider()
-        st.header("📍 城市 / 地区")
-        _province_city_map = _load_province_city_map()
+        st.header("🔧 筛选条件")
+        school_levels = st.multiselect(
+            "学校层次（不选 = 不限）",
+            ["985", "211", "双一流"],
+            default=[],
+        )
         _all_provinces = sorted(_province_city_map.keys())
         _selected_provinces = st.multiselect(
-            "选省份",
+            "只看这些省份",
             options=_all_provinces,
             default=[],
             placeholder="搜索省份…",
@@ -286,9 +287,6 @@ with st.sidebar:
             "四川", "贵州", "云南", "西藏", "陕西", "甘肃", "青海", "宁夏", "新疆",
         ]
         excluded_regions = st.multiselect("排除省份", _ALL_PROVINCES)
-
-        st.divider()
-        st.header("🚫 其他约束")
         accept_sino_foreign = st.checkbox("接受中外合作专业", value=False)
         accept_private = st.checkbox("接受民办学校", value=True)
         excluded_schools_raw = st.text_input("排除学校（精确名）", value="")
@@ -305,6 +303,11 @@ if not _form_ready:
     risk_preference = st.session_state.get("w_risk", "均衡")
     preferred_majors: list[str] = []
     preferred_cities: list[str] = []
+    preferred_cities_sort_input: list[str] = []
+    preferred_cities_input: list[str] = []
+    preferred_major_input: list[str] = []
+    excluded_major_input: list[str] = []
+    limit_to_preferred_majors = False
 
 # ─── AI 对话顾问 ──────────────────────────────────────────────────────────────
 
@@ -507,11 +510,8 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                 _all_cities = {c for cs in _prov_map.values() for c in cs}
                 _valid_cities = [c for c in _p["preferred_cities"] if c in _all_cities]
                 if _valid_cities:
-                    _fill["w_cities"] = _valid_cities
-                    _city_to_prov = {c: pv for pv, cs in _prov_map.items() for c in cs}
-                    _fill["w_provinces"] = list(dict.fromkeys(
-                        _city_to_prov[c] for c in _valid_cities if c in _city_to_prov
-                    ))
+                    # AI-expressed city preference → soft sort field only, not hard filter
+                    _fill["w_preferred_cities_sort"] = _valid_cities
             st.session_state["_pending_fill"] = _fill
             st.session_state["_form_ready"] = True
             st.session_state.pop("ai_parsed", None)
@@ -596,8 +596,8 @@ if main_priority not in ("专业优先", "学校优先", "城市优先"):
     st.info("请在左侧选择主排序方式（专业优先 / 学校优先 / 城市优先），或在上方 AI 对话中告诉小明你的偏好。")
     st.stop()
 
-preferred_cities = preferred_cities_input
-# Auto-filter: specific cities → filter by cities; province only → filter by all cities in province; neither → no filter
+preferred_cities = preferred_cities_sort_input  # soft sort preference only
+# Hard pool filter: specific cities > province expansion > no filter
 if preferred_cities_input:
     city_filters = preferred_cities_input
 elif _selected_provinces:
