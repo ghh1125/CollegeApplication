@@ -59,6 +59,7 @@ def _school_part(program: dict) -> str:
     if ruanke_rank:
         details.append(f"软科第{ruanke_rank}")
 
+
     founded = _clean_text(profile.get("founded_year"))
     if founded:
         details.append(f"创办于{founded}年")
@@ -95,8 +96,6 @@ def _major_part(program: dict) -> str:
     discipline_grade = _clean_text(program.get("discipline_grade"))
     if discipline_grade:
         details.append(f"学科评估{discipline_grade}")
-    elif program.get("school_best_grade"):
-        details.append(f"学校最佳学科{program.get('school_best_grade')}")
 
     career = _clean_text(profile.get("career_direction"))
     if career:

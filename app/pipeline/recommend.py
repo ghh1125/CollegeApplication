@@ -30,12 +30,8 @@ def expand_major_keywords(keywords: list[str], conn: Any) -> set[str]:
             continue
         like = f"%{kw}%"
         rows = conn.execute(
-            """
-            SELECT name FROM major_description
-            WHERE name     LIKE ?
-               OR keywords LIKE ?
-            """,
-            (like, like),
+            "SELECT name FROM major_description WHERE name LIKE ?",
+            (like,),
         ).fetchall()
         matched.update(r[0] for r in rows)
     return matched

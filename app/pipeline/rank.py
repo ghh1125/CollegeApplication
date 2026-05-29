@@ -383,20 +383,23 @@ def _city_key(program: dict, preferred_cities: list) -> tuple[int, int]:
 def _school_quality_key(program: dict, preferred_schools: list, major_first: bool = False) -> tuple[int, int]:
     """
     School quality signal — two orderings:
-      major_first=True  (专业优先): disc_grade leads, falls back to school_best_grade
-      major_first=False (学校优先): ruanke leads, disc_grade as tiebreaker
+      major_first=True  (专业优先): only the program's own discipline grade; fallback to ruanke.
+        school_best_grade intentionally NOT used — it may be from an unrelated discipline.
+      major_first=False (学校优先/城市优先): ruanke leads; disc_grade (with school_best fallback)
+        as tiebreaker — overall school strength is the signal.
     """
     if program.get("school_name") in preferred_schools:
         return (1000, 1000)
-    disc_grade = GRADE_ORDER.get(program.get("discipline_grade") or "", 0)
-    # Fall back to the school's best discipline grade when specific one is missing
-    if disc_grade == 0:
-        disc_grade = GRADE_ORDER.get(program.get("school_best_grade") or "", 0)
     ruanke = program.get("ruanke_rank")
     ruanke_score = -ruanke if ruanke else -999
     if major_first:
+        # Use only the matched discipline's own grade; ignore school_best_grade
+        disc_grade = GRADE_ORDER.get(program.get("discipline_grade") or "", 0)
         return (disc_grade, ruanke_score)
     else:
+        disc_grade = GRADE_ORDER.get(program.get("discipline_grade") or "", 0)
+        if disc_grade == 0:
+            disc_grade = GRADE_ORDER.get(program.get("school_best_grade") or "", 0)
         return (ruanke_score, disc_grade)
 
 
