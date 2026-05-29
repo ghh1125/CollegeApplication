@@ -452,6 +452,7 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                                 _fn_inject["volunteer"],
                                 _fn_inject["profile"],
                                 search_results=_fn_search,
+                                main_priority=_fn_inject.get("main_priority", "学校优先"),
                                 api_key=_effective_api_key,
                             )
                         )
@@ -462,6 +463,7 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                                 _fn_inject["stats"],
                                 _fn_inject["profile"],
                                 search_results=_fn_search,
+                                main_priority=_fn_inject.get("main_priority", "学校优先"),
                                 api_key=_effective_api_key,
                             )
                         )
@@ -596,6 +598,7 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                     "volunteers": _ctx["volunteers"],
                     "stats": _ctx["stats"],
                     "profile": _fn_profile,
+                    "main_priority": main_priority,
                 }
                 st.rerun()
         _qa_sel_label = st.selectbox(
@@ -615,6 +618,7 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                     "label": f"💬 解释第{_qv.get('volunteer_no')}条：{_qv.get('school_name')}·{_qv.get('major_name')}",
                     "volunteer": _qv,
                     "profile": _fn_profile,
+                    "main_priority": main_priority,
                 }
                 st.rerun()
 

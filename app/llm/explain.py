@@ -57,13 +57,56 @@ def _stream(messages: list[dict], api_key: str | None = None):
 
 # ─── 单条志愿解释 ──────────────────────────────────────────────────────────────
 
-def explain_volunteer(volunteer: dict, profile: dict, search_results: list[str] | None = None, api_key: str | None = None):
+_EXPLAIN_SENTENCE2 = {
+    "专业优先": (
+        '第2句：专业深度——学科评估等级（如有）+ 这个专业普通毕业生（非顶尖）典型去向和薪资区间；'
+        '优先引用上方搜索数据；无数据则写"就业数据待查"'
+    ),
+    "学校优先": (
+        '第2句：学校深度——软科排名/层次 + 该校毕业生整体就业质量、平均薪资或典型雇主；'
+        '优先引用上方搜索数据；无数据则写"就业数据待查"'
+    ),
+    "城市优先": (
+        '第2句：城市深度——城市 GDP/产业结构 + 这个专业在该城市的就业吸纳情况和薪资水平；'
+        '优先引用上方搜索数据；无数据则写"就业数据待查"'
+    ),
+}
+
+_REPORT_PARA2 = {
+    "专业优先": (
+        '第2段：专业深度——列出出现最多的2-3个专业方向，说每个方向普通毕业生（非顶尖）'
+        '的典型去向和薪资区间；优先引用搜索数据，无数据则写"就业数据待查"'
+    ),
+    "学校优先": (
+        '第2段：学校深度——分析Top学校的软科排名分布，说这些院校毕业生整体就业质量和薪资水平；'
+        '优先引用搜索数据，无数据则写"就业数据待查"'
+    ),
+    "城市优先": (
+        '第2段：城市深度——分析Top城市的产业结构和就业市场，说这些城市对志愿表中主要专业'
+        '的吸纳能力和薪资水平；优先引用搜索数据，无数据则写"就业数据待查"'
+    ),
+}
+
+_REPORT_PARA4 = {
+    "专业优先": "第4段：1条最重要的可执行建议——专注于专业匹配度优化，说清楚在左侧哪里修改",
+    "学校优先": "第4段：1条最重要的可执行建议——专注于院校层次覆盖优化，说清楚在左侧哪里修改",
+    "城市优先": "第4段：1条最重要的可执行建议——专注于城市分布和地区就业市场，说清楚在左侧哪里修改",
+}
+
+
+def explain_volunteer(
+    volunteer: dict,
+    profile: dict,
+    search_results: list[str] | None = None,
+    main_priority: str = "学校优先",
+    api_key: str | None = None,
+):
     """
     Generate a plain-language explanation for a single recommended program.
 
     volunteer keys: school_name, major_name, school_city, gap_info,
                     history, subject_requirement_json, ruanke_rank, _warnings
-    profile keys: rank, selected_subjects, preferred_majors, preferred_cities
+    profile keys: rank, selected_subjects, preferred_majors, preferred_cities, main_priority
     """
     gap = volunteer.get("gap_info") or {}
     history = volunteer.get("history") or []
@@ -107,7 +150,7 @@ def explain_volunteer(volunteer: dict, profile: dict, search_results: list[str] 
 
 请输出4句话（不加标题、不加序号）：
 第1句：录取概率——均值位次X考生位次Y gap Z 属于冲/稳/保，直接说数字
-第2句：就业倒推——优先引用上方搜索数据说去向和薪资；无数据则写"就业数据待查"，不编造数字
+{_EXPLAIN_SENTENCE2.get(main_priority, _EXPLAIN_SENTENCE2["学校优先"])}
 第3句：历史趋势——直接引用历史位次数字说涨跌，若只有1年数据则说参考价值有限
 第4句：风险或匹配——有预警则点出，无预警则说与考生选科/偏好的契合情况"""
 
@@ -223,6 +266,7 @@ def generate_overall_report(
     stats: dict,
     profile: dict,
     search_results: list[str] | None = None,
+    main_priority: str = "学校优先",
     api_key: str | None = None,
 ):
     """Generate an overall analysis report for the entire volunteer list."""
@@ -281,8 +325,8 @@ def generate_overall_report(
 
 请直接分4段输出（不加标题序号）：
 第1段：一句话点出这份志愿表最关键的问题或优势，用具体数字（冲稳保垫各几条）
-第2段：主要专业方向的就业实际情况——优先引用搜索数据，说普通毕业生去哪、挣多少；无数据则写"就业数据待查"
+{_REPORT_PARA2.get(main_priority, _REPORT_PARA2["学校优先"])}
 第3段：最需要家长注意的1-2个具体风险，点到具体志愿（如"第X条XXX"）
-第4段：1条最重要的可执行建议，说清楚做什么、在哪做"""
+{_REPORT_PARA4.get(main_priority, _REPORT_PARA4["学校优先"])}"""
 
     return _stream([{"role": "user", "content": prompt}], api_key=api_key)
