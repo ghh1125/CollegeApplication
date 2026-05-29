@@ -275,6 +275,35 @@ _CATEGORY_DISCIPLINE_CODES: dict[str, frozenset[str]] = {
 }
 
 
+# Clusters of discipline codes that are academically adjacent.
+# If the program's disc_code shares a cluster with any preferred disc_code → affine (level 1).
+# A code may appear in multiple clusters (e.g. 0701 数学 is adjacent to both CS and economics).
+_AFFINITY_CLUSTERS: list[frozenset[str]] = [
+    # CS / 理工信息
+    frozenset({"0812", "0835", "0809", "0810", "0811", "0701", "0702"}),
+    # 电气 / 机械 / 自动化 / 仪器  (0812 removed — CS ↔ 电气机械 should not auto-bridge)
+    frozenset({"0808", "0802", "0804", "0811"}),
+    # 化工 / 材料 / 化学 / 矿业
+    frozenset({"0817", "0805", "0703", "0819"}),
+    # 土木 / 建筑 / 水利
+    frozenset({"0814", "0813", "0815"}),
+    # 经济 / 金融 / 统计 / 管理科学
+    frozenset({"0201", "0202", "0701", "1201"}),
+    # 工商管理 / 营销 / 会计 / 旅游管理 / 公共管理
+    frozenset({"1202", "1203", "1204", "0201", "0202"}),
+    # 法学 / 政治学 / 社会学 / 马克思主义
+    frozenset({"0301", "0302", "0303", "0305"}),
+    # 中文 / 外语 / 新闻传播
+    frozenset({"0501", "0502", "0503"}),
+    # 生物 / 医学全系列 / 心理学
+    frozenset({"0710", "1002", "1003", "1004", "1005", "1007", "1008", "1010", "1011", "0402"}),
+    # 农学 / 林学 / 环境 / 地学
+    frozenset({"0901", "0907", "0830", "0705", "0706", "0707"}),
+    # 艺术 / 设计 / 体育 / 教育
+    frozenset({"1301", "1302", "1303", "1304", "1305", "0401", "0403", "0404"}),
+]
+
+
 def _lookup_discipline_code(normalized_name: str, raw_name: str = "") -> str | None:
     """
     Map a major name to its 第四轮 discipline code.
@@ -365,27 +394,50 @@ def _major_level(
     preferred_categories: list,
     expanded_major_names: set | None = None,
 ) -> int:
-    """Ordinal major-preference level: 4=exact/expanded, 3=keyword, 2=category, 1=none."""
+    """Ordinal major-preference level.
+
+    4  exact or expand-matched preferred major
+    3  keyword substring match in preferred_majors
+    2  matched preferred_categories (by DB field or discipline code)
+    1  affine discipline — same academic cluster as a preferred category/major
+    0  unrelated
+    """
     name = program.get("normalized_major_name", "")
     raw_name = program.get("major_name", "") or ""
     category = program.get("major_category", "")
+
     if name in preferred_majors or raw_name in preferred_majors:
         return 4
     if expanded_major_names and (name in expanded_major_names or raw_name in expanded_major_names):
         return 4
     if any(kw and (kw in name or kw in raw_name) for kw in preferred_majors):
         return 3
+
+    disc_code = _lookup_discipline_code(name, raw_name)
+
     if preferred_categories:
-        # Try DB-populated category field first
         if category in preferred_categories:
             return 2
-        # Fallback: infer via discipline code (major_category DB field is often empty)
-        disc_code = _lookup_discipline_code(name, raw_name)
         if disc_code:
             for cat in preferred_categories:
                 if disc_code in _CATEGORY_DISCIPLINE_CODES.get(cat, frozenset()):
                     return 2
-    return 1
+
+    # Collect all preferred discipline codes (from categories + majors)
+    preferred_disc_codes: set[str] = set()
+    for cat in preferred_categories:
+        preferred_disc_codes |= _CATEGORY_DISCIPLINE_CODES.get(cat, frozenset())
+    for m in preferred_majors:
+        code = _lookup_discipline_code(m)
+        if code:
+            preferred_disc_codes.add(code)
+
+    if disc_code and preferred_disc_codes:
+        for cluster in _AFFINITY_CLUSTERS:
+            if disc_code in cluster and cluster & preferred_disc_codes:
+                return 1
+
+    return 0
 
 
 def _city_key(program: dict, preferred_cities: list) -> tuple[int, int]:
@@ -447,7 +499,7 @@ def get_major_score(
     expanded_major_names: set | None = None,
 ) -> int:
     level = _major_level(program, preferred_majors, preferred_categories, expanded_major_names)
-    return {4: 100, 3: 90, 2: 85, 1: 40}[level]
+    return {4: 100, 3: 90, 2: 85, 1: 50, 0: 20}[level]
 
 
 def get_school_score(program: dict, preferred_schools: list) -> int:
