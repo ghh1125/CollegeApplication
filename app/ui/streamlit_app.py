@@ -488,8 +488,6 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                 _normalized = [_SUBJECT_ALIAS.get(s, s) for s in _p["selected_subjects"]]
                 _fill["w_subjects"] = [s for s in _normalized if s in SUBJECT_ORDER][:3]
             _mp = _p.get("main_priority")
-            if _mp == "专业优先" and not _p.get("preferred_majors"):
-                _mp = "学校优先"
             if _mp in ["专业优先", "学校优先", "城市优先"]:
                 _fill["w_main_priority"] = _mp
             if _p.get("risk_preference") in ["激进", "均衡", "保守"]:
