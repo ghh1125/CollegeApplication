@@ -194,14 +194,21 @@ def _city_key(program: dict, preferred_cities: list) -> tuple[int, int]:
     return (in_preferred, tier)
 
 
-def _school_quality_key(program: dict, preferred_schools: list) -> tuple[int, int]:
-    """(discipline_grade_score, -ruanke_rank) — higher is better on both."""
+def _school_quality_key(program: dict, preferred_schools: list, major_first: bool = False) -> tuple[int, int]:
+    """
+    School quality signal — two orderings:
+      major_first=True  (专业优先): disc_grade leads → rewards discipline strength in that subject
+      major_first=False (学校优先): ruanke leads    → rewards overall school brand/ranking
+    """
     if program.get("school_name") in preferred_schools:
         return (1000, 1000)
     disc_grade = GRADE_ORDER.get(program.get("discipline_grade") or "", 0)
     ruanke = program.get("ruanke_rank")
     ruanke_score = -ruanke if ruanke else -999
-    return (disc_grade, ruanke_score)
+    if major_first:
+        return (disc_grade, ruanke_score)
+    else:
+        return (ruanke_score, disc_grade)
 
 
 # ── kept for backward-compatibility; not used internally ─────────────────────
@@ -259,7 +266,7 @@ def sort_candidates(
 
     def sort_key(program: dict) -> tuple:
         major = _major_level(program, preferred_majors, preferred_categories, expanded_major_names)
-        school = _school_quality_key(program, preferred_schools)
+        school = _school_quality_key(program, preferred_schools, major_first=(main_priority == "专业优先"))
         city = _city_key(program, preferred_cities)
         ratio = (program.get("gap_info") or {}).get("ratio")
         gap = -abs(ratio) if ratio is not None else -1.0
