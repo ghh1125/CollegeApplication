@@ -510,6 +510,31 @@ def get_school_score(program: dict, preferred_schools: list) -> int:
     return disc * 5 + ruanke_base
 
 
+_MAJOR_TAG_LABELS: dict[int, str] = {
+    4: "目标专业",
+    3: "目标专业",
+    2: "目标专业类",
+    1: "相近专业",
+    0: "其他",
+}
+
+
+def major_tag_label(
+    program: dict,
+    preferred_majors: list,
+    preferred_categories: list,
+    expanded_major_names: set | None = None,
+) -> str:
+    """Return a short display label explaining why this major appears.
+
+    Returns "" when no preferences are specified (avoids showing "其他" for everything).
+    """
+    if not preferred_majors and not preferred_categories:
+        return ""
+    level = _major_level(program, preferred_majors, preferred_categories, expanded_major_names)
+    return _MAJOR_TAG_LABELS[level]
+
+
 def build_sort_reason(
     program: dict,
     main_priority: str,

@@ -77,7 +77,7 @@ class Constraints(BaseModel):
 
 class StudentProfile(BaseModel):
     rank: int
-    total_score: int
+    total_score: int | None = None
     selected_subjects: list[str]
     scores: ScoreDetail | None = None
 

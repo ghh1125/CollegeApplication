@@ -10,6 +10,7 @@ from app.pipeline.rank import (
     build_sort_reason,
     calculate_gap,
     enrich_with_history,
+    major_tag_label,
     sort_candidates,
 )
 
@@ -107,6 +108,12 @@ def build_recommendations(
                     preferred_categories=preferred_categories,
                     preferred_cities=preferred_cities,
                     preferred_schools=preferred_schools,
+                    expanded_major_names=expanded_major_names,
+                )
+                program["_major_tag"] = major_tag_label(
+                    program,
+                    preferred_majors=preferred_majors,
+                    preferred_categories=preferred_categories,
                     expanded_major_names=expanded_major_names,
                 )
         return result

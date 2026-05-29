@@ -122,6 +122,7 @@ def _recommendation_df(programs: list[dict], main_priority: str) -> pd.DataFrame
             "学校":      p.get("school_name", ""),
             "城市":      p.get("school_city") or resolve_school_city(p.get("school_name", "")),
             "专业":      p.get("major_name", ""),
+            "专业匹配":  p.get("_major_tag", ""),
             **history_rank_columns(p),
             "均值位次":  (p.get("gap_info") or {}).get("weighted_avg"),
             "gap":       (p.get("gap_info") or {}).get("gap"),
@@ -814,6 +815,11 @@ if major_kws and (stats.get("冲", 0) + stats.get("稳", 0)) < 25:
         "当前专业限制较严格，符合条件的冲/稳志愿不足，已用保底志愿补齐。"
         "如需更多冲稳选项，可适当放宽偏好专业或取消专业限制。"
     )
+if not preferred_majors and not preferred_categories:
+    st.warning(
+        "💡 你没有填写专业偏好，志愿按城市档+学校排名排序，结果可能较分散。"
+        "建议在左侧「偏好专业」填写目标方向（如"计算机"），让推荐更聚焦。"
+    )
 
 search = st.text_input("🔍 搜索", placeholder="搜索学校或专业…")
 recommend_df = _recommendation_df(recommendation["volunteers"], main_priority)
@@ -836,6 +842,7 @@ with tab_recommend:
             "学校":      st.column_config.TextColumn(width="medium"),
             "城市":      st.column_config.TextColumn(width="small"),
             "专业":      st.column_config.TextColumn(width="large"),
+            "专业匹配":  st.column_config.TextColumn(width="small"),
             "2025位次":  st.column_config.TextColumn(width="small"),
             "2024位次":  st.column_config.TextColumn(width="small"),
             "2023位次":  st.column_config.TextColumn(width="small"),
@@ -870,6 +877,7 @@ with tab_reserve:
             "学校":      st.column_config.TextColumn(width="medium"),
             "城市":      st.column_config.TextColumn(width="small"),
             "专业":      st.column_config.TextColumn(width="large"),
+            "专业匹配":  st.column_config.TextColumn(width="small"),
             "2025位次":  st.column_config.TextColumn(width="small"),
             "2024位次":  st.column_config.TextColumn(width="small"),
             "2023位次":  st.column_config.TextColumn(width="small"),
