@@ -396,24 +396,43 @@ def _city_key(program: dict, preferred_cities: list) -> tuple[int, int]:
     return (in_preferred, tier)
 
 
-def _school_quality_key(program: dict, preferred_schools: list, major_first: bool = False) -> tuple[int, int]:
+_DISC_BLEND_WEIGHT = 5  # each disc_grade point ≈ 5 ruanke positions (城市优先 blended score)
+
+
+def _school_quality_key(
+    program: dict,
+    preferred_schools: list,
+    major_first: bool = False,
+    city_blend: bool = False,
+) -> int | tuple[int, int]:
     """
-    School quality signal — two orderings:
-      major_first=True  (专业优先): only the program's own discipline grade; fallback to ruanke.
-        school_best_grade intentionally NOT used — it may be from an unrelated discipline.
-      major_first=False (学校优先/城市优先): ruanke leads; disc_grade (with school_best fallback)
-        as tiebreaker — overall school strength is the signal.
+    School quality signal — three modes:
+
+    city_blend=True  (城市优先): blended int score = ruanke_score + disc_grade × 5.
+        Disc-grade boosts but doesn't dominate; rank-3 school beats rank-50 school
+        even without a discipline grade.
+
+    major_first=True (专业优先): strict tuple (disc_grade, ruanke_score).
+        Own discipline grade leads; school_best_grade NOT used (may be unrelated field).
+
+    major_first=False (学校优先): tuple (ruanke_score, disc_grade).
+        Overall school prestige leads; disc_grade (with school_best fallback) as tiebreaker.
     """
-    if program.get("school_name") in preferred_schools:
-        return (1000, 1000)
     ruanke = program.get("ruanke_rank")
     ruanke_score = -ruanke if ruanke else -999
+    disc_grade = GRADE_ORDER.get(program.get("discipline_grade") or "", 0)
+
+    if city_blend:
+        if program.get("school_name") in preferred_schools:
+            return 10000
+        return ruanke_score + disc_grade * _DISC_BLEND_WEIGHT
+
+    if program.get("school_name") in preferred_schools:
+        return (1000, 1000)
+
     if major_first:
-        # Use only the matched discipline's own grade; ignore school_best_grade
-        disc_grade = GRADE_ORDER.get(program.get("discipline_grade") or "", 0)
         return (disc_grade, ruanke_score)
     else:
-        disc_grade = GRADE_ORDER.get(program.get("discipline_grade") or "", 0)
         if disc_grade == 0:
             disc_grade = GRADE_ORDER.get(program.get("school_best_grade") or "", 0)
         return (ruanke_score, disc_grade)
@@ -512,9 +531,12 @@ def sort_candidates(
 
     def sort_key(program: dict) -> tuple:
         major = _major_level(program, preferred_majors, preferred_categories, expanded_major_names)
-        # 专业优先/城市优先: disc_grade leads (prefer strong discipline even at lower-ranked school)
-        # 学校优先: ruanke leads (overall school prestige is the signal)
-        school = _school_quality_key(program, preferred_schools, major_first=(main_priority != "学校优先"))
+        if main_priority == "学校优先":
+            school = _school_quality_key(program, preferred_schools, major_first=False)
+        elif main_priority == "城市优先":
+            school = _school_quality_key(program, preferred_schools, city_blend=True)
+        else:  # 专业优先
+            school = _school_quality_key(program, preferred_schools, major_first=True)
         city = _city_key(program, preferred_cities)
         ratio = (program.get("gap_info") or {}).get("ratio")
         gap = -abs(ratio) if ratio is not None else -1.0
