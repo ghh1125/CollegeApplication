@@ -140,7 +140,6 @@ class RankPipelineTests(unittest.TestCase):
         sorted_candidates = sort_candidates(
             candidates,
             main_priority="专业优先",
-            city_first=True,
             preferred_majors=["计算机科学与技术"],
             preferred_categories=[],
             preferred_schools=[],
@@ -291,11 +290,10 @@ class RecommendationServiceTests(unittest.TestCase):
                 ],
             )
 
-            city_first = build_recommendations(
+            city_mode = build_recommendations(
                 candidates,
                 profile,
-                main_priority="专业优先",
-                city_first=True,
+                main_priority="城市优先",
                 preferred_majors=["计算机科学与技术"],
                 preferred_categories=[],
                 preferred_schools=[],
@@ -304,11 +302,10 @@ class RecommendationServiceTests(unittest.TestCase):
                 total=2,
                 conn=conn,
             )
-            school_first = build_recommendations(
+            school_mode = build_recommendations(
                 candidates,
                 profile,
-                main_priority="专业优先",
-                city_first=False,
+                main_priority="学校优先",
                 preferred_majors=["计算机科学与技术"],
                 preferred_categories=[],
                 preferred_schools=[],
@@ -318,10 +315,10 @@ class RecommendationServiceTests(unittest.TestCase):
                 conn=conn,
             )
 
-        # Same major score → city is tiebreaker when city_first=True
-        self.assertEqual([v["id"] for v in city_first["volunteers"]], ["city", "ranked"])
-        # Same major score → ruanke_rank is tiebreaker when city_first=False
-        self.assertEqual([v["id"] for v in school_first["volunteers"]], ["ranked", "city"])
+        # 城市优先: city match is primary → "city" (杭州) comes first
+        self.assertEqual([v["id"] for v in city_mode["volunteers"]], ["city", "ranked"])
+        # 学校优先: ruanke_rank is primary (ranked=50 > city=None) → "ranked" comes first
+        self.assertEqual([v["id"] for v in school_mode["volunteers"]], ["ranked", "city"])
 
 
 if __name__ == "__main__":

@@ -208,7 +208,12 @@ with st.sidebar:
 
         st.divider()
         st.header("推荐策略")
-        main_priority = st.selectbox("主排序", ["专业优先", "学校优先"], index=0, key="w_main_priority")
+        main_priority = st.selectbox(
+            "主排序（必选）",
+            ["请选择…", "专业优先", "学校优先", "城市优先"],
+            index=0,
+            key="w_main_priority",
+        )
 
         if main_priority == "专业优先":
             major_options = _all_major_options
@@ -235,7 +240,6 @@ with st.sidebar:
             limit_to_preferred_majors = False
             excluded_major_input = []
 
-        city_first = st.checkbox("同层级内城市优先", value=True)
         risk_preference = st.selectbox("风险偏好", ["激进", "均衡", "保守"], index=1, key="w_risk")
         volunteer_total = st.number_input("志愿数量", 1, 80, 80, step=1)
 
@@ -297,7 +301,7 @@ if not _form_ready:
     rank = st.session_state.get("w_rank", 1)
     total_score = st.session_state.get("w_total_score") or 600
     selected_subjects = st.session_state.get("w_subjects", [])
-    main_priority = st.session_state.get("w_main_priority", "专业优先")
+    main_priority = st.session_state.get("w_main_priority", "请选择…")
     risk_preference = st.session_state.get("w_risk", "均衡")
     preferred_majors: list[str] = []
     preferred_cities: list[str] = []
@@ -587,6 +591,10 @@ if len(selected_subjects) != 3:
     )
     st.stop()
 
+if main_priority == "请选择…":
+    st.info("请在左侧选择主排序方式（专业优先 / 学校优先 / 城市优先）")
+    st.stop()
+
 preferred_cities = preferred_cities_input
 # Auto-filter: specific cities → filter by cities; province only → filter by all cities in province; neither → no filter
 if preferred_cities_input:
@@ -666,7 +674,6 @@ with st.spinner("生成推荐志愿…"):
         final,
         profile,
         main_priority=main_priority,
-        city_first=city_first,
         preferred_majors=preferred_majors,
         preferred_categories=preferred_categories,
         preferred_schools=preferred_schools,

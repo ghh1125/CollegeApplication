@@ -59,7 +59,6 @@ def build_recommendations(
     candidates: list[dict],
     profile: Any,
     main_priority: str,
-    city_first: bool,
     preferred_majors: list[str],
     preferred_categories: list[str],
     preferred_schools: list[str],
@@ -84,7 +83,6 @@ def build_recommendations(
         sorted_candidates = sort_candidates(
             enriched,
             main_priority=main_priority,
-            city_first=city_first,
             preferred_majors=preferred_majors,
             preferred_categories=preferred_categories,
             preferred_schools=preferred_schools,
