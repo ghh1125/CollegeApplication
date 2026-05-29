@@ -15,4 +15,5 @@ dependencies = [
     "beautifulsoup4",
     "lxml",
     "streamlit>=1.57",
+    "ddgs>=0.6",
 ]

@@ -8,4 +8,4 @@ python-dotenv
 requests
 beautifulsoup4
 lxml
-duckduckgo-search>=6.0
+ddgs>=0.6

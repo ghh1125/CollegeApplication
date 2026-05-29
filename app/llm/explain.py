@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from app.config import config
@@ -27,9 +28,10 @@ def should_search(message: str) -> bool:
 
 def search_web(query: str, max_results: int = 3) -> list[str]:
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
+        search_query = query if re.search(r"\b20\d{2}\b", query) else f"{query} 2025"
         with DDGS() as ddgs:
-            results = list(ddgs.text(f"{query} 2025", max_results=max_results))
+            results = list(ddgs.text(search_query, max_results=max_results))
         return [
             f"{r['title']}: {r['body'][:250]}"
             for r in results if r.get("body")

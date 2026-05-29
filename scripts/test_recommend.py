@@ -54,7 +54,6 @@ def main() -> None:
         final,
         profile,
         main_priority="专业优先",
-        city_first=True,
         preferred_majors=profile.preferences.majors.preferred_majors,
         preferred_categories=profile.preferences.majors.preferred_categories,
         preferred_schools=profile.preferences.schools.preferred_schools,

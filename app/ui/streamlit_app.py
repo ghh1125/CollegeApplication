@@ -437,10 +437,10 @@ with st.expander("💬 AI 对话顾问", expanded=True):
             if _fn_type == "explain_volunteer":
                 _major = _fn_inject["volunteer"].get("major_name", "")
                 _city = _fn_inject["volunteer"].get("school_city", "")
-                _city_has_gdp = bool((_fn_inject["volunteer"].get("city_profile") or {}).get("gdp"))
-                if _search_priority == "城市优先" and _city and not _city_has_gdp:
-                    with st.spinner(f"🔍 搜索 {_city} 经济就业数据…"):
-                        _fn_search = search_web(f"{_city} GDP 经济产业 就业 2024")
+                if _search_priority == "城市优先" and _city:
+                    _query = f"{_city} {_major} 就业 薪资 产业 2025".strip()
+                    with st.spinner(f"🔍 搜索 {_city} {_major} 城市就业数据…"):
+                        _fn_search = search_web(_query)
                 else:
                     with st.spinner(f"🔍 搜索 {_major} 就业数据…"):
                         _fn_search = search_web(f"{_major} 就业去向 薪资 2025")
@@ -453,8 +453,9 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                     _top_city = (_Counter(
                         v.get("school_city", "") for v in _fn_inject["volunteers"] if v.get("school_city")
                     ).most_common(1) or [("", 0)])[0][0]
-                    with st.spinner(f"🔍 搜索 {_top_city} 就业数据…"):
-                        _fn_search = search_web(f"{_top_city} 产业结构 就业市场 2024") if _top_city else []
+                    _query = f"{_top_city} {_top_major} 就业 薪资 产业 2025".strip()
+                    with st.spinner(f"🔍 搜索 {_top_city} {_top_major} 就业数据…"):
+                        _fn_search = search_web(_query) if _top_city else []
                 else:
                     with st.spinner(f"🔍 搜索 {_top_major} 就业数据…"):
                         _fn_search = search_web(f"{_top_major} 就业去向 薪资 2025") if _top_major else []
