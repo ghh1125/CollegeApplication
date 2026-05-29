@@ -44,3 +44,44 @@ def queue_ai_message(
     state["_ai_pending_msg"] = text
     state["_ai_input_n"] = input_index + 1
     return True
+
+
+def format_sort_reason_for_display(program: dict, main_priority: str) -> str:
+    """Return the backend sort reason, or build a compact UI fallback."""
+
+    reason = str(program.get("sort_reason") or "").strip()
+    if reason:
+        return reason
+
+    gap_info = program.get("gap_info") or {}
+    tier = gap_info.get("tier") or "数据不足"
+    details: list[str] = []
+
+    discipline_grade = program.get("discipline_grade") or ""
+    school_best_grade = program.get("school_best_grade") or ""
+    if discipline_grade:
+        details.append(f"学科评估{discipline_grade}")
+    elif main_priority == "专业优先" and school_best_grade:
+        details.append(f"学校最佳学科{school_best_grade}")
+
+    ruanke_rank = program.get("ruanke_rank")
+    if ruanke_rank:
+        details.append(f"软科第{ruanke_rank}")
+    elif program.get("is_985"):
+        details.append("985")
+    elif program.get("is_211"):
+        details.append("211")
+    elif program.get("is_double_first_class"):
+        details.append("双一流")
+
+    city = program.get("school_city") or ""
+    if main_priority == "城市优先" and city:
+        details.append(city)
+
+    gap = gap_info.get("gap")
+    if gap is not None:
+        details.append(f"gap {gap}")
+    else:
+        details.append("历史位次不足")
+
+    return f"{tier}；{main_priority}：" + "；".join(details)

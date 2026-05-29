@@ -45,6 +45,31 @@ class FormHelperTests(unittest.TestCase):
         self.assertFalse(queued)
         self.assertEqual(state, {"_ai_input_n": 3})
 
+    def test_format_sort_reason_keeps_backend_reason(self) -> None:
+        from app.ui.form_helpers import format_sort_reason_for_display
+
+        self.assertEqual(
+            format_sort_reason_for_display(
+                {"sort_reason": "冲；专业优先：学科评估A+；gap -76"},
+                "专业优先",
+            ),
+            "冲；专业优先：学科评估A+；gap -76",
+        )
+
+    def test_format_sort_reason_falls_back_when_backend_reason_missing(self) -> None:
+        from app.ui.form_helpers import format_sort_reason_for_display
+
+        reason = format_sort_reason_for_display(
+            {
+                "school_city": "杭州",
+                "ruanke_rank": 3,
+                "gap_info": {"tier": "冲", "gap": -538},
+            },
+            "学校优先",
+        )
+
+        self.assertEqual(reason, "冲；学校优先：软科第3；gap -538")
+
 
 if __name__ == "__main__":
     unittest.main()

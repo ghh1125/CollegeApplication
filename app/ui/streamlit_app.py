@@ -31,7 +31,12 @@ from app.pipeline.filter import (
     filter_by_subject,
 )
 from app.pipeline.recommend import build_recommendations, history_rank_columns
-from app.ui.form_helpers import normalize_items, queue_ai_message, split_major_preferences
+from app.ui.form_helpers import (
+    format_sort_reason_for_display,
+    normalize_items,
+    queue_ai_message,
+    split_major_preferences,
+)
 from app.db import get_conn
 from app.llm.explain import (
     chat_with_advisor, search_web, should_search,
@@ -109,7 +114,7 @@ def _to_df(programs: list[dict]) -> pd.DataFrame:
     ])
 
 
-def _recommendation_df(programs: list[dict]) -> pd.DataFrame:
+def _recommendation_df(programs: list[dict], main_priority: str) -> pd.DataFrame:
     return pd.DataFrame([
         {
             "序号":      p.get("volunteer_no") or index,
@@ -120,7 +125,7 @@ def _recommendation_df(programs: list[dict]) -> pd.DataFrame:
             **history_rank_columns(p),
             "均值位次":  (p.get("gap_info") or {}).get("weighted_avg"),
             "gap":       (p.get("gap_info") or {}).get("gap"),
-            "排序理由":  p.get("sort_reason", ""),
+            "排序理由":  format_sort_reason_for_display(p, main_priority),
             "历史年数":  (p.get("gap_info") or {}).get("data_years"),
             "选科要求":  _fmt_req(p.get("subject_requirement_json")),
             "⚠":        "  ".join(p.get("_warnings") or []),
@@ -780,9 +785,9 @@ if major_kws and (stats.get("冲", 0) + stats.get("稳", 0)) < 25:
     )
 
 search = st.text_input("🔍 搜索", placeholder="搜索学校或专业…")
-recommend_df = _recommendation_df(recommendation["volunteers"])
+recommend_df = _recommendation_df(recommendation["volunteers"], main_priority)
 candidate_df = _to_df(final)
-reserve_df = _recommendation_df(recommendation["reserve"])
+reserve_df = _recommendation_df(recommendation["reserve"], main_priority)
 if search.strip():
     keyword = search.strip()
     recommend_df = _filter_df(recommend_df, keyword)
