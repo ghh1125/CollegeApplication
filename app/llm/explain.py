@@ -69,8 +69,8 @@ _EXPLAIN_4_SENTENCES = {
 第3句：历史趋势——直接引用历史位次数字说该校该专业录取线涨跌，若只有1年数据则说参考价值有限
 第4句：学校匹配——引用上方推荐理由里的学校相关内容，说明该学校层次是否达到考生预期；有预警则点出""",
     "城市优先": """\
-第1句：城市切入——先点出城市经济层级和GDP规模，再说录取概率（均值位次X，考生位次Y，gap Z，属于冲/稳/保），一句话说清楚
-第2句：城市深度——城市产业结构 + 这个专业在该城市的就业吸纳情况和薪资水平；优先引用上方搜索数据；无数据则写"就业数据待查"
+第1句：城市切入——先点出城市经济层级（城市画像里有GDP则引用，没有则只说层级/省会等信息，不编造数字），再说录取概率（均值位次X，考生位次Y，gap Z，属于冲/稳/保），一句话说清楚
+第2句：城市深度——城市产业结构 + 这个专业在该城市的就业吸纳情况和薪资水平；优先引用上方搜索数据；城市画像无数据则写"城市就业数据待查"；无搜索数据则写"就业数据待查"
 第3句：历史趋势——直接引用历史位次数字说录取线涨跌，若只有1年数据则说参考价值有限
 第4句：城市匹配——引用上方推荐理由里的城市相关内容，说明该城市是否符合考生地区预期；有预警则点出""",
 }
@@ -348,14 +348,17 @@ def generate_overall_report(
             f"{v.get('school_name')}·{v.get('major_name')}"
         )
 
-    # Top-3 per tier with their sort reasons (for report context)
+    # Representative sort reasons per tier — include all tiers so parents see 垫/数据不足 risks
+    TIER_SAMPLES = [("冲", 3), ("稳", 2), ("保", 2), ("垫", 1), ("数据不足", 2), ("高危冲", 1)]
     top_reasons_lines = []
-    for tier in ["冲", "稳", "保"]:
+    for tier, n in TIER_SAMPLES:
         tier_vols = [v for v in volunteers if (v.get("gap_info") or {}).get("tier") == tier]
-        for v in tier_vols[:3]:
+        if not tier_vols:
+            continue
+        for v in tier_vols[:n]:
             reason = (v.get("sort_reason") or "").split("；", 1)[-1]  # strip tier prefix
             top_reasons_lines.append(
-                f"[{tier}]{v.get('volunteer_no')}.{v.get('school_name')}·{v.get('major_name')}：{reason[:80]}"
+                f"[{tier}]{v.get('volunteer_no')}.{v.get('school_name')}·{v.get('major_name')}：{reason[:120]}"
             )
     top_reasons_block = "\n".join(top_reasons_lines) if top_reasons_lines else "暂无"
 

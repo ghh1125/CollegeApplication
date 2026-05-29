@@ -433,17 +433,31 @@ with st.expander("💬 AI 对话顾问", expanded=True):
             with _chat_container:
                 with st.chat_message("user"):
                     st.write(_fn_label)
+            _search_priority = _fn_inject.get("main_priority", "学校优先")
             if _fn_type == "explain_volunteer":
                 _major = _fn_inject["volunteer"].get("major_name", "")
-                with st.spinner(f"🔍 搜索 {_major} 就业数据…"):
-                    _fn_search = search_web(f"{_major} 就业去向 薪资 2025")
+                _city = _fn_inject["volunteer"].get("school_city", "")
+                _city_has_gdp = bool((_fn_inject["volunteer"].get("city_profile") or {}).get("gdp"))
+                if _search_priority == "城市优先" and _city and not _city_has_gdp:
+                    with st.spinner(f"🔍 搜索 {_city} 经济就业数据…"):
+                        _fn_search = search_web(f"{_city} GDP 经济产业 就业 2024")
+                else:
+                    with st.spinner(f"🔍 搜索 {_major} 就业数据…"):
+                        _fn_search = search_web(f"{_major} 就业去向 薪资 2025")
             else:
                 from collections import Counter as _Counter
                 _top_major = (_Counter(
                     v.get("major_name", "") for v in _fn_inject["volunteers"]
                 ).most_common(1) or [("", 0)])[0][0]
-                with st.spinner(f"🔍 搜索 {_top_major} 就业数据…"):
-                    _fn_search = search_web(f"{_top_major} 就业去向 薪资 2025") if _top_major else []
+                if _search_priority == "城市优先":
+                    _top_city = (_Counter(
+                        v.get("school_city", "") for v in _fn_inject["volunteers"] if v.get("school_city")
+                    ).most_common(1) or [("", 0)])[0][0]
+                    with st.spinner(f"🔍 搜索 {_top_city} 就业数据…"):
+                        _fn_search = search_web(f"{_top_city} 产业结构 就业市场 2024") if _top_city else []
+                else:
+                    with st.spinner(f"🔍 搜索 {_top_major} 就业数据…"):
+                        _fn_search = search_web(f"{_top_major} 就业去向 薪资 2025") if _top_major else []
             with _chat_container:
                 with st.chat_message("assistant"):
                     if _fn_type == "explain_volunteer":
@@ -477,8 +491,8 @@ with st.expander("💬 AI 对话顾问", expanded=True):
             _profile_ctx = {
                 "rank": int(rank),
                 "selected_subjects": selected_subjects,
-                "preferred_majors": [],
-                "preferred_cities": [],
+                "preferred_majors": preferred_major_input,
+                "preferred_cities": preferred_cities_sort_input,
                 "main_priority": main_priority,
                 "risk_preference": risk_preference,
             }
@@ -584,8 +598,9 @@ with st.expander("💬 AI 对话顾问", expanded=True):
         _fn_profile = {
             "rank": int(rank),
             "selected_subjects": selected_subjects,
-            "preferred_majors": [],
-            "preferred_cities": [],
+            "preferred_majors": preferred_major_input,
+            "preferred_cities": preferred_cities_sort_input,
+            "main_priority": main_priority,
             "risk_preference": risk_preference,
         }
         if st.button("📊 生成总体报告", use_container_width=True, key="btn_report"):
