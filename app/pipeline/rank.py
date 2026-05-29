@@ -245,6 +245,10 @@ def sort_candidates(
       城市优先: city_match > school_quality > major_level > gap
     """
 
+    # Track whether user explicitly specified each dimension (before defaults kick in)
+    has_major = bool(preferred_majors)
+    has_city = bool(preferred_cities)  # True only when user explicitly specified cities
+
     if preferred_cities is None:
         preferred_cities = DEFAULT_PREFERRED_CITIES
 
@@ -260,12 +264,16 @@ def sort_candidates(
         ratio = (program.get("gap_info") or {}).get("ratio")
         gap = -abs(ratio) if ratio is not None else -1.0
 
+        # If user explicitly specified a secondary preference, promote it above school quality.
+        # 专业优先 + 指定城市 → (major, city, school, gap)
+        # 学校优先 + 指定城市 → (school, city, major, gap)
+        # 城市优先 + 指定专业 → (city, major, school, gap)
         if main_priority == "专业优先":
-            return (major, school, city, gap)
+            return (major, city, school, gap) if has_city else (major, school, city, gap)
         elif main_priority == "学校优先":
-            return (school, major, city, gap)
+            return (school, city, major, gap) if has_city else (school, major, city, gap)
         else:  # 城市优先
-            return (city, school, major, gap)
+            return (city, major, school, gap) if has_major else (city, school, major, gap)
 
     result: list[dict] = []
     for tier in TIER_ORDER:
