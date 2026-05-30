@@ -14,10 +14,18 @@ DB_PATH = PROJECT_ROOT / "data" / "college.db"
 
 @contextmanager
 def get_conn() -> Iterator[sqlite3.Connection]:
-    """Yield a SQLite connection and manage transaction finalization."""
+    """Yield a SQLite connection and manage transaction finalization.
 
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    Opens read-only when the DB already exists (safe on read-only filesystems
+    like Streamlit Cloud's /mount/src/). Falls back to read-write when the DB
+    is absent so tests and local init scripts can still create it.
+    """
+    if DB_PATH.exists():
+        uri = f"file:{DB_PATH}?mode=ro"
+        conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
+    else:
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     try:
         conn.execute("PRAGMA foreign_keys = ON")
         yield conn
