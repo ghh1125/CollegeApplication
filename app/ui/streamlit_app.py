@@ -189,7 +189,7 @@ if "_pending_fill" in st.session_state:
 with st.sidebar:
     st.header("🔑 AI 设置")
     _user_api_key = st.text_input(
-        "百炼 API Key（可选，用于生成解释）",
+        "百炼 API Key（必填，AI 对话 / 报告 / 解释均需要）",
         type="password",
         placeholder="sk-...",
         help="填入后才能使用 AI 解释功能。Key 仅在本次会话中使用，不会保存。",
