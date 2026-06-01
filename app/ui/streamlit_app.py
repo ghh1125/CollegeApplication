@@ -956,12 +956,9 @@ if search.strip():
 tab_recommend, tab_candidates, tab_reserve = st.tabs(["推荐志愿", "候选池", "备选池"])
 
 with tab_recommend:
-    st.caption("点击任意行查看学校/专业详情 👆")
-    _rec_event = st.dataframe(
-        recommend_df, width="stretch", hide_index=True, height=600,
-        on_select="rerun", selection_mode="single-row",
+    st.dataframe(
+        recommend_df.drop(columns=["_idx"]), width="stretch", hide_index=True, height=580,
         column_config={
-            "_idx":      None,
             "序号":      st.column_config.NumberColumn(width="small"),
             "层级":      st.column_config.TextColumn(width="small"),
             "学校":      st.column_config.TextColumn(width="medium"),
@@ -978,10 +975,16 @@ with tab_recommend:
             "⚠":        st.column_config.TextColumn(width="medium"),
         },
     )
-    if _rec_event.selection.rows:
-        _orig_idx = int(recommend_df.iloc[_rec_event.selection.rows[0]]["_idx"])
+    _rec_vols = recommendation["volunteers"]
+    _rec_options = ["— 选择一条志愿查看详情 —"] + [
+        f"{p.get('volunteer_no')}. {p.get('school_name')}  ·  {p.get('major_name', '')}"
+        for p in _rec_vols
+    ]
+    _rec_sel = st.selectbox("查看详情", _rec_options, key="rec_detail_sel", label_visibility="collapsed")
+    if _rec_sel != _rec_options[0]:
+        _rec_idx = _rec_options.index(_rec_sel) - 1
         with st.container(border=True):
-            _show_program_detail(recommendation["volunteers"][_orig_idx])
+            _show_program_detail(_rec_vols[_rec_idx])
 
 with tab_candidates:
     warn_cnt = sum(1 for p in final if p.get("_warnings"))
@@ -998,12 +1001,9 @@ with tab_candidates:
     )
 
 with tab_reserve:
-    st.caption("点击任意行查看学校/专业详情 👆")
-    _rsv_event = st.dataframe(
-        reserve_df, width="stretch", hide_index=True, height=600,
-        on_select="rerun", selection_mode="single-row",
+    st.dataframe(
+        reserve_df.drop(columns=["_idx"]), width="stretch", hide_index=True, height=580,
         column_config={
-            "_idx":      None,
             "序号":      st.column_config.NumberColumn(width="small"),
             "层级":      st.column_config.TextColumn(width="small"),
             "学校":      st.column_config.TextColumn(width="medium"),
@@ -1020,7 +1020,13 @@ with tab_reserve:
             "⚠":        st.column_config.TextColumn(width="medium"),
         },
     )
-    if _rsv_event.selection.rows:
-        _orig_idx = int(reserve_df.iloc[_rsv_event.selection.rows[0]]["_idx"])
+    _rsv_vols = recommendation["reserve"]
+    _rsv_options = ["— 选择一条志愿查看详情 —"] + [
+        f"{p.get('volunteer_no')}. {p.get('school_name')}  ·  {p.get('major_name', '')}"
+        for p in _rsv_vols
+    ]
+    _rsv_sel = st.selectbox("查看详情", _rsv_options, key="rsv_detail_sel", label_visibility="collapsed")
+    if _rsv_sel != _rsv_options[0]:
+        _rsv_idx = _rsv_options.index(_rsv_sel) - 1
         with st.container(border=True):
-            _show_program_detail(recommendation["reserve"][_orig_idx])
+            _show_program_detail(_rsv_vols[_rsv_idx])
