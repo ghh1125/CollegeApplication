@@ -105,27 +105,40 @@ def _load_major_detail(major_name: str) -> dict:
 def _show_program_detail(program: dict) -> None:
     school_name = program.get("school_name", "")
     major_name  = program.get("major_name", "")
-    school      = _load_school_detail(school_name)
-    major       = _load_major_detail(major_name)
 
-    # ── 学校头部 ──────────────────────────────────────────────────────────────
+    # ── 学校头部（始终渲染）────────────────────────────────────────────────────
+    tiers = []
+    if program.get("is_985"):               tiers.append("985")
+    if program.get("is_211"):               tiers.append("211")
+    if program.get("is_double_first_class"): tiers.append("双一流")
+    tier_str = "　".join(f"`{t}`" for t in tiers) if tiers else ""
+
+    try:
+        school = _load_school_detail(school_name)
+    except Exception:
+        school = {}
+    try:
+        major = _load_major_detail(major_name)
+    except Exception:
+        major = {}
+
     col_logo, col_info = st.columns([1, 5])
     with col_logo:
-        if school.get("logo_url"):
-            st.image(school["logo_url"], width=80)
+        logo = school.get("logo_url")
+        if logo:
+            try:
+                st.image(logo, width=80)
+            except Exception:
+                pass
     with col_info:
-        tiers = []
-        if program.get("is_985"):              tiers.append("985")
-        if program.get("is_211"):              tiers.append("211")
-        if program.get("is_double_first_class"): tiers.append("双一流")
         st.markdown(f"## {school_name}")
-        if tiers:
-            st.markdown("　".join(f"`{t}`" for t in tiers))
+        if tier_str:
+            st.markdown(tier_str)
         meta = []
-        if program.get("school_city"):   meta.append(f"📍 {program['school_city']}")
-        if school.get("founded_year"):   meta.append(f"创办 {school['founded_year']}")
-        if school.get("school_type"):    meta.append(school["school_type"])
-        if school.get("ruanke_rank"):    meta.append(f"软科第 {school['ruanke_rank']}")
+        if program.get("school_city"):  meta.append(f"📍 {program['school_city']}")
+        if school.get("founded_year"):  meta.append(f"创办 {school['founded_year']}")
+        if school.get("school_type"):   meta.append(school["school_type"])
+        if school.get("ruanke_rank"):   meta.append(f"软科第 {school['ruanke_rank']}")
         if meta:
             st.caption("  ｜  ".join(meta))
 
@@ -134,36 +147,32 @@ def _show_program_detail(program: dict) -> None:
     if school.get("tags"):
         st.caption("🏷 " + school["tags"])
     if school.get("summary"):
-        txt = school["summary"]
-        st.write(txt[:320] + ("…" if len(txt) > 320 else ""))
+        st.write(school["summary"][:320] + ("…" if len(school["summary"]) > 320 else ""))
 
     st.divider()
 
-    # ── 专业 ──────────────────────────────────────────────────────────────────
+    # ── 专业（始终渲染）────────────────────────────────────────────────────────
     st.markdown(f"### 📚 {major_name}")
 
-    history   = program.get("history") or []
-    gap_info  = program.get("gap_info") or {}
+    history  = program.get("history") or []
+    gap_info = program.get("gap_info") or {}
     if history:
         rank_by_year = {h["year"]: h.get("min_rank") for h in history}
         parts = [f"{y}年 **{rank_by_year[y]}**" for y in [2025, 2024, 2023] if rank_by_year.get(y)]
-        st.markdown("**历史最低位次**：" + "　|　".join(parts))
+        if parts:
+            st.markdown("**历史最低位次**：" + "　|　".join(parts))
     if gap_info.get("tier"):
         st.markdown(f"**录取把握**：{gap_info['tier']}　gap {gap_info.get('gap', '—')}")
 
     if major.get("summary"):
         st.markdown("**专业简介**")
-        txt = major["summary"]
-        st.write(txt[:240] + ("…" if len(txt) > 240 else ""))
+        st.write(major["summary"][:240] + ("…" if len(major["summary"]) > 240 else ""))
     if major.get("learn_what"):
         st.markdown("**主要学什么**")
-        txt = major["learn_what"]
-        st.write(txt[:240] + ("…" if len(txt) > 240 else ""))
+        st.write(major["learn_what"][:240] + ("…" if len(major["learn_what"]) > 240 else ""))
     if major.get("career_direction"):
         st.markdown("**就业方向**")
-        txt = major["career_direction"]
-        st.write(txt[:240] + ("…" if len(txt) > 240 else ""))
-
+        st.write(major["career_direction"][:240] + ("…" if len(major["career_direction"]) > 240 else ""))
     if not school and not major:
         st.info("暂无该学校/专业的详细介绍数据。")
 
