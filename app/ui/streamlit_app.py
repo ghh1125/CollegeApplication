@@ -968,14 +968,8 @@ with tab_recommend:
         },
     )
     if _rec_event.selection.rows:
-        _df_row = recommend_df.iloc[_rec_event.selection.rows[0]]
-        _orig_idx = int(_df_row["_idx"])
-        _detail_key = f"rec_{_orig_idx}"
-        if st.session_state.get("_detail_open") != _detail_key:
-            st.session_state["_detail_open"] = _detail_key
-            _show_program_detail(recommendation["volunteers"][_orig_idx])
-    else:
-        st.session_state.pop("_detail_open", None)
+        _orig_idx = int(recommend_df.iloc[_rec_event.selection.rows[0]]["_idx"])
+        _show_program_detail(recommendation["volunteers"][_orig_idx])
 
 with tab_candidates:
     warn_cnt = sum(1 for p in final if p.get("_warnings"))
@@ -1015,11 +1009,5 @@ with tab_reserve:
         },
     )
     if _rsv_event.selection.rows:
-        _df_row = reserve_df.iloc[_rsv_event.selection.rows[0]]
-        _orig_idx = int(_df_row["_idx"])
-        _detail_key = f"rsv_{_orig_idx}"
-        if st.session_state.get("_detail_open") != _detail_key:
-            st.session_state["_detail_open"] = _detail_key
-            _show_program_detail(recommendation["reserve"][_orig_idx])
-    else:
-        st.session_state.pop("_detail_open", None)
+        _orig_idx = int(reserve_df.iloc[_rsv_event.selection.rows[0]]["_idx"])
+        _show_program_detail(recommendation["reserve"][_orig_idx])
