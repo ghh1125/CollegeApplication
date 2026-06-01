@@ -102,7 +102,6 @@ def _load_major_detail(major_name: str) -> dict:
     return {}
 
 
-@st.dialog("志愿详情", width="large")
 def _show_program_detail(program: dict) -> None:
     school_name = program.get("school_name", "")
     major_name  = program.get("major_name", "")
@@ -981,7 +980,8 @@ with tab_recommend:
     )
     if _rec_event.selection.rows:
         _orig_idx = int(recommend_df.iloc[_rec_event.selection.rows[0]]["_idx"])
-        _show_program_detail(recommendation["volunteers"][_orig_idx])
+        with st.container(border=True):
+            _show_program_detail(recommendation["volunteers"][_orig_idx])
 
 with tab_candidates:
     warn_cnt = sum(1 for p in final if p.get("_warnings"))
@@ -1022,4 +1022,5 @@ with tab_reserve:
     )
     if _rsv_event.selection.rows:
         _orig_idx = int(reserve_df.iloc[_rsv_event.selection.rows[0]]["_idx"])
-        _show_program_detail(recommendation["reserve"][_orig_idx])
+        with st.container(border=True):
+            _show_program_detail(recommendation["reserve"][_orig_idx])
