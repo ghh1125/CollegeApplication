@@ -60,121 +60,6 @@ _SUBJECT_ALIAS = {
 }
 
 
-@st.cache_data(ttl=3600)
-def _load_school_detail(school_name: str) -> dict:
-    with get_conn() as conn:
-        row = conn.execute(
-            "SELECT school_id, summary, tags, motto, founded_year, school_type, school_nature, ruanke_rank "
-            "FROM school_profile WHERE school_name = ? LIMIT 1",
-            (school_name,),
-        ).fetchone()
-    if not row:
-        return {}
-    return {
-        "logo_url": f"https://static-data.gaokao.cn/upload/logo/{row[0]}.jpg" if row[0] else None,
-        "summary": row[1] or "",
-        "tags": row[2] or "",
-        "motto": row[3] or "",
-        "founded_year": row[4] or "",
-        "school_type": row[5] or "",
-        "school_nature": row[6] or "",
-        "ruanke_rank": row[7],
-    }
-
-
-@st.cache_data(ttl=3600)
-def _load_major_detail(major_name: str) -> dict:
-    from app.pipeline.rank import normalize_major_name
-    norm = normalize_major_name(major_name)
-    with get_conn() as conn:
-        row = conn.execute(
-            "SELECT summary, learn_what, career_direction FROM major_profile WHERE major_name = ? LIMIT 1",
-            (norm,),
-        ).fetchone()
-        if row:
-            return {"summary": row[0] or "", "learn_what": row[1] or "", "career_direction": row[2] or ""}
-        row2 = conn.execute(
-            "SELECT is_what, learn_what, do_what FROM major_description WHERE name = ? LIMIT 1",
-            (norm,),
-        ).fetchone()
-        if row2:
-            return {"summary": row2[0] or "", "learn_what": row2[1] or "", "career_direction": row2[2] or ""}
-    return {}
-
-
-def _show_program_detail(program: dict) -> None:
-    school_name = program.get("school_name", "")
-    major_name  = program.get("major_name", "")
-
-    # ── 学校头部（始终渲染）────────────────────────────────────────────────────
-    tiers = []
-    if program.get("is_985"):               tiers.append("985")
-    if program.get("is_211"):               tiers.append("211")
-    if program.get("is_double_first_class"): tiers.append("双一流")
-    tier_str = "　".join(f"`{t}`" for t in tiers) if tiers else ""
-
-    try:
-        school = _load_school_detail(school_name)
-    except Exception:
-        school = {}
-    try:
-        major = _load_major_detail(major_name)
-    except Exception:
-        major = {}
-
-    col_logo, col_info = st.columns([1, 5])
-    with col_logo:
-        logo = school.get("logo_url")
-        if logo:
-            try:
-                st.image(logo, width=80)
-            except Exception:
-                pass
-    with col_info:
-        st.markdown(f"## {school_name}")
-        if tier_str:
-            st.markdown(tier_str)
-        meta = []
-        if program.get("school_city"):  meta.append(f"📍 {program['school_city']}")
-        if school.get("founded_year"):  meta.append(f"创办 {school['founded_year']}")
-        if school.get("school_type"):   meta.append(school["school_type"])
-        if school.get("ruanke_rank"):   meta.append(f"软科第 {school['ruanke_rank']}")
-        if meta:
-            st.caption("  ｜  ".join(meta))
-
-    if school.get("motto"):
-        st.caption(f"校训：{school['motto']}")
-    if school.get("tags"):
-        st.caption("🏷 " + school["tags"])
-    if school.get("summary"):
-        st.write(school["summary"][:320] + ("…" if len(school["summary"]) > 320 else ""))
-
-    st.divider()
-
-    # ── 专业（始终渲染）────────────────────────────────────────────────────────
-    st.markdown(f"### 📚 {major_name}")
-
-    history  = program.get("history") or []
-    gap_info = program.get("gap_info") or {}
-    if history:
-        rank_by_year = {h["year"]: h.get("min_rank") for h in history}
-        parts = [f"{y}年 **{rank_by_year[y]}**" for y in [2025, 2024, 2023] if rank_by_year.get(y)]
-        if parts:
-            st.markdown("**历史最低位次**：" + "　|　".join(parts))
-    if gap_info.get("tier"):
-        st.markdown(f"**录取把握**：{gap_info['tier']}　gap {gap_info.get('gap', '—')}")
-
-    if major.get("summary"):
-        st.markdown("**专业简介**")
-        st.write(major["summary"][:240] + ("…" if len(major["summary"]) > 240 else ""))
-    if major.get("learn_what"):
-        st.markdown("**主要学什么**")
-        st.write(major["learn_what"][:240] + ("…" if len(major["learn_what"]) > 240 else ""))
-    if major.get("career_direction"):
-        st.markdown("**就业方向**")
-        st.write(major["career_direction"][:240] + ("…" if len(major["career_direction"]) > 240 else ""))
-    if not school and not major:
-        st.info("暂无该学校/专业的详细介绍数据。")
 
 
 @st.cache_data(ttl=3600)
@@ -234,7 +119,6 @@ def _to_df(programs: list[dict]) -> pd.DataFrame:
 def _recommendation_df(programs: list[dict], main_priority: str) -> pd.DataFrame:
     return pd.DataFrame([
         {
-            "_idx":      index - 1,  # original list index, hidden in UI
             "序号":      p.get("volunteer_no") or index,
             "层级":      (p.get("gap_info") or {}).get("tier", ""),
             "学校":      p.get("school_name", ""),
@@ -966,7 +850,7 @@ tab_recommend, tab_candidates, tab_reserve = st.tabs(["推荐志愿", "候选池
 
 with tab_recommend:
     st.dataframe(
-        recommend_df.drop(columns=["_idx"]), width="stretch", hide_index=True, height=580,
+        recommend_df.drop(columns=["_idx"]), width="stretch", hide_index=True, height=620,
         column_config={
             "序号":      st.column_config.NumberColumn(width="small"),
             "层级":      st.column_config.TextColumn(width="small"),
@@ -984,16 +868,6 @@ with tab_recommend:
             "⚠":        st.column_config.TextColumn(width="medium"),
         },
     )
-    _rec_vols = recommendation["volunteers"]
-    _rec_options = ["— 选择一条志愿查看详情 —"] + [
-        f"{p.get('volunteer_no')}. {p.get('school_name')}  ·  {p.get('major_name', '')}"
-        for p in _rec_vols
-    ]
-    _rec_sel = st.selectbox("查看详情", _rec_options, key="rec_detail_sel", label_visibility="collapsed")
-    if _rec_sel != _rec_options[0]:
-        _rec_idx = _rec_options.index(_rec_sel) - 1
-        with st.container(border=True):
-            _show_program_detail(_rec_vols[_rec_idx])
 
 with tab_candidates:
     warn_cnt = sum(1 for p in final if p.get("_warnings"))
@@ -1011,7 +885,7 @@ with tab_candidates:
 
 with tab_reserve:
     st.dataframe(
-        reserve_df.drop(columns=["_idx"]), width="stretch", hide_index=True, height=580,
+        reserve_df.drop(columns=["_idx"]), width="stretch", hide_index=True, height=620,
         column_config={
             "序号":      st.column_config.NumberColumn(width="small"),
             "层级":      st.column_config.TextColumn(width="small"),
@@ -1029,13 +903,3 @@ with tab_reserve:
             "⚠":        st.column_config.TextColumn(width="medium"),
         },
     )
-    _rsv_vols = recommendation["reserve"]
-    _rsv_options = ["— 选择一条志愿查看详情 —"] + [
-        f"{p.get('volunteer_no')}. {p.get('school_name')}  ·  {p.get('major_name', '')}"
-        for p in _rsv_vols
-    ]
-    _rsv_sel = st.selectbox("查看详情", _rsv_options, key="rsv_detail_sel", label_visibility="collapsed")
-    if _rsv_sel != _rsv_options[0]:
-        _rsv_idx = _rsv_options.index(_rsv_sel) - 1
-        with st.container(border=True):
-            _show_program_detail(_rsv_vols[_rsv_idx])
