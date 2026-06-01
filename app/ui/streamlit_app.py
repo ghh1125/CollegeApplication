@@ -226,6 +226,7 @@ def _to_df(programs: list[dict]) -> pd.DataFrame:
 def _recommendation_df(programs: list[dict], main_priority: str) -> pd.DataFrame:
     return pd.DataFrame([
         {
+            "_idx":      index - 1,  # original list index, hidden in UI
             "序号":      p.get("volunteer_no") or index,
             "层级":      (p.get("gap_info") or {}).get("tier", ""),
             "学校":      p.get("school_name", ""),
@@ -949,6 +950,7 @@ with tab_recommend:
         recommend_df, width="stretch", hide_index=True, height=600,
         on_select="rerun", selection_mode="single-row",
         column_config={
+            "_idx":      None,
             "序号":      st.column_config.NumberColumn(width="small"),
             "层级":      st.column_config.TextColumn(width="small"),
             "学校":      st.column_config.TextColumn(width="medium"),
@@ -966,7 +968,14 @@ with tab_recommend:
         },
     )
     if _rec_event.selection.rows:
-        _show_program_detail(recommendation["volunteers"][_rec_event.selection.rows[0]])
+        _df_row = recommend_df.iloc[_rec_event.selection.rows[0]]
+        _orig_idx = int(_df_row["_idx"])
+        _detail_key = f"rec_{_orig_idx}"
+        if st.session_state.get("_detail_open") != _detail_key:
+            st.session_state["_detail_open"] = _detail_key
+            _show_program_detail(recommendation["volunteers"][_orig_idx])
+    else:
+        st.session_state.pop("_detail_open", None)
 
 with tab_candidates:
     warn_cnt = sum(1 for p in final if p.get("_warnings"))
@@ -988,6 +997,7 @@ with tab_reserve:
         reserve_df, width="stretch", hide_index=True, height=600,
         on_select="rerun", selection_mode="single-row",
         column_config={
+            "_idx":      None,
             "序号":      st.column_config.NumberColumn(width="small"),
             "层级":      st.column_config.TextColumn(width="small"),
             "学校":      st.column_config.TextColumn(width="medium"),
@@ -1005,4 +1015,11 @@ with tab_reserve:
         },
     )
     if _rsv_event.selection.rows:
-        _show_program_detail(recommendation["reserve"][_rsv_event.selection.rows[0]])
+        _df_row = reserve_df.iloc[_rsv_event.selection.rows[0]]
+        _orig_idx = int(_df_row["_idx"])
+        _detail_key = f"rsv_{_orig_idx}"
+        if st.session_state.get("_detail_open") != _detail_key:
+            st.session_state["_detail_open"] = _detail_key
+            _show_program_detail(recommendation["reserve"][_orig_idx])
+    else:
+        st.session_state.pop("_detail_open", None)
