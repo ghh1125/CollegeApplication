@@ -825,7 +825,7 @@ def attach_history(candidates: list[dict], data: HistoryData) -> list[dict]:
     Attaches history, school metadata, and discipline grades to each candidate
     using pre-loaded HistoryData. Identical output to enrich_with_history.
     """
-    from src.zhejiang.input.filter import SCHOOL_LEVEL_MAP
+    from src.common.reference import SCHOOL_LEVEL_MAP
 
     _PUBLIC_KEYS = ("year", "min_rank", "min_score", "plan_count")
 
