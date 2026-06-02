@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-RAW_DIR = PROJECT_ROOT / "data" / "raw"
+RAW_DIR = PROJECT_ROOT / "data" / "zhejiang" / "raw"
 HISTORICAL_CUTOFF_YEARS = (2025, 2024, 2023)
 ADMISSION_PLAN_YEAR = 2025
 ADMISSION_PROVINCE = "浙江"
@@ -380,7 +380,7 @@ def run_ingestion(
     """Load cutoff CSVs and derive the 2025 admission plan into SQLite."""
 
     if ingest_module is None:
-        from src.input import ingest as ingest_module
+        from src.zhejiang.input import ingest as ingest_module
 
     plan_base_path = raw_csv_path("historical_cutoff", ADMISSION_PLAN_YEAR, raw_dir)
     if not plan_base_path.exists():

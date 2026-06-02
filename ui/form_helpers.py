@@ -52,6 +52,6 @@ def format_sort_reason_for_display(program: dict, main_priority: str) -> str:
     reason = str(program.get("sort_reason") or "").strip()
     if reason:
         return reason
-    from src.ranking.profiles import build_profile_sort_reason
+    from src.zhejiang.ranking.profiles import build_profile_sort_reason
 
     return build_profile_sort_reason(program, main_priority)

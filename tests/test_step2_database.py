@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SCHEMA_PATH = PROJECT_ROOT / "data" / "schema.sql"
+SCHEMA_PATH = PROJECT_ROOT / "data" / "zhejiang" / "schema.sql"
 
 
 class FakeCursor:
@@ -60,16 +60,18 @@ class DatabaseHelperTests(unittest.TestCase):
         db = importlib.import_module("db")
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            original_path = db.DB_PATH
-            db.DB_PATH = Path(tmpdir) / "college.db"
+            tmp_db = Path(tmpdir) / "college.db"
+            # patch get_db_path to redirect to temp dir
+            original_get_db_path = db.get_db_path
+            db.get_db_path = lambda province="zhejiang": tmp_db
             try:
                 with db.get_conn() as conn:
                     conn.execute("CREATE TABLE demo (value INTEGER)")
                     conn.execute("INSERT INTO demo VALUES (1)")
-                with sqlite3.connect(db.DB_PATH) as conn:
+                with sqlite3.connect(tmp_db) as conn:
                     value = conn.execute("SELECT value FROM demo").fetchone()[0]
             finally:
-                db.DB_PATH = original_path
+                db.get_db_path = original_get_db_path
 
         self.assertEqual(value, 1)
 
@@ -79,8 +81,9 @@ class DatabaseHelperTests(unittest.TestCase):
         db = importlib.import_module("db")
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            original_path = db.DB_PATH
-            db.DB_PATH = Path(tmpdir) / "college.db"
+            tmp_db = Path(tmpdir) / "college.db"
+            original_get_db_path = db.get_db_path
+            db.get_db_path = lambda province="zhejiang": tmp_db
             try:
                 # First open: DB doesn't exist yet → read-write, create table
                 with db.get_conn() as conn:
@@ -90,7 +93,7 @@ class DatabaseHelperTests(unittest.TestCase):
                     with db.get_conn() as conn:
                         conn.execute("INSERT INTO demo VALUES (1)")
             finally:
-                db.DB_PATH = original_path
+                db.get_db_path = original_get_db_path
 
     def test_get_cursor_closes_cursor(self) -> None:
         conn = FakeConnection()

@@ -14,7 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.input.profile import (
+from src.zhejiang.input.profile import (
     Constraints,
     CityPreference,
     MajorPreference,
@@ -22,7 +22,7 @@ from src.input.profile import (
     SchoolPreference,
     StudentProfile,
 )
-from src.input.filter import (
+from src.zhejiang.input.filter import (
     resolve_school_city,
     filter_by_city,
     filter_by_constraints,
@@ -30,7 +30,7 @@ from src.input.filter import (
     filter_by_school_level,
     filter_by_subject,
 )
-from src.allocation.recommend import build_recommendations, history_rank_columns
+from src.zhejiang.allocation.recommend import build_recommendations, history_rank_columns
 from ui.form_helpers import (
     format_sort_reason_for_display,
     normalize_items,
@@ -38,7 +38,7 @@ from ui.form_helpers import (
     split_major_preferences,
 )
 from db import get_conn
-from src.input.llm import (
+from src.zhejiang.input.llm import (
     chat_with_advisor, search_web, should_search,
     explain_volunteer, generate_overall_report,
 )
@@ -46,8 +46,30 @@ from src.input.llm import (
 
 # ─── 页面配置 ────────────────────────────────────────────────────────────────
 
-st.set_page_config(page_title="浙江高考志愿筛选", page_icon="🎓", layout="wide")
-st.title("🎓 高考志愿筛选（面向浙江高考）")
+st.set_page_config(page_title="高考志愿推荐系统", page_icon="🎓", layout="wide")
+st.title("🎓 高考志愿推荐系统")
+
+# ─── 省份路由 ─────────────────────────────────────────────────────────────────
+
+_PROVINCE_OPTIONS = {
+    "浙江": "zhejiang",
+    "江苏（即将支持）": None,
+    "上海（即将支持）": None,
+}
+
+_selected_province_label = st.radio(
+    "请选择省份",
+    list(_PROVINCE_OPTIONS.keys()),
+    horizontal=True,
+    key="province_selector",
+)
+_selected_province = _PROVINCE_OPTIONS[_selected_province_label]
+
+if _selected_province is None:
+    st.info(f"📌 {_selected_province_label}的数据暂未接入，敬请期待。")
+    st.stop()
+
+st.divider()
 
 # ─── 辅助 ────────────────────────────────────────────────────────────────────
 
@@ -63,19 +85,19 @@ _SUBJECT_ALIAS = {
 
 
 @st.cache_data(ttl=3600)
-def _load_major_options() -> list[str]:
+def _load_major_options(province: str = "zhejiang") -> list[str]:
     """Load major names: standard catalog + all actual programs from admission_plan."""
-    with get_conn() as conn:
+    with get_conn(province) as conn:
         std = {r[0] for r in conn.execute("SELECT name FROM major_description").fetchall()}
         actual = {r[0] for r in conn.execute("SELECT DISTINCT major_name FROM admission_plan").fetchall()}
     return sorted(std | actual)
 
 
 @st.cache_data(ttl=3600)
-def _load_province_city_map() -> dict[str, list[str]]:
+def _load_province_city_map(province: str = "zhejiang") -> dict[str, list[str]]:
     """Return {province: sorted list of cities} from school_master."""
     _INVALID = {"军校", ""}
-    with get_conn() as conn:
+    with get_conn(province) as conn:
         rows = conn.execute(
             "SELECT DISTINCT province, city FROM school_master "
             "WHERE province IS NOT NULL AND province != '' "
@@ -176,7 +198,7 @@ def _dynamic_text_list(
 
 # ─── 预加载 + AI填报pending处理（必须在所有widget渲染前执行） ─────────────────
 
-_all_major_options = _load_major_options()
+_all_major_options = _load_major_options(_selected_province)
 _form_ready = bool(st.session_state.get("_form_ready", False))
 # Pop the rerun flag early so it only takes effect for one run
 _reco_rerun_pending = st.session_state.pop("_reco_rerun_pending", False)
@@ -255,7 +277,7 @@ with st.sidebar:
             elif preferred_major_input and not limit_to_preferred_majors:
                 st.caption("当前这些专业只影响排序；勾选“只看这些专业”后才会过滤候选池。")
 
-            _province_city_map = _load_province_city_map()
+            _province_city_map = _load_province_city_map(_selected_province)
             _all_cities_flat = sorted({c for cs in _province_city_map.values() for c in cs})
             preferred_cities_sort_input = st.multiselect(
                 "偏好城市（排序优先）",
@@ -589,7 +611,7 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                 _expanded: list[str] = []
                 for _c in _p["preferred_cities"]:
                     _expanded.extend(_REGION_EXPAND.get(_c, [_c]))
-                _prov_map = _load_province_city_map()
+                _prov_map = _load_province_city_map(_selected_province)
                 _all_cities = {c for cs in _prov_map.values() for c in cs}
                 _valid_cities = list(dict.fromkeys(c for c in _expanded if c in _all_cities))
                 if _valid_cities:

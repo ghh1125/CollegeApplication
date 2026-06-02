@@ -30,7 +30,7 @@ class SQLiteConfigTests(unittest.TestCase):
     def test_db_uses_project_sqlite_file(self) -> None:
         db = importlib.import_module("db")
 
-        self.assertEqual(db.DB_PATH, PROJECT_ROOT / "data" / "college.db")
+        self.assertEqual(db.DB_PATH, PROJECT_ROOT / "data" / "zhejiang" / "college.db")
         with db.get_conn() as conn:
             self.assertIsInstance(conn, sqlite3.Connection)
 
@@ -39,7 +39,7 @@ class SQLiteSchemaTests(unittest.TestCase):
     """Schema should be executable by SQLite."""
 
     def test_schema_uses_sqlite_compatible_types(self) -> None:
-        schema = (PROJECT_ROOT / "data" / "schema.sql").read_text(
+        schema = (PROJECT_ROOT / "data" / "zhejiang" / "schema.sql").read_text(
             encoding="utf-8"
         )
 
@@ -49,7 +49,7 @@ class SQLiteSchemaTests(unittest.TestCase):
         self.assertIn("CHECK (recruit_type IN ('MAJOR', 'CATEGORY'))", schema)
 
     def test_schema_executes_on_sqlite(self) -> None:
-        schema = (PROJECT_ROOT / "data" / "schema.sql").read_text(
+        schema = (PROJECT_ROOT / "data" / "zhejiang" / "schema.sql").read_text(
             encoding="utf-8"
         )
 
