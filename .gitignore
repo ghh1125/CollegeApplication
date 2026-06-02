@@ -6,3 +6,7 @@ venv/
 *.egg-info/
 .DS_Store
 data/raw/
+
+# SQLite WAL mode temp files
+*.db-shm
+*.db-wal
