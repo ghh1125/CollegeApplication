@@ -1,18 +1,18 @@
 # 高考志愿推荐系统
 
-面向浙江高考的志愿填报推荐工具，基于历史录取位次、选科要求和学生偏好，生成冲稳保梯度志愿方案，并提供 AI 对话助手辅助分析。
+面向浙江高考的志愿填报推荐工具。输入位次和偏好，自动生成冲稳保梯度志愿方案，并提供 AI 对话助手帮你分析和解读。
 
 **在线体验**：[https://collegeapplication-imqdnkfg5pggujsmkofkbo.streamlit.app](https://collegeapplication-imqdnkfg5pggujsmkofkbo.streamlit.app)
 
 ---
 
-## 功能
+## 能做什么
 
-- **智能筛选**：按选科要求、学校层次、城市、专业关键词过滤候选学校专业
-- **位次匹配**：用近三年历史录取位次（加权 0.5/0.3/0.2）计算 gap，划分冲/稳/保/垫/高危冲五档
-- **多维排序**：支持专业优先 / 学校优先 / 城市优先三种模式，各模式内按专业匹配度 × 学校质量 × 城市偏好排序
-- **专业匹配**：五层精细匹配（精确 → 关键词 → 专业类 → 相近学科 → 无关），基于第四轮学科评估代码和学科亲缘 cluster
-- **AI 对话**：小明助手支持自然语言填报、问卷引导（不知道读什么时逐题分析兴趣）、志愿解释、整体方案报告
+- **自动筛选**：根据你的选考科目，排除掉不符合要求的专业，再按学校层次、城市、专业方向进一步缩小范围
+- **录取把握判断**：对比你的位次和该专业近三年历史录取位次，判断是冲、稳、保还是垫底，不靠感觉靠数据
+- **三种排序模式**：专业优先（先找你想读的专业）、学校优先（先找好学校）、城市优先（先找你想去的城市），同一套数据，按你的侧重点排
+- **专业相关度识别**：能区分"这就是你想读的专业"、"这个专业类里的"、"跟你想读的方向沾边"、"完全不相关"，不会把无关专业混进来
+- **AI 对话助手**：不知道填什么可以跟小明聊，它会问你几个问题帮你分析适合读什么方向，也能解释为什么推荐某条志愿
 
 ---
 
@@ -20,37 +20,44 @@
 
 ```
 .
-├── main.py                   # Streamlit 应用入口
-├── db.py                     # SQLite 连接管理
-├── config.py                 # 环境变量配置（DashScope API Key 等）
+├── main.py                   # 网页应用主文件，运行后在浏览器打开
+├── db.py                     # 数据库连接
+├── config.py                 # 配置（API Key 等）
 │
 ├── src/
-│   ├── input/                # 用户输入层
-│   │   ├── profile.py        # StudentProfile 数据模型
-│   │   ├── filter.py         # 候选池筛选（选科 + 硬约束 + 城市 + 专业关键词）
-│   │   ├── llm.py            # AI 对话、参数提取、报告生成
-│   │   └── ingest.py         # 原始数据导入
+│   ├── input/                # 接收用户输入，做初步筛选
+│   │   ├── profile.py        # 学生信息格式定义（位次、选科、偏好等）
+│   │   ├── filter.py         # 筛掉不符合条件的学校专业
+│   │   ├── llm.py            # AI 对话逻辑
+│   │   └── ingest.py         # 原始数据导入数据库
 │   │
-│   ├── ranking/              # 排序层
-│   │   ├── rank.py           # 位次计算、专业打分、排序、历史数据富化
-│   │   └── profiles.py       # 学校/专业画像富化
+│   ├── ranking/              # 给候选学校专业打分排序
+│   │   ├── rank.py           # 位次计算、专业匹配打分、排序
+│   │   └── profiles.py       # 补充学校和专业的详细信息
 │   │
-│   ├── allocation/           # 志愿生成层
-│   │   ├── builder.py        # 冲稳保志愿数量分配
-│   │   └── recommend.py      # 端到端流水线组装
+│   ├── allocation/           # 生成最终志愿表
+│   │   ├── builder.py        # 按冲稳保比例分配志愿数量
+│   │   └── recommend.py      # 把所有步骤串起来，输出完整结果
 │   │
 │   └── export/
-│       └── excel.py          # Excel 导出
+│       └── excel.py          # 导出 Excel 表格
 │
 ├── ui/
-│   └── form_helpers.py       # Streamlit 表单辅助函数
+│   └── form_helpers.py       # 网页表单辅助
 │
 ├── data/
-│   ├── college.db            # SQLite 数据库（学校/专业/历史录取/选科要求）
-│   └── schema.sql            # 数据库表结构
+│   ├── college.db            # 数据库文件（包含所有学校、专业、历史录取数据）
+│   ├── schema.sql            # 数据库表结构定义
+│   └── raw/                  # 原始数据文件
+│       ├── historical_cutoff_2023/2024/2025.csv   # 各年历史录取位次
+│       ├── subject_requirement.pdf                # 选考科目要求原始PDF
+│       ├── subject_req_parsed.csv                 # PDF 解析后的结构化数据
+│       ├── school_profiles_raw.json               # 学校基本信息
+│       ├── school_locations_raw.json              # 学校城市信息
+│       └── city_wiki_raw.json                     # 城市经济数据
 │
-├── scripts/                  # 数据构建脚本（初始化 DB、抓取数据等）
-└── tests/                    # 单元测试
+├── scripts/                  # 数据处理脚本（初始化数据库、抓取数据等，一次性使用）
+└── tests/                    # 自动化测试
 ```
 
 ---
@@ -78,7 +85,7 @@ uv sync          # 或 pip install -r requirements.txt
 DASHSCOPE_API_KEY=your_key_here
 ```
 
-AI 对话功能（小明助手、报告生成）需要 DashScope API Key，志愿生成本身不需要。
+AI 对话功能（小明助手、报告生成）需要阿里云百炼的 API Key，志愿生成本身不需要。
 
 ### 运行
 
@@ -88,43 +95,25 @@ streamlit run main.py
 
 ---
 
-## 核心模块接口
-
-各子模块均可独立复用，输入输出明确：
-
-| 模块 | 函数 | 输入 | 输出 |
-|------|------|------|------|
-| 筛选 | `load_admission_plans(conn, year)` | DB 连接 + 年份 | 招生计划列表 |
-| 筛选 | `apply_subject_filter(programs, subjects)` | 计划列表 + 选科 | (合格, 排除) |
-| 历史数据 | `load_all_history_data(conn, year)` | DB 连接 + 年份 | `HistoryData` |
-| 历史数据 | `attach_history(candidates, data)` | 候选列表 + HistoryData | 富化后列表 |
-| 专业匹配 | `_major_level(program, majors, cats)` | 专业信息 + 偏好 | 0-4 匹配等级 |
-| 排序 | `sort_candidates(candidates, ...)` | 候选列表 + 偏好 + 模式 | 排序后列表 |
-| 分配 | `build_volunteer_list(candidates, ...)` | 排序列表 + 风险偏好 | 志愿表 + 备选池 |
-
----
-
 ## 数据来源
 
 本项目数据均来自公开渠道，仅供学习和参考使用，不做商业用途。
 
-| 数据类型 | 来源 | 说明 |
-|---------|------|------|
-| 历史录取位次 / 招生计划 | [阳光高考 chsi.com.cn](https://gaokao.chsi.com.cn) | 教育部主管的官方高考信息平台 |
-| 学校基本信息 / 专业介绍 | [阳光高考 static-data.gaokao.cn](https://static-data.gaokao.cn) | 同上，JSON 接口 |
-| 浙江省各批次位次对照表 | [浙江省教育考试院](https://www.zjzs.net) | 每年发布的一段线、普通类位次分段表 |
-| 软科大学排名 | [软科 shanghairanking.cn](https://www.shanghairanking.cn) | 手动整理，仅排名数字 |
-| 第四轮学科评估结果 | [教育部](https://www.moe.gov.cn) | 2017年公开发布，存于 `data/discipline_eval.sql` |
-| 城市 GDP / 人口数据 | [维基百科](https://zh.wikipedia.org) | 爬取各城市词条经济数据 |
-| 选考科目要求 | [浙江省教育考试院](https://www.zjzs.net) | 官方发布的《普通高校招生专业选考科目要求》PDF，解析后入库，部分数据经 LLM 辅助解析并标注 `need_review` |
+| 数据内容 | 来源 |
+|---------|------|
+| 历史录取位次 / 招生计划 | [阳光高考 chsi.com.cn](https://gaokao.chsi.com.cn)（教育部主管的官方平台） |
+| 学校基本信息 / 专业介绍 | [阳光高考 static-data.gaokao.cn](https://static-data.gaokao.cn) |
+| 浙江省位次分段表 / 选考科目要求 | [浙江省教育考试院](https://www.zjzs.net) |
+| 大学排名 | [软科 shanghairanking.cn](https://www.shanghairanking.cn)（手动整理） |
+| 学科评估等级 | [教育部第四轮学科评估](https://www.moe.gov.cn)（2017年公开发布） |
+| 城市经济数据 | [维基百科](https://zh.wikipedia.org) |
 
-**版权说明**：本项目不持有、不分发任何受版权保护的原始数据集。数据库文件（`college.db`）仅用于个人学习目的，使用时请遵守各平台服务条款。软科排名、学科评估等数据的版权归原发布机构所有。
+**版权说明**：本项目不持有、不分发任何受版权保护的原始数据集，仅供个人学习使用，请遵守各平台服务条款。
 
 ---
 
 ## 技术栈
 
-- **前端**：Streamlit
+- **网页框架**：Streamlit
 - **数据库**：SQLite
-- **AI**：阿里云百炼 DashScope（兼容 OpenAI 接口）
-- **数据模型**：Pydantic v2
+- **AI**：阿里云百炼 DashScope
