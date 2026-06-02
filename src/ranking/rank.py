@@ -389,7 +389,7 @@ def calculate_gap(student_rank: int, history: list[dict]) -> dict:
         "gap": gap,
         "ratio": round(ratio, 4),
         "tier": tier,
-        "data_years": len(valid),
+        "data_years": len({year for year, _ in valid}),
     }
 
 
@@ -705,18 +705,45 @@ def load_history_indexes(
     """
     rows = conn.execute(sql, tuple(years)).fetchall()
 
+    # Deduplicate: same (school, major, year) may have multiple rows from different
+    # major_codes (e.g. different recruitment batches). Keep the row with the lowest
+    # min_rank (most selective / most conservative estimate).
+    best_by_code: dict[tuple[str, str, int], tuple] = {}
+    best_by_name: dict[tuple[str, str, int], tuple] = {}
+    for row in rows:
+        year_val, sch_code, sch_name, maj_code, maj_name, min_score, min_rank, plan_count = row
+        norm = normalize_major_name(maj_name)
+        rank = min_rank if min_rank else 999999
+
+        code_key = (str(sch_code or ""), str(maj_code or ""), year_val)
+        if code_key not in best_by_code or rank < (best_by_code[code_key][6] or 999999):
+            best_by_code[code_key] = row
+
+        name_key = (str(sch_name or ""), norm, year_val)
+        if name_key not in best_by_name or rank < (best_by_name[name_key][6] or 999999):
+            best_by_name[name_key] = row
+
     by_code: dict[tuple[str, str], list[dict]] = {}
     by_name: dict[tuple[str, str], list[dict]] = {}
-    for row in rows:
+    for row in best_by_code.values():
         norm = normalize_major_name(row[4])
         record = {
             "year": row[0],
             "min_rank": row[6],
             "min_score": row[5],
             "plan_count": row[7],
-            "_norm_major_name": norm,  # used to validate code-fallback matches
+            "_norm_major_name": norm,
         }
         by_code.setdefault((str(row[1] or ""), str(row[3] or "")), []).append(record)
+    for row in best_by_name.values():
+        norm = normalize_major_name(row[4])
+        record = {
+            "year": row[0],
+            "min_rank": row[6],
+            "min_score": row[5],
+            "plan_count": row[7],
+            "_norm_major_name": norm,
+        }
         by_name.setdefault((str(row[2] or ""), norm), []).append(record)
     return by_code, by_name
 
