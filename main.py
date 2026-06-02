@@ -148,7 +148,10 @@ if _selected_province not in _AVAILABLE:
 _PROVINCE_NAMES = {p[1]: p[0] for g in _PROVINCE_GROUPS for p in g[1]}
 st.title(f"高考志愿推荐系统 · {_PROVINCE_NAMES.get(_selected_province, _selected_province)}")
 if st.button("← 切换省份", key="_back_to_landing"):
-    del st.session_state["_province"]
+    keep = {"_back_to_landing"}  # keep only the button key itself
+    for k in list(st.session_state.keys()):
+        if k not in keep:
+            del st.session_state[k]
     st.rerun()
 st.divider()
 
