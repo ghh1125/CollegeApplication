@@ -18,25 +18,40 @@
 
 ## 项目结构
 
-| 路径 | 说明 |
-|------|------|
-| `main.py` | Streamlit 应用入口 |
-| `db.py` | SQLite 连接管理 |
-| `config.py` | 环境变量配置（DashScope API Key 等） |
-| `src/input/profile.py` | StudentProfile 数据模型 |
-| `src/input/filter.py` | 候选池筛选（选科 + 硬约束 + 城市 + 专业关键词） |
-| `src/input/llm.py` | AI 对话、参数提取、报告生成 |
-| `src/input/ingest.py` | 原始数据导入 |
-| `src/ranking/rank.py` | 位次计算、专业打分、排序、历史数据富化 |
-| `src/ranking/profiles.py` | 学校/专业画像富化 |
-| `src/allocation/builder.py` | 冲稳保志愿数量分配 |
-| `src/allocation/recommend.py` | 端到端流水线组装 |
-| `src/export/excel.py` | Excel 导出 |
-| `ui/form_helpers.py` | Streamlit 表单辅助函数 |
-| `data/college.db` | SQLite 数据库（学校/专业/历史录取/选科要求） |
-| `data/schema.sql` | 数据库表结构 |
-| `scripts/` | 数据构建脚本（初始化 DB、抓取数据等） |
-| `tests/` | 单元测试 |
+```
+.
+├── main.py                   # Streamlit 应用入口
+├── db.py                     # SQLite 连接管理
+├── config.py                 # 环境变量配置（DashScope API Key 等）
+│
+├── src/
+│   ├── input/                # 用户输入层
+│   │   ├── profile.py        # StudentProfile 数据模型
+│   │   ├── filter.py         # 候选池筛选（选科 + 硬约束 + 城市 + 专业关键词）
+│   │   ├── llm.py            # AI 对话、参数提取、报告生成
+│   │   └── ingest.py         # 原始数据导入
+│   │
+│   ├── ranking/              # 排序层
+│   │   ├── rank.py           # 位次计算、专业打分、排序、历史数据富化
+│   │   └── profiles.py       # 学校/专业画像富化
+│   │
+│   ├── allocation/           # 志愿生成层
+│   │   ├── builder.py        # 冲稳保志愿数量分配
+│   │   └── recommend.py      # 端到端流水线组装
+│   │
+│   └── export/
+│       └── excel.py          # Excel 导出
+│
+├── ui/
+│   └── form_helpers.py       # Streamlit 表单辅助函数
+│
+├── data/
+│   ├── college.db            # SQLite 数据库（学校/专业/历史录取/选科要求）
+│   └── schema.sql            # 数据库表结构
+│
+├── scripts/                  # 数据构建脚本（初始化 DB、抓取数据等）
+└── tests/                    # 单元测试
+```
 
 ---
 
