@@ -28,12 +28,33 @@ def should_search(message: str) -> bool:
     return not (_EDIT_VERBS.search(message) and _PARAM_NOUNS.search(message))
 
 
-def search_web(query: str, max_results: int = 3) -> list[str]:
+_CONV_WORDS = re.compile(
+    # longer alternatives must come first to avoid partial matches
+    r"怎么样|好不好|值不值|能不能|帮我|告诉我|的话|"
+    r"你|我|请|能|帮|是否|怎么|可以|"
+    r"推荐|评价|分析|介绍|说说|看看|觉得|认为|了解|判断|"
+    r"一下|如何|好吗|吗|呢|啊|哦|嗯"
+)
+
+
+def _build_search_query(message: str) -> str:
+    """Strip conversational words and append context for a clean DDG query."""
+    q = _CONV_WORDS.sub("", message.strip()).strip()
+    if not q:
+        q = message.strip()
+    if not re.search(r"20\d{2}", q):
+        q = f"{q} 2025"
+    if not any(kw in q for kw in ("就业", "评价", "排名", "薪资")):
+        q = f"{q} 评价 就业"
+    return q
+
+
+def search_web(query: str, max_results: int = 5) -> list[str]:
     try:
         from ddgs import DDGS
-        search_query = query if re.search(r"\b20\d{2}\b", query) else f"{query} 2025"
+        search_query = _build_search_query(query)
         with DDGS(timeout=8) as ddgs:
-            results = list(ddgs.text(search_query, max_results=max_results))
+            results = list(ddgs.text(search_query, max_results=max_results, region="cn-zh"))
         return [
             f"{r['title']}: {r['body'][:250]}"
             for r in results if r.get("body")
