@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SCHEMA_PATH = PROJECT_ROOT / "app" / "models" / "schema.sql"
+SCHEMA_PATH = PROJECT_ROOT / "data" / "schema.sql"
 
 
 class FakeCursor:

@@ -265,7 +265,7 @@ class IngestPipelineTests(unittest.TestCase):
     """Tests for CSV-to-database ingestion helpers."""
 
     def setUp(self) -> None:
-        self.ingest = importlib.import_module("app.pipeline.ingest")
+        self.ingest = importlib.import_module("src.input.ingest")
 
     def write_csv(self, path: Path, rows: list[dict[str, str]]) -> None:
         with path.open("w", encoding="utf-8", newline="") as handle:
@@ -348,7 +348,7 @@ class SchemaStep4Tests(unittest.TestCase):
     """Schema checks for Step 4 ingestion and validation queries."""
 
     def test_schema_has_columns_required_by_ingest_and_validation(self) -> None:
-        schema = (PROJECT_ROOT / "app" / "models" / "schema.sql").read_text(
+        schema = (PROJECT_ROOT / "data" / "schema.sql").read_text(
             encoding="utf-8"
         )
 

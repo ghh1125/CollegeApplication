@@ -1,2 +1,0 @@
-"""College application pipeline package."""
-

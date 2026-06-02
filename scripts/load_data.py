@@ -380,7 +380,7 @@ def run_ingestion(
     """Load cutoff CSVs and derive the 2025 admission plan into SQLite."""
 
     if ingest_module is None:
-        from app.pipeline import ingest as ingest_module
+        from src.input import ingest as ingest_module
 
     plan_base_path = raw_csv_path("historical_cutoff", ADMISSION_PLAN_YEAR, raw_dir)
     if not plan_base_path.exists():
