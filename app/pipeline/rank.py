@@ -3,7 +3,20 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from typing import Any
+
+
+@dataclass
+class HistoryData:
+    """Pre-loaded DB data required by attach_history. Load once, reuse many times."""
+
+    by_code: dict[tuple[str, str], list[dict]] = field(default_factory=dict)
+    by_name: dict[tuple[str, str], list[dict]] = field(default_factory=dict)
+    location_by_school: dict[str, tuple[str, str, int | None]] = field(default_factory=dict)
+    major_category_by_name: dict[str, str] = field(default_factory=dict)
+    discipline_grades: dict[tuple[str, str], str] = field(default_factory=dict)
+    school_best_grades: dict[str, str] = field(default_factory=dict)
 
 
 YEAR_WEIGHTS = {2025: 0.5, 2024: 0.3, 2023: 0.2}
@@ -672,69 +685,12 @@ def enrich_with_history(
 
 
 def _enrich_with_history(candidates: list[dict], year: int, conn: Any) -> list[dict]:
-    from app.pipeline.filter import SCHOOL_LEVEL_MAP
-
-    history_by_code, history_by_name = _load_history_indexes(conn, year)
-    location_by_school = _load_school_locations(conn)
-    major_category_by_name = _load_major_categories(conn)
-    discipline_grades, school_best_grades = _load_discipline_grades(conn)
-
-    _PUBLIC_KEYS = ("year", "min_rank", "min_score", "plan_count")
-
-    def _strip(records: list[dict]) -> list[dict]:
-        return [{k: r[k] for k in _PUBLIC_KEYS} for r in records]
-
-    enriched: list[dict] = []
-    for program in candidates:
-        item = dict(program)
-        school_code = str(item.get("school_code") or "")
-        major_code = str(item.get("major_code") or "")
-        school_name = str(item.get("school_name") or "")
-        normalized_major_name = item.get("normalized_major_name") or normalize_major_name(
-            item.get("major_name")
-        )
-
-        item["normalized_major_name"] = normalized_major_name
-        item["major_category"] = item.get("major_category") or major_category_by_name.get(
-            normalized_major_name,
-            "",
-        )
-
-        # Name-based lookup is authoritative; code fallback is filtered by stored name
-        # to reject rows where the code was reused for a different major in earlier years.
-        name_history = history_by_name.get((school_name, normalized_major_name), [])
-        if name_history:
-            item["history"] = _strip(name_history)
-        else:
-            code_records = history_by_code.get((school_code, major_code), [])
-            matched = [r for r in code_records if r.get("_norm_major_name") == normalized_major_name]
-            item["history"] = _strip(matched)
-
-        province, city, ruanke_rank = location_by_school.get(school_name, ("", "", None))
-        item["school_province"] = item.get("school_province") or province
-        item["school_city"] = item.get("school_city") or city
-        if item.get("ruanke_rank") is None:
-            item["ruanke_rank"] = ruanke_rank
-
-        item["is_985"] = item.get("is_985", school_name in SCHOOL_LEVEL_MAP["985"])
-        item["is_211"] = item.get("is_211", school_name in SCHOOL_LEVEL_MAP["211"])
-        item["is_double_first_class"] = item.get(
-            "is_double_first_class",
-            school_name in SCHOOL_LEVEL_MAP["双一流"],
-        )
-
-        disc_code = _lookup_discipline_code(
-            normalized_major_name, raw_name=item.get("major_name") or ""
-        )
-        item["discipline_grade"] = discipline_grades.get((school_name, disc_code), "") if disc_code else ""
-        item["school_best_grade"] = school_best_grades.get(school_name, "")
-
-        enriched.append(item)
-
-    return enriched
+    """Thin wrapper: load data then delegate to the pure attach_history."""
+    data = load_all_history_data(conn, year)
+    return attach_history(candidates, data)
 
 
-def _load_history_indexes(
+def load_history_indexes(
     conn: Any,
     year: int,
 ) -> tuple[dict[tuple[str, str], list[dict]], dict[tuple[str, str], list[dict]]]:
@@ -765,7 +721,8 @@ def _load_history_indexes(
     return by_code, by_name
 
 
-def _load_school_locations(conn: Any) -> dict[str, tuple[str, str, int | None]]:
+def load_school_locations(conn: Any) -> dict[str, tuple[str, str, int | None]]:
+    """Load {school_name: (province, city, ruanke_rank)} from school_master."""
     rows = conn.execute(
         "SELECT school_name, province, city, ruanke_rank FROM school_master"
     ).fetchall()
@@ -776,7 +733,8 @@ def _load_school_locations(conn: Any) -> dict[str, tuple[str, str, int | None]]:
     }
 
 
-def _load_major_categories(conn: Any) -> dict[str, str]:
+def load_major_categories(conn: Any) -> dict[str, str]:
+    """Load {normalized_major_name: major_category} from major_subject_requirement."""
     rows = conn.execute(
         """
         SELECT normalized_major_name, major_category
@@ -791,11 +749,12 @@ def _load_major_categories(conn: Any) -> dict[str, str]:
     }
 
 
-def _load_discipline_grades(conn: Any) -> tuple[dict[tuple[str, str], str], dict[str, str]]:
-    """
-    Return (by_school_disc, school_best):
+def load_discipline_grades(conn: Any) -> tuple[dict[tuple[str, str], str], dict[str, str]]:
+    """Load discipline evaluation grades.
+
+    Returns:
       by_school_disc: {(school_name, discipline_code): grade}
-      school_best:    {school_name: best_grade}  — highest grade across all disciplines
+      school_best:    {school_name: best_grade across all disciplines}
     """
     try:
         rows = conn.execute(
@@ -810,3 +769,85 @@ def _load_discipline_grades(conn: Any) -> tuple[dict[tuple[str, str], str], dict
         return by_school_disc, school_best
     except Exception:
         return {}, {}
+
+
+# backward-compat aliases (internal callers)
+_load_history_indexes = load_history_indexes
+_load_school_locations = load_school_locations
+_load_major_categories = load_major_categories
+_load_discipline_grades = load_discipline_grades
+
+
+def load_all_history_data(conn: Any, year: int) -> HistoryData:
+    """Load all DB data needed by attach_history in one call."""
+    by_code, by_name = load_history_indexes(conn, year)
+    disc_grades, school_best = load_discipline_grades(conn)
+    return HistoryData(
+        by_code=by_code,
+        by_name=by_name,
+        location_by_school=load_school_locations(conn),
+        major_category_by_name=load_major_categories(conn),
+        discipline_grades=disc_grades,
+        school_best_grades=school_best,
+    )
+
+
+def attach_history(candidates: list[dict], data: HistoryData) -> list[dict]:
+    """Pure computation — no DB access.
+
+    Attaches history, school metadata, and discipline grades to each candidate
+    using pre-loaded HistoryData. Identical output to enrich_with_history.
+    """
+    from app.pipeline.filter import SCHOOL_LEVEL_MAP
+
+    _PUBLIC_KEYS = ("year", "min_rank", "min_score", "plan_count")
+
+    def _strip(records: list[dict]) -> list[dict]:
+        return [{k: r[k] for k in _PUBLIC_KEYS} for r in records]
+
+    enriched: list[dict] = []
+    for program in candidates:
+        item = dict(program)
+        school_code = str(item.get("school_code") or "")
+        major_code = str(item.get("major_code") or "")
+        school_name = str(item.get("school_name") or "")
+        normalized_major_name = item.get("normalized_major_name") or normalize_major_name(
+            item.get("major_name")
+        )
+
+        item["normalized_major_name"] = normalized_major_name
+        item["major_category"] = item.get("major_category") or data.major_category_by_name.get(
+            normalized_major_name, ""
+        )
+
+        name_history = data.by_name.get((school_name, normalized_major_name), [])
+        if name_history:
+            item["history"] = _strip(name_history)
+        else:
+            code_records = data.by_code.get((school_code, major_code), [])
+            matched = [r for r in code_records if r.get("_norm_major_name") == normalized_major_name]
+            item["history"] = _strip(matched)
+
+        province, city, ruanke_rank = data.location_by_school.get(school_name, ("", "", None))
+        item["school_province"] = item.get("school_province") or province
+        item["school_city"] = item.get("school_city") or city
+        if item.get("ruanke_rank") is None:
+            item["ruanke_rank"] = ruanke_rank
+
+        item["is_985"] = item.get("is_985", school_name in SCHOOL_LEVEL_MAP["985"])
+        item["is_211"] = item.get("is_211", school_name in SCHOOL_LEVEL_MAP["211"])
+        item["is_double_first_class"] = item.get(
+            "is_double_first_class", school_name in SCHOOL_LEVEL_MAP["双一流"]
+        )
+
+        disc_code = _lookup_discipline_code(
+            normalized_major_name, raw_name=item.get("major_name") or ""
+        )
+        item["discipline_grade"] = (
+            data.discipline_grades.get((school_name, disc_code), "") if disc_code else ""
+        )
+        item["school_best_grade"] = data.school_best_grades.get(school_name, "")
+
+        enriched.append(item)
+
+    return enriched

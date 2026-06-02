@@ -194,65 +194,73 @@ def _subject_match(
 
 # ─── public API ──────────────────────────────────────────────────────────────
 
+def load_admission_plans(conn: Any, year: int) -> list[dict]:
+    """Load all admission plan rows for *year* from the DB. No filtering applied."""
+    from app.db import get_cursor
+
+    sql = """
+        SELECT id, school_code, school_name, major_code, major_name,
+               plan_count, subject_requirement, subject_requirement_text,
+               subject_requirement_json, subject_req_source, need_review,
+               school_location, tuition, duration
+        FROM admission_plan
+        WHERE year = ?
+    """
+    with get_cursor(conn) as cursor:
+        cursor.execute(sql, (year,))
+        cols = [d[0] for d in cursor.description]
+        return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+
+def apply_subject_filter(
+    programs: list[dict],
+    selected_subjects: list[str],
+) -> tuple[list[dict], list[dict]]:
+    """Pure filter — no DB access.
+
+    Returns:
+      eligible  – programs that pass subject check (with '_warnings' field added).
+      excluded  – list of {"program": dict, "reason": str, "detail": str}
+    """
+    selected = frozenset(selected_subjects)
+    eligible: list[dict] = []
+    excluded: list[dict] = []
+
+    for row in programs:
+        row = dict(row)
+        row["_warnings"] = []
+        need_review = row.get("need_review") or 0
+        req_type = ""
+        try:
+            req_type = json.loads(row.get("subject_requirement_json") or "{}").get("type", "")
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        if need_review:
+            row["_warnings"].append("选科要求需人工核对")
+        if req_type == "UNKNOWN":
+            row["_warnings"].append("选科要求未知")
+
+        ok, reason = _subject_match(row.get("subject_requirement_json"), selected)
+        if ok:
+            eligible.append(row)
+        else:
+            excluded.append({"program": row, "reason": "选科不符", "detail": reason})
+
+    return eligible, excluded
+
+
 def filter_by_subject(
     profile: Any,
     year: int,
     conn: Any | None = None,
 ) -> tuple[list[dict], list[dict]]:
-    """
-    Filter admission_plan by subject eligibility.
-
-    Returns:
-      eligible  – list of program dicts that pass subject check.
-                  Each dict has all admission_plan columns plus '_warnings'.
-      excluded  – list of {"program": dict, "reason": str, "detail": str}
-    """
-    from app.db import get_conn, get_cursor
-
-    selected = frozenset(profile.selected_subjects)
+    """Load admission plans and apply subject filter. Backward-compatible wrapper."""
+    from app.db import get_conn
 
     def _run(active_conn: Any) -> tuple[list[dict], list[dict]]:
-        sql = """
-            SELECT id, school_code, school_name, major_code, major_name,
-                   plan_count, subject_requirement, subject_requirement_text,
-                   subject_requirement_json, subject_req_source, need_review,
-                   school_location, tuition, duration
-            FROM admission_plan
-            WHERE year = ?
-        """
-        with get_cursor(active_conn) as cursor:
-            cursor.execute(sql, (year,))
-            cols = [d[0] for d in cursor.description]
-            rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
-
-        eligible: list[dict] = []
-        excluded: list[dict] = []
-
-        for row in rows:
-            row["_warnings"] = []
-            need_review = row.get("need_review") or 0
-            req_type = ""
-            try:
-                req_type = json.loads(row.get("subject_requirement_json") or "{}").get("type", "")
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-            if need_review:
-                row["_warnings"].append("选科要求需人工核对")
-            if req_type == "UNKNOWN":
-                row["_warnings"].append("选科要求未知")
-
-            ok, reason = _subject_match(row.get("subject_requirement_json"), selected)
-            if ok:
-                eligible.append(row)
-            else:
-                excluded.append({
-                    "program": row,
-                    "reason": "选科不符",
-                    "detail": reason,
-                })
-
-        return eligible, excluded
+        programs = load_admission_plans(active_conn, year)
+        return apply_subject_filter(programs, profile.selected_subjects)
 
     if conn is not None:
         return _run(conn)
