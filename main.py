@@ -47,28 +47,100 @@ from src.zhejiang.input.llm import (
 # ─── 页面配置 ────────────────────────────────────────────────────────────────
 
 st.set_page_config(page_title="高考志愿推荐系统", page_icon="🎓", layout="wide")
-st.title("🎓 高考志愿推荐系统")
 
-# ─── 省份路由 ─────────────────────────────────────────────────────────────────
+# ─── 省份定义 ──────────────────────────────────────────────────────────────────
 
-_PROVINCE_OPTIONS = {
-    "浙江": "zhejiang",
-    "江苏（即将支持）": None,
-    "上海（即将支持）": None,
-}
+_PROVINCE_GROUPS = [
+    ("华东", [
+        ("浙江", "zhejiang", True),
+        ("上海", "shanghai", False),
+        ("江苏", "jiangsu", False),
+        ("安徽", "anhui", False),
+        ("福建", "fujian", False),
+        ("山东", "shandong", False),
+        ("江西", "jiangxi", False),
+    ]),
+    ("华南 / 华中", [
+        ("广东", "guangdong", False),
+        ("湖南", "hunan", False),
+        ("湖北", "hubei", False),
+        ("河南", "henan", False),
+        ("广西", "guangxi", False),
+        ("海南", "hainan", False),
+    ]),
+    ("华北 / 东北", [
+        ("北京", "beijing", False),
+        ("天津", "tianjin", False),
+        ("河北", "hebei", False),
+        ("山西", "shanxi", False),
+        ("辽宁", "liaoning", False),
+        ("吉林", "jilin", False),
+        ("黑龙江", "heilongjiang", False),
+        ("内蒙古", "neimenggu", False),
+    ]),
+    ("西部", [
+        ("重庆", "chongqing", False),
+        ("四川", "sichuan", False),
+        ("陕西", "shaanxi", False),
+        ("云南", "yunnan", False),
+        ("贵州", "guizhou", False),
+        ("甘肃", "gansu", False),
+        ("新疆", "xinjiang", False),
+        ("宁夏", "ningxia", False),
+        ("青海", "qinghai", False),
+        ("西藏", "xizang", False),
+    ]),
+]
 
-_selected_province_label = st.radio(
-    "请选择省份",
-    list(_PROVINCE_OPTIONS.keys()),
-    horizontal=True,
-    key="province_selector",
-)
-_selected_province = _PROVINCE_OPTIONS[_selected_province_label]
+# ─── 落地页 ────────────────────────────────────────────────────────────────────
 
-if _selected_province is None:
-    st.info(f"📌 {_selected_province_label}的数据暂未接入，敬请期待。")
+def _show_landing() -> None:
+    st.title("高考志愿推荐系统")
+    st.caption("选择你的省份，进入志愿推荐")
+    st.divider()
+    for region_name, provinces in _PROVINCE_GROUPS:
+        st.markdown(f"**{region_name}**")
+        cols = st.columns(8)
+        for idx, (name, slug, available) in enumerate(provinces):
+            with cols[idx % 8]:
+                if available:
+                    if st.button(name, key=f"prov_{slug}", use_container_width=True):
+                        st.session_state["_province"] = slug
+                        st.rerun()
+                else:
+                    st.button(
+                        name,
+                        key=f"prov_{slug}",
+                        use_container_width=True,
+                        disabled=True,
+                        help="即将支持",
+                    )
+        st.write("")
+
+# ─── 省份路由 ──────────────────────────────────────────────────────────────────
+
+if "_province" not in st.session_state:
+    _show_landing()
     st.stop()
 
+_selected_province: str = st.session_state["_province"]
+
+# Verify province has data; if not (shouldn't happen via UI, but guard anyway)
+_AVAILABLE = {"zhejiang"}
+if _selected_province not in _AVAILABLE:
+    st.info(f"该省份数据暂未接入，敬请期待。")
+    if st.button("返回选择省份"):
+        del st.session_state["_province"]
+        st.rerun()
+    st.stop()
+
+# ─── 省份界面标题 + 返回入口 ───────────────────────────────────────────────────
+
+_PROVINCE_NAMES = {p[1]: p[0] for g in _PROVINCE_GROUPS for p in g[1]}
+st.title(f"高考志愿推荐系统 · {_PROVINCE_NAMES.get(_selected_province, _selected_province)}")
+if st.button("← 切换省份", key="_back_to_landing"):
+    del st.session_state["_province"]
+    st.rerun()
 st.divider()
 
 # ─── 辅助 ────────────────────────────────────────────────────────────────────
