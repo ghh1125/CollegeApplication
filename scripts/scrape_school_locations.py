@@ -259,7 +259,7 @@ def main() -> None:
     print(f"City ID map: {len(CITY_ID_MAP)} hardcoded + {len(extra_city_map)} from addresses")
 
     # Save raw JSON for inspection
-    out_path = PROJECT_ROOT / "data" / "raw" / "school_locations_raw.json"
+    out_path = PROJECT_ROOT / "data" / "common" / "raw" / "school_locations_raw.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(schools, f, ensure_ascii=False, indent=2)

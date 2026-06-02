@@ -38,7 +38,7 @@ from ui.form_helpers import (
     split_major_preferences,
 )
 from db import get_conn
-from src.zhejiang.input.llm import (
+from src.common.input.llm import (
     chat_with_advisor, search_web, should_search,
     explain_volunteer, generate_overall_report,
 )

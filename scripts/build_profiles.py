@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-RAW_DIR = PROJECT_ROOT / "data" / "raw"
+RAW_DIR = PROJECT_ROOT / "data" / "common" / "raw"
 SCHOOL_RAW_PATH = RAW_DIR / "school_locations_raw.json"
 SCHOOL_PROFILE_RAW_PATH = RAW_DIR / "school_profiles_raw.json"
 SCHOOL_INFO_URL = "https://static-data.gaokao.cn/www/2.0/school/{school_id}/info.json"
@@ -1022,7 +1022,7 @@ def fetch_city_wiki_profiles(
 
 
 def _city_tier_label(city: str) -> tuple[int, str]:
-    from src.zhejiang.ranking.rank import CITY_TIER
+    from src.common.ranking.rank import CITY_TIER
 
     tier = CITY_TIER.get(city, 1)
     label_by_tier = {5: "一线城市", 4: "一线城市", 3: "新一线城市", 2: "二线城市", 1: "普通地级市"}
