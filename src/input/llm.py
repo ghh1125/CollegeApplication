@@ -19,11 +19,13 @@ def get_client(api_key: str | None = None) -> Any:
 
 MODEL = "qwen3.7-max"
 
-SEARCH_KEYWORDS = ["就业", "薪资", "工资", "前景", "行情", "替代", "招聘", "行业", "待遇", "毕业去向"]
+_EDIT_VERBS = re.compile(r"改|换|删|调整|更新|去掉|加上|修改")
+_PARAM_NOUNS = re.compile(r"位次|城市|专业|排序|优先|选科|分数|志愿数|风险|学校|省份|层次")
 
 
 def should_search(message: str) -> bool:
-    return any(kw in message for kw in SEARCH_KEYWORDS)
+    """Advisor mode: search unless the message is clearly a parameter edit."""
+    return not (_EDIT_VERBS.search(message) and _PARAM_NOUNS.search(message))
 
 
 def search_web(query: str, max_results: int = 3) -> list[str]:
