@@ -9,7 +9,7 @@ class FormHelperTests(unittest.TestCase):
     """Pure helper tests for dynamic sidebar inputs."""
 
     def test_normalize_items_splits_commas_and_deduplicates(self) -> None:
-        from app.ui.form_helpers import normalize_items
+        from ui.form_helpers import normalize_items
 
         self.assertEqual(
             normalize_items([" 计算机科学与技术，软件工程 ", "", "软件工程", "人工智能"]),
@@ -17,7 +17,7 @@ class FormHelperTests(unittest.TestCase):
         )
 
     def test_split_major_preferences_moves_class_terms_to_categories(self) -> None:
-        from app.ui.form_helpers import split_major_preferences
+        from ui.form_helpers import split_major_preferences
 
         majors, categories = split_major_preferences(["计算机科学与技术", "计算机类", "电子信息类"])
 
@@ -25,7 +25,7 @@ class FormHelperTests(unittest.TestCase):
         self.assertEqual(categories, ["计算机类", "电子信息类"])
 
     def test_queue_ai_message_clears_next_input_by_incrementing_key(self) -> None:
-        from app.ui.form_helpers import queue_ai_message
+        from ui.form_helpers import queue_ai_message
 
         state = {}
 
@@ -36,7 +36,7 @@ class FormHelperTests(unittest.TestCase):
         self.assertEqual(state["_ai_input_n"], 4)
 
     def test_queue_ai_message_ignores_blank_text(self) -> None:
-        from app.ui.form_helpers import queue_ai_message
+        from ui.form_helpers import queue_ai_message
 
         state = {"_ai_input_n": 3}
 
@@ -46,7 +46,7 @@ class FormHelperTests(unittest.TestCase):
         self.assertEqual(state, {"_ai_input_n": 3})
 
     def test_format_sort_reason_keeps_backend_reason(self) -> None:
-        from app.ui.form_helpers import format_sort_reason_for_display
+        from ui.form_helpers import format_sort_reason_for_display
 
         self.assertEqual(
             format_sort_reason_for_display(
@@ -57,7 +57,7 @@ class FormHelperTests(unittest.TestCase):
         )
 
     def test_format_sort_reason_falls_back_when_backend_reason_missing(self) -> None:
-        from app.ui.form_helpers import format_sort_reason_for_display
+        from ui.form_helpers import format_sort_reason_for_display
 
         reason = format_sort_reason_for_display(
             {

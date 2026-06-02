@@ -35,7 +35,7 @@ class ProfileReasonTests(unittest.TestCase):
         }
 
     def test_school_priority_reason_starts_with_school_profile(self) -> None:
-        from app.pipeline.profiles import build_profile_sort_reason
+        from src.ranking.profiles import build_profile_sort_reason
 
         reason = build_profile_sort_reason(self._program(), "学校优先")
 
@@ -46,7 +46,7 @@ class ProfileReasonTests(unittest.TestCase):
         self.assertIn("gap -605", reason)
 
     def test_major_priority_reason_starts_with_major_profile(self) -> None:
-        from app.pipeline.profiles import build_profile_sort_reason
+        from src.ranking.profiles import build_profile_sort_reason
 
         reason = build_profile_sort_reason(self._program(), "专业优先")
 
@@ -56,7 +56,7 @@ class ProfileReasonTests(unittest.TestCase):
         self.assertIn("fallback数学与应用数学", reason)
 
     def test_city_priority_reason_starts_with_city_profile(self) -> None:
-        from app.pipeline.profiles import build_profile_sort_reason
+        from src.ranking.profiles import build_profile_sort_reason
 
         reason = build_profile_sort_reason(self._program(), "城市优先")
 
@@ -70,7 +70,7 @@ class ProfileDatabaseTests(unittest.TestCase):
     """Profile tables should attach structured data to candidate programs."""
 
     def test_enrich_with_profiles_attaches_school_major_and_city_profiles(self) -> None:
-        from app.pipeline.profiles import enrich_with_profiles
+        from src.ranking.profiles import enrich_with_profiles
         from scripts.init_db import execute_schema, load_schema_sql
 
         with sqlite3.connect(":memory:") as conn:

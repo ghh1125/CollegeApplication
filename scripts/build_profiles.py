@@ -1022,7 +1022,7 @@ def fetch_city_wiki_profiles(
 
 
 def _city_tier_label(city: str) -> tuple[int, str]:
-    from app.pipeline.rank import CITY_TIER
+    from src.ranking.rank import CITY_TIER
 
     tier = CITY_TIER.get(city, 1)
     label_by_tier = {5: "一线城市", 4: "一线城市", 3: "新一线城市", 2: "二线城市", 1: "普通地级市"}
@@ -1103,7 +1103,7 @@ def build_profiles(
 ) -> dict[str, int]:
     """Create profile tables and populate them from available source data."""
 
-    from app.db import get_conn
+    from db import get_conn
     from scripts.init_db import execute_schema, load_schema_sql
 
     with get_conn() as conn:

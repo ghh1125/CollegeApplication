@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.pipeline.builder import build_volunteer_list
-from app.pipeline.profiles import enrich_with_profiles
-from app.pipeline.rank import (
+from src.allocation.builder import build_volunteer_list
+from src.ranking.profiles import enrich_with_profiles
+from src.ranking.rank import (
     build_sort_reason,
     calculate_gap,
     enrich_with_history,
@@ -73,7 +73,7 @@ def build_recommendations(
 ) -> dict:
     """Build final volunteers from a filtered candidate pool."""
 
-    from app.db import get_conn
+    from db import get_conn
 
     def _run(db_conn: Any) -> dict:
         # Expand keyword shorthand → matched standard major names via description text

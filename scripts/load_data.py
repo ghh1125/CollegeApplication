@@ -278,7 +278,7 @@ def connection_scope(conn: Any | None = None) -> Iterator[Any]:
         yield conn
         return
 
-    from app.db import get_conn
+    from db import get_conn
 
     with get_conn() as managed_conn:
         yield managed_conn
@@ -292,7 +292,7 @@ def insert_admission_plan_from_cutoff(
 ) -> dict[str, int]:
     """Use the selected year's cutoff CSV as the current admission-plan base."""
 
-    from app.db import get_cursor
+    from db import get_cursor
 
     sql = """
         INSERT INTO admission_plan (
@@ -419,7 +419,7 @@ def run_ingestion(
 def load_validation_summary(conn: Any) -> str:
     """Run verification SQL queries and format their output."""
 
-    from app.db import get_cursor
+    from db import get_cursor
 
     with get_cursor(conn) as cursor:
         cursor.execute("SELECT year, COUNT(*) FROM admission_plan GROUP BY year ORDER BY year")
@@ -459,7 +459,7 @@ def load_validation_summary(conn: Any) -> str:
 def print_validation_summary() -> None:
     """Print database verification counts."""
 
-    from app.db import get_conn
+    from db import get_conn
 
     with get_conn() as conn:
         print(load_validation_summary(conn))

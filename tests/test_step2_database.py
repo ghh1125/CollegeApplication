@@ -57,7 +57,7 @@ class DatabaseHelperTests(unittest.TestCase):
     """Behavioral tests for app.db."""
 
     def test_get_conn_commits_on_success_and_closes(self) -> None:
-        db = importlib.import_module("app.db")
+        db = importlib.import_module("db")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             original_path = db.DB_PATH
@@ -73,29 +73,28 @@ class DatabaseHelperTests(unittest.TestCase):
 
         self.assertEqual(value, 1)
 
-    def test_get_conn_rolls_back_on_exception_and_closes(self) -> None:
-        db = importlib.import_module("app.db")
+    def test_get_conn_opens_existing_db_readonly(self) -> None:
+        # Once a DB file exists, get_conn() must open it read-only so that
+        # Streamlit Cloud's immutable filesystem doesn't cause write errors.
+        db = importlib.import_module("db")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             original_path = db.DB_PATH
             db.DB_PATH = Path(tmpdir) / "college.db"
             try:
+                # First open: DB doesn't exist yet → read-write, create table
                 with db.get_conn() as conn:
                     conn.execute("CREATE TABLE demo (value INTEGER)")
-                with self.assertRaises(RuntimeError):
+                # Second open: DB now exists → read-only, write must be rejected
+                with self.assertRaises(Exception):
                     with db.get_conn() as conn:
                         conn.execute("INSERT INTO demo VALUES (1)")
-                        raise RuntimeError("fail inside transaction")
-                with sqlite3.connect(db.DB_PATH) as conn:
-                    count = conn.execute("SELECT COUNT(*) FROM demo").fetchone()[0]
             finally:
                 db.DB_PATH = original_path
 
-        self.assertEqual(count, 0)
-
     def test_get_cursor_closes_cursor(self) -> None:
         conn = FakeConnection()
-        db = importlib.import_module("app.db")
+        db = importlib.import_module("db")
 
         with db.get_cursor(conn) as cursor:
             self.assertIs(cursor, conn.cursor_obj)

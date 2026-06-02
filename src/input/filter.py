@@ -47,7 +47,7 @@ _CITY_TO_PROVINCE: dict[str, str] = {
 def _load_school_location_map() -> dict[str, tuple[str, str]]:
     """Load school_name → (province, city) from school_master. Cached once."""
     try:
-        from app.db import get_conn, get_cursor
+        from db import get_conn, get_cursor
         with get_conn() as conn:
             with get_cursor(conn) as cur:
                 cur.execute("SELECT school_name, province, city FROM school_master")
@@ -196,7 +196,7 @@ def _subject_match(
 
 def load_admission_plans(conn: Any, year: int) -> list[dict]:
     """Load all admission plan rows for *year* from the DB. No filtering applied."""
-    from app.db import get_cursor
+    from db import get_cursor
 
     sql = """
         SELECT id, school_code, school_name, major_code, major_name,
@@ -256,7 +256,7 @@ def filter_by_subject(
     conn: Any | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Load admission plans and apply subject filter. Backward-compatible wrapper."""
-    from app.db import get_conn
+    from db import get_conn
 
     def _run(active_conn: Any) -> tuple[list[dict], list[dict]]:
         programs = load_admission_plans(active_conn, year)

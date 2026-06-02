@@ -10,7 +10,7 @@ class RankPipelineTests(unittest.TestCase):
     """Behavioral tests for app.pipeline.rank."""
 
     def test_calculate_gap_renormalizes_available_year_weights(self) -> None:
-        from app.pipeline.rank import calculate_gap
+        from src.ranking.rank import calculate_gap
 
         result = calculate_gap(
             36500,
@@ -28,7 +28,7 @@ class RankPipelineTests(unittest.TestCase):
         self.assertEqual(result["data_years"], 2)
 
     def test_calculate_gap_returns_cushion_tier_for_very_safe_programs(self) -> None:
-        from app.pipeline.rank import calculate_gap
+        from src.ranking.rank import calculate_gap
 
         # ratio = (80000 - 36500) / 80000 = 0.54375 > 0.40 → 垫
         result = calculate_gap(36500, [{"year": 2025, "min_rank": 80000}])
@@ -37,7 +37,7 @@ class RankPipelineTests(unittest.TestCase):
         self.assertGreater(result["ratio"], 0.40)
 
     def test_calculate_gap_handles_missing_history(self) -> None:
-        from app.pipeline.rank import calculate_gap
+        from src.ranking.rank import calculate_gap
 
         result = calculate_gap(36500, [{"year": 2025, "min_rank": None}])
 
@@ -53,7 +53,7 @@ class RankPipelineTests(unittest.TestCase):
         )
 
     def test_enrich_with_history_adds_history_and_sort_metadata(self) -> None:
-        from app.pipeline.rank import enrich_with_history
+        from src.ranking.rank import enrich_with_history
         from scripts.init_db import execute_schema, load_schema_sql
 
         candidate = {
@@ -118,7 +118,7 @@ class RankPipelineTests(unittest.TestCase):
 
         Name-based matching must return only the 计算机类 rows (10942/9200/8437).
         """
-        from app.pipeline.rank import enrich_with_history
+        from src.ranking.rank import enrich_with_history
         from scripts.init_db import execute_schema, load_schema_sql
 
         candidate = {
@@ -166,7 +166,7 @@ class RankPipelineTests(unittest.TestCase):
         生物统计学 → disc_code 0710 (bio); econ preferred → {0201, 0202, 0701}.
         0710 is not in the econ/math cluster → keyword match falls through → level=0.
         """
-        from app.pipeline.rank import _major_level
+        from src.ranking.rank import _major_level
 
         program = {
             "normalized_major_name": "生物统计学",
@@ -182,7 +182,7 @@ class RankPipelineTests(unittest.TestCase):
 
     def test_major_level_keyword_same_cluster_kept_at_3(self) -> None:
         """'统计' in preferred_majors should keep 统计学 at level=3 (0701 matches 0701)."""
-        from app.pipeline.rank import _major_level
+        from src.ranking.rank import _major_level
 
         program = {
             "normalized_major_name": "统计学",
@@ -197,7 +197,7 @@ class RankPipelineTests(unittest.TestCase):
         self.assertEqual(level, 3, "统计学 should remain level=3 for a student who prefers 统计")
 
     def test_sort_candidates_preserves_tier_order_and_sorts_inside_tier(self) -> None:
-        from app.pipeline.rank import sort_candidates
+        from src.ranking.rank import sort_candidates
 
         candidates = [
             {
@@ -243,7 +243,7 @@ class RankPipelineTests(unittest.TestCase):
         self.assertLess(ids.index("rush-major"), ids.index("rush-city"))
 
     def test_build_sort_reason_summarizes_ranking_signals(self) -> None:
-        from app.pipeline.rank import build_sort_reason
+        from src.ranking.rank import build_sort_reason
 
         reason = build_sort_reason(
             {
@@ -271,7 +271,7 @@ class BuilderPipelineTests(unittest.TestCase):
     """Behavioral tests for app.pipeline.builder."""
 
     def test_build_volunteer_list_allocates_available_tiers_and_reserve(self) -> None:
-        from app.pipeline.builder import build_volunteer_list
+        from src.allocation.builder import build_volunteer_list
 
         candidates = [
             {"id": "c1", "gap_info": {"tier": "冲"}},
@@ -294,7 +294,7 @@ class BuilderPipelineTests(unittest.TestCase):
         )
 
     def test_build_volunteer_list_fills_to_total_when_no_cushion_pool(self) -> None:
-        from app.pipeline.builder import build_volunteer_list
+        from src.allocation.builder import build_volunteer_list
 
         candidates = (
             [{"id": f"c{i}", "gap_info": {"tier": "冲"}} for i in range(30)]
@@ -311,7 +311,7 @@ class BuilderPipelineTests(unittest.TestCase):
         self.assertEqual(result["stats"]["垫"], 0)
 
     def test_build_volunteer_list_keeps_risk_tiers_in_order_after_backfill(self) -> None:
-        from app.pipeline.builder import build_volunteer_list
+        from src.allocation.builder import build_volunteer_list
 
         candidates = (
             [{"id": "c0", "gap_info": {"tier": "冲"}}]
@@ -333,7 +333,7 @@ class RecommendationServiceTests(unittest.TestCase):
     """End-to-end recommendation service tests with frontend-style inputs."""
 
     def test_history_rank_columns_lists_all_years_with_blanks(self) -> None:
-        from app.pipeline.recommend import history_rank_columns
+        from src.allocation.recommend import history_rank_columns
 
         program = {
             "history": [
@@ -348,8 +348,8 @@ class RecommendationServiceTests(unittest.TestCase):
         )
 
     def test_build_recommendations_uses_city_first_and_major_preferences(self) -> None:
-        from app.models.profile import StudentProfile
-        from app.pipeline.recommend import build_recommendations
+        from src.input.profile import StudentProfile
+        from src.allocation.recommend import build_recommendations
         from scripts.init_db import execute_schema, load_schema_sql
 
         profile = StudentProfile(

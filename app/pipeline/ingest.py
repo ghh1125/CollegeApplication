@@ -117,7 +117,7 @@ def connection_scope(conn: Any | None = None) -> Iterator[Any]:
         yield conn
         return
 
-    from app.db import get_conn
+    from db import get_conn
 
     with get_conn() as managed_conn:
         yield managed_conn
@@ -126,7 +126,7 @@ def connection_scope(conn: Any | None = None) -> Iterator[Any]:
 def ingest_admission_plan(path: str | Path, year: int, conn: Any | None = None) -> int:
     """Insert admission-plan CSV rows into SQLite."""
 
-    from app.db import get_cursor
+    from db import get_cursor
 
     rows = read_csv_records(path)
     sql = """
@@ -170,7 +170,7 @@ def ingest_historical_cutoff(
 ) -> int:
     """Insert historical cutoff CSV rows into SQLite."""
 
-    from app.db import get_cursor
+    from db import get_cursor
 
     rows = read_csv_records(path)
     sql = """
@@ -206,7 +206,7 @@ def ingest_historical_cutoff(
 def build_program_mapping(year: int, conn: Any | None = None) -> None:
     """Build exact program mappings from the selected year's admission plan."""
 
-    from app.db import get_cursor
+    from db import get_cursor
 
     sql = """
         INSERT INTO program_mapping (

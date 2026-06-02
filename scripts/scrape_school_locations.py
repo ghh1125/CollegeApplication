@@ -266,7 +266,7 @@ def main() -> None:
     print(f"Raw data saved to {out_path}")
 
     # Upsert into school_master
-    from app.db import get_conn, get_cursor
+    from db import get_conn, get_cursor
 
     # Ensure ruanke_rank column exists
     with get_conn() as conn:

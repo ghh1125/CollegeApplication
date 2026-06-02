@@ -285,7 +285,7 @@ SCHOOL_CITY_MAP: dict[str, tuple[str, str]] = {
 
 
 def build_school_master() -> None:
-    from app.db import get_conn, get_cursor
+    from db import get_conn, get_cursor
 
     # Step 1: 从 CSV 读取学校→省份
     school_province: dict[str, str] = {}
@@ -331,7 +331,7 @@ def build_school_master() -> None:
     print(f"写入 school_master：{inserted} 条")
 
     # Step 4: 统计 admission_plan 覆盖率
-    from app.db import get_conn as gc
+    from db import get_conn as gc
     with gc() as conn:
         with get_cursor(conn) as cur:
             cur.execute("""

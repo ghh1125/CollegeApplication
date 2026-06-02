@@ -10,15 +10,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.models.profile import (
+from src.input.profile import (
     CityPreference,
     Constraints,
     MajorPreference,
     Preferences,
     StudentProfile,
 )
-from app.pipeline.filter import filter_by_constraints, filter_by_subject
-from app.pipeline.recommend import build_recommendations
+from src.input.filter import filter_by_constraints, filter_by_subject
+from src.allocation.recommend import build_recommendations
 
 
 def main() -> None:

@@ -23,12 +23,12 @@ class SQLiteConfigTests(unittest.TestCase):
             self.assertIn(f'"{dependency}"', text)
 
     def test_config_imports_without_database_url_or_dashscope_key(self) -> None:
-        config_module = importlib.import_module("app.config")
+        config_module = importlib.import_module("config")
 
         self.assertTrue(hasattr(config_module, "config"))
 
     def test_db_uses_project_sqlite_file(self) -> None:
-        db = importlib.import_module("app.db")
+        db = importlib.import_module("db")
 
         self.assertEqual(db.DB_PATH, PROJECT_ROOT / "data" / "college.db")
         with db.get_conn() as conn:

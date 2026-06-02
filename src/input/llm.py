@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.config import config
+from config import config
 
 
 def get_client(api_key: str | None = None) -> Any:

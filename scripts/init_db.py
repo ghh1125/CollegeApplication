@@ -57,7 +57,7 @@ def load_schema_sql(path: Path = SCHEMA_PATH) -> str:
 def execute_schema(conn: Any, schema_sql: str) -> None:
     """Execute schema SQL on an existing connection."""
 
-    from app.db import get_cursor
+    from db import get_cursor
 
     if hasattr(conn, "executescript"):
         conn.executescript(schema_sql)
@@ -73,7 +73,7 @@ def table_row_counts(
 ) -> dict[str, int]:
     """Return row counts for known schema tables."""
 
-    from app.db import get_cursor
+    from db import get_cursor
 
     counts: dict[str, int] = {}
     for table in tables:
@@ -100,7 +100,7 @@ def ensure_sqlite_schema_columns(conn: Any) -> None:
 def initialize_database(schema_path: Path = SCHEMA_PATH) -> dict[str, int]:
     """Create tables and return row counts for confirmation output."""
 
-    from app.db import get_conn
+    from db import get_conn
 
     with get_conn() as conn:
         execute_schema(conn, load_schema_sql(schema_path))

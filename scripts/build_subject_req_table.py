@@ -177,7 +177,7 @@ def build_major_req_table(csv_path: Path = CSV_PATH, conn: Any = None) -> int:
     Aggregate CSV by normalized_major_name.
     When same normalized name has conflicting requirements, take the most frequent.
     """
-    from app.db import get_cursor
+    from db import get_cursor
 
     records: list[dict] = []
     with csv_path.open(encoding="utf-8-sig", newline="") as fh:
@@ -226,7 +226,7 @@ def update_admission_plan(csv_path: Path = CSV_PATH, conn: Any = None) -> dict[s
     Update admission_plan.subject_requirement_json / subject_req_source / need_review
     using 3-tier priority matching.
     """
-    from app.db import get_cursor
+    from db import get_cursor
 
     # Build EXACT index: (norm_school, norm_major) → (req_type, subjects, req_text)
     exact_index: dict[tuple[str, str], tuple[str, list, str]] = {}
@@ -328,7 +328,7 @@ def _print_report(counts: dict[str, int], major_req_count: int) -> None:
 # ─── main ────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    from app.db import get_conn
+    from db import get_conn
     from scripts.init_db import initialize_database
 
     # Ensure schema is up to date (adds new columns if table already exists)

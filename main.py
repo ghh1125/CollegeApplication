@@ -10,11 +10,11 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.models.profile import (
+from src.input.profile import (
     Constraints,
     CityPreference,
     MajorPreference,
@@ -22,7 +22,7 @@ from app.models.profile import (
     SchoolPreference,
     StudentProfile,
 )
-from app.pipeline.filter import (
+from src.input.filter import (
     resolve_school_city,
     filter_by_city,
     filter_by_constraints,
@@ -30,15 +30,15 @@ from app.pipeline.filter import (
     filter_by_school_level,
     filter_by_subject,
 )
-from app.pipeline.recommend import build_recommendations, history_rank_columns
-from app.ui.form_helpers import (
+from src.allocation.recommend import build_recommendations, history_rank_columns
+from ui.form_helpers import (
     format_sort_reason_for_display,
     normalize_items,
     queue_ai_message,
     split_major_preferences,
 )
-from app.db import get_conn
-from app.llm.explain import (
+from db import get_conn
+from src.input.llm import (
     chat_with_advisor, search_web, should_search,
     explain_volunteer, generate_overall_report,
 )

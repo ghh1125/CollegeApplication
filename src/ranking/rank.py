@@ -568,7 +568,7 @@ def build_sort_reason(
     expanded_major_names: set | None = None,
 ) -> str:
     """Build a short deterministic explanation for why a program ranks where it does."""
-    from app.pipeline.profiles import build_profile_sort_reason
+    from src.ranking.profiles import build_profile_sort_reason
 
     preferred_cities = preferred_cities or []
     preferred_schools = preferred_schools or []
@@ -675,7 +675,7 @@ def enrich_with_history(
     school_name + normalized major name for programs whose code changed.
     """
 
-    from app.db import get_conn
+    from db import get_conn
 
     if conn is not None:
         return _enrich_with_history(candidates, year, conn)
@@ -798,7 +798,7 @@ def attach_history(candidates: list[dict], data: HistoryData) -> list[dict]:
     Attaches history, school metadata, and discipline grades to each candidate
     using pre-loaded HistoryData. Identical output to enrich_with_history.
     """
-    from app.pipeline.filter import SCHOOL_LEVEL_MAP
+    from src.input.filter import SCHOOL_LEVEL_MAP
 
     _PUBLIC_KEYS = ("year", "min_rank", "min_score", "plan_count")
 
