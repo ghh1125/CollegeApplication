@@ -97,6 +97,23 @@ streamlit run main.py
 
 ---
 
+## 数据来源
+
+本项目数据均来自公开渠道，仅供学习和参考使用，不做商业用途。
+
+| 数据类型 | 来源 | 说明 |
+|---------|------|------|
+| 历史录取位次 / 招生计划 | [阳光高考 chsi.com.cn](https://gaokao.chsi.com.cn) | 教育部主管的官方高考信息平台 |
+| 学校基本信息 / 专业介绍 | [阳光高考 static-data.gaokao.cn](https://static-data.gaokao.cn) | 同上，JSON 接口 |
+| 软科大学排名 | [软科 shanghairanking.cn](https://www.shanghairanking.cn) | 手动整理，仅排名数字 |
+| 第四轮学科评估结果 | [教育部](https://www.moe.gov.cn) | 2017年公开发布，存于 `data/discipline_eval.sql` |
+| 城市 GDP / 人口数据 | [维基百科](https://zh.wikipedia.org) | 爬取各城市词条经济数据 |
+| 选考科目要求 | 阳光高考 + 人工校对 | 部分数据经 LLM 辅助解析，标注 `need_review` |
+
+**版权说明**：本项目不持有、不分发任何受版权保护的原始数据集。数据库文件（`college.db`）仅用于个人学习目的，使用时请遵守各平台服务条款。软科排名、学科评估等数据的版权归原发布机构所有。
+
+---
+
 ## 技术栈
 
 - **前端**：Streamlit
