@@ -4,6 +4,8 @@
 
 **在线体验**：[https://collegeapplication-imqdnkfg5pggujsmkofkbo.streamlit.app](https://collegeapplication-imqdnkfg5pggujsmkofkbo.streamlit.app)
 
+> **注意事项**：浙江高考实行平行志愿，最多可填 80 个专业（含学校），按位次从高到低依次检索，未被录取即落档。本工具基于历史数据生成参考方案，不能保证录取结果。历史位次每年会有波动，部分学校/专业数据可能存在缺失或误差。**最终填报请以浙江省教育考试院官方公布的数据为准，建议同时参考学校招生章程和专业录取规则。**
+
 ---
 
 ## 能做什么
