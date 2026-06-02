@@ -97,6 +97,7 @@ streamlit run main.py
 |---------|------|------|
 | 历史录取位次 / 招生计划 | [阳光高考 chsi.com.cn](https://gaokao.chsi.com.cn) | 教育部主管的官方高考信息平台 |
 | 学校基本信息 / 专业介绍 | [阳光高考 static-data.gaokao.cn](https://static-data.gaokao.cn) | 同上，JSON 接口 |
+| 浙江省各批次位次对照表 | [浙江省教育考试院](https://www.zjzs.net) | 每年发布的一段线、普通类位次分段表 |
 | 软科大学排名 | [软科 shanghairanking.cn](https://www.shanghairanking.cn) | 手动整理，仅排名数字 |
 | 第四轮学科评估结果 | [教育部](https://www.moe.gov.cn) | 2017年公开发布，存于 `data/discipline_eval.sql` |
 | 城市 GDP / 人口数据 | [维基百科](https://zh.wikipedia.org) | 爬取各城市词条经济数据 |
