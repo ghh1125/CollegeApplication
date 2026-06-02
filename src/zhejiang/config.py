@@ -1,15 +1,14 @@
-"""Zhejiang-specific province configuration for LLM prompts."""
+"""Zhejiang-specific province configuration."""
 
 from src.common.input.llm import ProvinceConfig
 
 PROVINCE_CONFIG = ProvinceConfig(
     volunteer_system="平行志愿，最多可填 80 个专业（含学校）",
     subject_system="7 选 3（物理/化学/生物/历史/地理/思想政治/技术）",
-    region_expansions={
-        "长三角": ["上海", "杭州", "南京", "苏州", "宁波", "合肥"],
-        "珠三角": ["广州", "深圳", "佛山", "东莞"],
-        "京津冀": ["北京", "天津"],
-        "成渝":   ["成都", "重庆"],
-        "中部/长江中游": ["武汉", "长沙", "南昌", "郑州"],
+    total_volunteers=80,
+    risk_allocation={
+        "激进": {"冲": 30, "稳": 30, "保": 15, "垫": 5},
+        "均衡": {"冲": 20, "稳": 30, "保": 20, "垫": 10},
+        "保守": {"冲": 10, "稳": 25, "保": 30, "垫": 15},
     },
 )

@@ -42,6 +42,7 @@ from db import get_conn
 from src.common.input.llm import (
     chat_with_advisor, search_web, should_search,
     explain_volunteer, generate_overall_report,
+    REGION_EXPANSIONS,
 )
 
 
@@ -684,19 +685,9 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                     if "w_main_priority" not in _fill:
                         _fill["w_main_priority"] = "专业优先"
             if _p.get("preferred_cities"):
-                _REGION_EXPAND: dict[str, list[str]] = {
-                    "长三角": ["上海", "杭州", "南京", "苏州", "宁波", "合肥"],
-                    "珠三角": ["广州", "深圳", "佛山", "东莞", "珠海"],
-                    "京津冀": ["北京", "天津"],
-                    "成渝":   ["成都", "重庆"],
-                    "中部":   ["武汉", "长沙", "南昌", "郑州"],
-                    "长江中游": ["武汉", "长沙", "南昌", "郑州"],
-                    "西部":   ["成都", "重庆", "西安"],
-                    "东北":   ["沈阳", "大连", "哈尔滨", "长春"],
-                }
                 _expanded: list[str] = []
                 for _c in _p["preferred_cities"]:
-                    _expanded.extend(_REGION_EXPAND.get(_c, [_c]))
+                    _expanded.extend(REGION_EXPANSIONS.get(_c, [_c]))
                 _prov_map = _load_province_city_map(_selected_province)
                 _all_cities = {c for cs in _prov_map.values() for c in cs}
                 _valid_cities = list(dict.fromkeys(c for c in _expanded if c in _all_cities))

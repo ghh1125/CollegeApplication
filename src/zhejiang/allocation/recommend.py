@@ -68,7 +68,8 @@ def build_recommendations(
     preferred_cities: list[str] | None = None,
     risk_preference: str | None = None,
     year: int = 2025,
-    total: int = 80,
+    total: int | None = None,
+    risk_allocation: dict | None = None,
     conn: Any | None = None,
 ) -> dict:
     """Build final volunteers from a filtered candidate pool."""
@@ -98,6 +99,7 @@ def build_recommendations(
             sorted_candidates,
             risk_preference=risk_preference or profile.risk_preference,
             total=total,
+            risk_allocation=risk_allocation,
         )
         for collection_name in ("volunteers", "reserve"):
             for program in result.get(collection_name, []):

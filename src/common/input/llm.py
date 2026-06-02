@@ -9,12 +9,23 @@ from typing import Any
 from config import config
 
 
+# Geographic region → city list, shared across all provinces.
+REGION_EXPANSIONS: dict[str, list[str]] = {
+    "长三角": ["上海", "杭州", "南京", "苏州", "宁波", "合肥"],
+    "珠三角": ["广州", "深圳", "佛山", "东莞", "珠海"],
+    "京津冀": ["北京", "天津", "石家庄", "保定"],
+    "成渝":   ["成都", "重庆"],
+    "中部/长江中游": ["武汉", "长沙", "南昌", "郑州"],
+    "东北":   ["沈阳", "大连", "哈尔滨", "长春"],
+    "西北":   ["西安", "兰州", "乌鲁木齐", "银川"],
+}
+
+
 @dataclass
 class ProvinceConfig:
-    """Province-specific text injected into LLM prompts.
+    """Province-specific settings injected into LLM prompts and allocation logic.
 
-    Each province creates one instance (e.g. in src/<province>/config.py)
-    and passes it to chat_with_advisor / generate_overall_report.
+    Each province creates one instance in src/<province>/config.py.
     """
 
     # One-line description of the volunteer system, e.g.:
@@ -22,13 +33,13 @@ class ProvinceConfig:
     #   江苏: "平行志愿，本科普通批最多填 40 个院校专业组，每组 6 个专业"
     volunteer_system: str = "平行志愿，最多可填 80 个专业（含学校）"
 
-    # Region → cities expansion used in the JSON output instruction
-    region_expansions: dict[str, list[str]] = field(default_factory=lambda: {
-        "长三角": ["上海", "杭州", "南京", "苏州", "宁波", "合肥"],
-        "珠三角": ["广州", "深圳", "佛山", "东莞"],
-        "京津冀": ["北京", "天津"],
-        "成渝":   ["成都", "重庆"],
-        "中部/长江中游": ["武汉", "长沙", "南昌", "郑州"],
+    # Total volunteer slots and tier allocation per risk preference.
+    # 浙江: total=80; 江苏: total=40 (院校专业组)
+    total_volunteers: int = 80
+    risk_allocation: dict[str, dict[str, int]] = field(default_factory=lambda: {
+        "激进": {"冲": 30, "稳": 30, "保": 15, "垫": 5},
+        "均衡": {"冲": 20, "稳": 30, "保": 20, "垫": 10},
+        "保守": {"冲": 10, "稳": 25, "保": 30, "垫": 15},
     })
 
     # Subject selection description shown in the prompt, e.g.:
@@ -375,7 +386,7 @@ def _build_advisor_system(
         '  {"rank":..., "total_score":..., "selected_subjects":[...], "preferred_majors":[...], "preferred_cities":[...], "main_priority":"专业优先/学校优先/城市优先", "risk_preference":"激进/均衡/保守"}',
         "  preferred_cities 填具体城市名，不填地区概念。常见地区转换：",
         *[f"    {region} → [{chr(44).join(cities)}]"
-          for region, cities in province_config.region_expansions.items()],
+          for region, cities in REGION_EXPANSIONS.items()],
         '  ```',
         "- 填报模式输出JSON后，在下一段提醒用户做两件事：",
         "  ① 核对上方提取的参数是否正确（位次、选科、主排序等）；有误请直接说要改什么",
