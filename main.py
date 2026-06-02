@@ -518,12 +518,9 @@ with st.expander("💬 AI 对话顾问", expanded=True):
             _search_results = None
             with _chat_container:
                 with st.chat_message("assistant"):
-                    _status_placeholder = st.empty()
                     if should_search(_msg_to_send) and st.session_state.get("_advisor_ctx"):
-                        with _status_placeholder:
-                            with st.spinner("正在搜索最新资料…"):
-                                _search_results = search_web(_msg_to_send)
-                        _status_placeholder.empty()
+                        with st.spinner("正在搜索最新资料…"):
+                            _search_results = search_web(_msg_to_send)
                     _response = st.write_stream(
                         chat_with_advisor(
                             st.session_state["ai_chat"],
