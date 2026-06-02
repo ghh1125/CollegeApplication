@@ -2,7 +2,7 @@
 
 面向浙江高考的志愿填报推荐工具，基于历史录取位次、选科要求和学生偏好，生成冲稳保梯度志愿方案，并提供 AI 对话助手辅助分析。
 
-**在线体验**：部署于 Streamlit Cloud，入口文件为 `main.py`。
+**在线体验**：[https://collegeapplication-imqdnkfg5pggujsmkofkbo.streamlit.app](https://collegeapplication-imqdnkfg5pggujsmkofkbo.streamlit.app)
 
 ---
 
