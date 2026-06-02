@@ -14,6 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.zhejiang.config import PROVINCE_CONFIG as _ZJ_CONFIG
 from src.zhejiang.input.profile import (
     Constraints,
     CityPreference,
@@ -634,6 +635,7 @@ with st.expander("💬 AI 对话顾问", expanded=True):
                             recommendation_ctx=st.session_state.get("_advisor_ctx"),
                             search_results=_search_results,
                             api_key=_effective_api_key,
+                            province_config=_ZJ_CONFIG,
                         )
                     )
             st.session_state["ai_chat"].append({"role": "assistant", "content": _response})

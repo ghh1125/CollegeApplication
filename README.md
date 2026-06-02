@@ -45,24 +45,25 @@
 │   │   ├── ranking/          # 位次计算、冲稳保分层、排序打分
 │   │   ├── allocation/       # 冲稳保比例分配
 │   │   ├── export/           # 导出 Excel
-│   │   └── input/llm.py      # AI 对话助手
+│   │   └── input/
+│   │       └── llm.py        # AI 对话助手（含 ProvinceConfig 接口）
 │   │
-│   ├── zhejiang/             # 浙江省特有逻辑（已实现）
+│   ├── zhejiang/             # 浙江省（已实现）
+│   │   ├── config.py         # 省份配置（志愿制度、选科说明、地区转换）
 │   │   ├── input/            # 浙江选科筛选、学生信息格式、数据导入
 │   │   └── allocation/       # 浙江志愿表生成（平行志愿 80 个专业）
 │   │
 │   ├── jiangsu/              # 江苏省（目录已建，待接入）
-│   └── ...                   # 其余省份同上
+│   └── ...                   # 其余省份同上，各自实现 config.py + input/ + allocation/
 │
 ├── ui/
 │   └── form_helpers.py       # 网页表单辅助
 │
 ├── data/
-│   ├── common/               # 各省共用数据
-│   │   └── raw/              # 学校画像、学校城市、城市经济数据
+│   ├── common/raw/           # 各省共用数据（学校画像、城市、学科评估）
 │   │
 │   ├── zhejiang/             # 浙江特有数据（已有）
-│   │   ├── college.db        # 数据库（含历史录取位次、招生计划、选科要求）
+│   │   ├── college.db        # 数据库（历史录取位次、招生计划、选科要求）
 │   │   ├── schema.sql        # 数据库表结构
 │   │   └── raw/              # 历史位次 CSV、选科要求 PDF
 │   │
@@ -123,10 +124,3 @@ streamlit run main.py
 
 **版权说明**：本项目不持有、不分发任何受版权保护的原始数据集，仅供个人学习使用，请遵守各平台服务条款。
 
----
-
-## 技术栈
-
-- **网页框架**：Streamlit
-- **数据库**：SQLite
-- **AI**：阿里云百炼 DashScope

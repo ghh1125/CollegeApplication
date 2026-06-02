@@ -3,9 +3,43 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from typing import Any
 
 from config import config
+
+
+@dataclass
+class ProvinceConfig:
+    """Province-specific text injected into LLM prompts.
+
+    Each province creates one instance (e.g. in src/<province>/config.py)
+    and passes it to chat_with_advisor / generate_overall_report.
+    """
+
+    # One-line description of the volunteer system, e.g.:
+    #   浙江: "平行志愿，最多可填 80 个专业（含学校）"
+    #   江苏: "平行志愿，本科普通批最多填 40 个院校专业组，每组 6 个专业"
+    volunteer_system: str = "平行志愿，最多可填 80 个专业（含学校）"
+
+    # Region → cities expansion used in the JSON output instruction
+    region_expansions: dict[str, list[str]] = field(default_factory=lambda: {
+        "长三角": ["上海", "杭州", "南京", "苏州", "宁波", "合肥"],
+        "珠三角": ["广州", "深圳", "佛山", "东莞"],
+        "京津冀": ["北京", "天津"],
+        "成渝":   ["成都", "重庆"],
+        "中部/长江中游": ["武汉", "长沙", "南昌", "郑州"],
+    })
+
+    # Subject selection description shown in the prompt, e.g.:
+    #   浙江: "7 选 3（物理/化学/生物/历史/地理/思想政治/技术）"
+    #   江苏: "3+1+2（首选物理或历史，再选 2 门）"
+    subject_system: str = "7 选 3（物理/化学/生物/历史/地理/思想政治/技术）"
+
+
+# Default config = Zhejiang (backwards-compatible; callers that don't pass
+# a config get Zhejiang behavior unchanged)
+_DEFAULT_PROVINCE_CONFIG = ProvinceConfig()
 
 
 def get_client(api_key: str | None = None) -> Any:
@@ -241,7 +275,9 @@ def _build_advisor_system(
     profile_ctx: dict | None = None,
     recommendation_ctx: dict | None = None,
     search_results: list[str] | None = None,
+    province_config: ProvinceConfig | None = None,
 ) -> str:
+    province_config = province_config or _DEFAULT_PROVINCE_CONFIG
     if recommendation_ctx:
         name, role = "小明", "志愿顾问"
         task = "解读推荐志愿，分析冲稳保策略，给出调整建议，回答专业/学校问题"
@@ -252,6 +288,8 @@ def _build_advisor_system(
     lines = [
         f"你叫{name}，角色是{role}，当前核心任务：{task}。",
         "整个对话中只有你一个AI，始终以这个角色回复。",
+        f"【志愿制度】本省实行{province_config.volunteer_system}，按位次从高到低依次检索，未被录取即落档。",
+        f"【选科制度】本省实行{province_config.subject_system}。",
         "",
     ]
 
@@ -336,11 +374,8 @@ def _build_advisor_system(
         '  ```json',
         '  {"rank":..., "total_score":..., "selected_subjects":[...], "preferred_majors":[...], "preferred_cities":[...], "main_priority":"专业优先/学校优先/城市优先", "risk_preference":"激进/均衡/保守"}',
         "  preferred_cities 填具体城市名，不填地区概念。常见地区转换：",
-        "    长三角 → [上海, 杭州, 南京, 苏州, 宁波, 合肥]",
-        "    珠三角 → [广州, 深圳, 佛山, 东莞]",
-        "    京津冀 → [北京, 天津]",
-        "    成渝 → [成都, 重庆]",
-        "    中部/长江中游 → [武汉, 长沙, 南昌, 郑州]",
+        *[f"    {region} → [{chr(44).join(cities)}]"
+          for region, cities in province_config.region_expansions.items()],
         '  ```',
         "- 填报模式输出JSON后，在下一段提醒用户做两件事：",
         "  ① 核对上方提取的参数是否正确（位次、选科、主排序等）；有误请直接说要改什么",
@@ -381,8 +416,9 @@ def chat_with_advisor(
     recommendation_ctx: dict | None = None,
     search_results: list[str] | None = None,
     api_key: str | None = None,
+    province_config: ProvinceConfig | None = None,
 ):
-    system = _build_advisor_system(profile_ctx, recommendation_ctx, search_results)
+    system = _build_advisor_system(profile_ctx, recommendation_ctx, search_results, province_config)
     return _stream([{"role": "system", "content": system}] + messages, api_key=api_key)
 
 
