@@ -850,7 +850,7 @@ tab_recommend, tab_candidates, tab_reserve = st.tabs(["推荐志愿", "候选池
 
 with tab_recommend:
     st.dataframe(
-        recommend_df.drop(columns=["_idx"]), width="stretch", hide_index=True, height=620,
+        recommend_df.drop(columns=["_idx"], errors="ignore"), width="stretch", hide_index=True, height=620,
         column_config={
             "序号":      st.column_config.NumberColumn(width="small"),
             "层级":      st.column_config.TextColumn(width="small"),
@@ -885,7 +885,7 @@ with tab_candidates:
 
 with tab_reserve:
     st.dataframe(
-        reserve_df.drop(columns=["_idx"]), width="stretch", hide_index=True, height=620,
+        reserve_df.drop(columns=["_idx"], errors="ignore"), width="stretch", hide_index=True, height=620,
         column_config={
             "序号":      st.column_config.NumberColumn(width="small"),
             "层级":      st.column_config.TextColumn(width="small"),
