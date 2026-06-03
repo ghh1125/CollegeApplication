@@ -294,10 +294,10 @@ def ingest_plan_details(conn: sqlite3.Connection) -> int:
         if not major_name or "合计" in major_name or "小计" in major_name:
             continue
         plan_count = _parse_int(row.get("plan_count"))
-        min_score, min_rank = thresholds.get(
-            (year, subject_category, school_code, special_group),
-            (None, None),
-        )
+        threshold_key = (year, subject_category, school_code, special_group)
+        if threshold_key not in thresholds:
+            continue
+        min_score, min_rank = thresholds[threshold_key]
         params = (
             year,
             subject_category,

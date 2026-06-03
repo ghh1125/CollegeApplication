@@ -7,6 +7,7 @@ collection is needed.
 Examples:
     uv run python scripts/run_jiangsu_pipeline.py
     uv run python scripts/run_jiangsu_pipeline.py --fetch-official
+    uv run python scripts/run_jiangsu_pipeline.py --fetch-jszs-plan-pages --limit 50
     uv run python scripts/run_jiangsu_pipeline.py --fetch-plan-sources --limit 50
 """
 
@@ -31,6 +32,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--years", type=int, nargs="+", default=list(DEFAULT_YEARS))
     parser.add_argument("--fetch-official", action="store_true", help="重新抓取江苏官方投档线/逐分段")
+    parser.add_argument("--fetch-jszs-plan-pages", action="store_true", help="从江苏招生考试网下载院校专业组计划页")
     parser.add_argument("--fetch-plan-sources", action="store_true", help="搜索并下载公开招生计划源")
     parser.add_argument("--limit", type=int, default=0, help="抓取计划源时限制学校数量，0=全部")
     parser.add_argument("--school", action="append", default=[], help="抓取计划源时只抓指定学校名，可重复")
@@ -45,6 +47,20 @@ def main() -> None:
 
     if args.fetch_official:
         run(py + ["scripts/fetch_jiangsu_official.py", "--years", *year_args])
+
+    if args.fetch_jszs_plan_pages:
+        cmd = py + [
+            "scripts/fetch_jiangsu_jszs_plan_pages.py",
+            "--years",
+            *year_args,
+            "--delay",
+            str(args.delay),
+        ]
+        if args.limit:
+            cmd.extend(["--limit", str(args.limit)])
+        for school in args.school:
+            cmd.extend(["--school", school])
+        run(cmd)
 
     if args.fetch_plan_sources:
         cmd = py + [

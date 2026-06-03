@@ -25,6 +25,7 @@ import re
 import shutil
 import subprocess
 from collections import defaultdict
+from html import unescape
 from pathlib import Path
 from typing import Iterable
 
@@ -550,6 +551,10 @@ def read_frames(path: Path) -> list[pd.DataFrame]:
 
 
 def parse_source_file(path: Path, year: int, official_groups: dict[tuple, dict]) -> list[dict]:
+    jszs_records = parse_jszs_plan_page(path, year, official_groups)
+    if jszs_records:
+        return jszs_records
+
     records: list[dict] = []
     for frame in read_frames(path):
         records.extend(
@@ -568,6 +573,135 @@ def parse_source_file(path: Path, year: int, official_groups: dict[tuple, dict])
         source_file=path,
         official_groups=official_groups,
     )
+
+
+def _official_by_school_group(official_groups: dict[tuple, dict]) -> dict[tuple, dict]:
+    index: dict[tuple, dict] = {}
+    for key, row in official_groups.items():
+        year, subject_category, _school_code, sg_name = key
+        school_name = clean_text(row.get("school_name") or "")
+        if school_name:
+            index[(year, subject_category, school_name, sg_name)] = row
+    return index
+
+
+def _parse_jszs_header(text: str) -> dict | None:
+    header = clean_text(text)
+    match = re.search(
+        r"(?P<year>\d{4})年\s+普通类\s+(?P<subject>物理|历史)\s+"
+        r"(?P<batch>\S*?本科\S*?)\s+(?P<school>.+?)(?P<sg>\d{2,3})\s*专业组"
+        r"(?:\((?P<req>[^)]*)\))?",
+        header,
+    )
+    if not match:
+        return None
+    gd = match.groupdict()
+    return {
+        "year": int(gd["year"]),
+        "subject_category": f"{gd['subject']}类",
+        "school_name": clean_text(gd["school"]),
+        "sg_name": gd["sg"],
+        "sg_info": clean_text(gd.get("req") or ""),
+    }
+
+
+def _html_text(html: str) -> str:
+    text = re.sub(r"<script\b.*?</script>", " ", html, flags=re.I | re.S)
+    text = re.sub(r"<style\b.*?</style>", " ", text, flags=re.I | re.S)
+    text = re.sub(r"<[^>]+>", " ", text)
+    return clean_text(unescape(text))
+
+
+def _major_name_from_jszs_cell(cell_html: str) -> str:
+    text = re.sub(r"<span\b.*?</span>", " ", cell_html, flags=re.I | re.S)
+    text = re.sub(r"<p\b.*?</p>", " ", text, flags=re.I | re.S)
+    return _html_text(text)
+
+
+def parse_jszs_plan_page(
+    path: Path,
+    year: int,
+    official_groups: dict[tuple, dict],
+) -> list[dict]:
+    """Parse 江苏招生考试网 gaoxiao.jszs.com plannew pages.
+
+    These pages preserve the exact 院校专业组 header above each table, which is the
+    cleanest public source for mapping group → inner majors.
+    """
+    if path.suffix.lower() not in {".html", ".htm"}:
+        return []
+    try:
+        html = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        html = path.read_text(encoding="gb18030", errors="ignore")
+    if "gaoxiao.jszs.com" not in html and "江苏招生考试网" not in html:
+        return []
+    if "专业组" not in html or "专业名称" not in html:
+        return []
+
+    by_school_group = _official_by_school_group(official_groups)
+    source_url = source_url_for(path)
+    rows: list[dict] = []
+
+    h4_matches = list(re.finditer(r"<h4\b[^>]*>(?P<title>.*?)</h4>", html, flags=re.I | re.S))
+    for index, title_match in enumerate(h4_matches):
+        header = _parse_jszs_header(_html_text(title_match.group("title")))
+        if not header or header["year"] != year:
+            continue
+        next_start = h4_matches[index + 1].start() if index + 1 < len(h4_matches) else len(html)
+        section = html[title_match.end():next_start]
+        table_match = re.search(r"<table\b[^>]*>(?P<table>.*?)</table>", section, flags=re.I | re.S)
+        if not table_match:
+            continue
+        official = by_school_group.get(
+            (
+                header["year"],
+                header["subject_category"],
+                header["school_name"],
+                header["sg_name"],
+            )
+        )
+        if official:
+            school_code = str(official["school_code"])
+            school_name = official.get("school_name") or header["school_name"]
+            sg_info = official.get("sg_info") or header["sg_info"]
+        else:
+            school_code = ""
+            school_name = header["school_name"]
+            sg_info = header["sg_info"]
+        if not school_code:
+            continue
+
+        sg_info = canonical_group_info(header["subject_category"], sg_info)
+        special_group = f"{school_code}-{header['sg_name']}"
+
+        for tr_match in re.finditer(r"<tr\b[^>]*>(?P<tr>.*?)</tr>", table_match.group("table"), flags=re.I | re.S):
+            cells = re.findall(r"<td\b[^>]*>(.*?)</td>", tr_match.group("tr"), flags=re.I | re.S)
+            if len(cells) < 7:
+                continue
+            major_name = _major_name_from_jszs_cell(cells[0])
+            if not major_name or "专业名称" in major_name or "合计" in major_name:
+                continue
+            rows.append(
+                {
+                    "year": header["year"],
+                    "subject_category": header["subject_category"],
+                    "school_code": school_code,
+                    "school_name": school_name,
+                    "special_group": special_group,
+                    "sg_name": header["sg_name"],
+                    "sg_info": sg_info,
+                    "major_code": "",
+                    "major_name": major_name,
+                    "plan_count": parse_int(_html_text(cells[3])) or "",
+                    "tuition": parse_int(_html_text(cells[6])) or "",
+                    "duration": clean_text(_html_text(cells[5])),
+                    "source_url": source_url,
+                    "source_file": display_path(path),
+                    "matched_official_group": 1 if official else 0,
+                }
+            )
+    return rows
 
 
 def dedupe(records: list[dict]) -> list[dict]:

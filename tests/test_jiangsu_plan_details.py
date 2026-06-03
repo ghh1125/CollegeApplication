@@ -145,6 +145,59 @@ def test_normalize_frame_handles_combo_school_group_code() -> None:
     assert rows[0]["plan_count"] == 13
 
 
+def test_parse_jszs_plan_page_maps_group_tables_to_official_groups(tmp_path) -> None:
+    from scripts.parse_jiangsu_plan_details import parse_jszs_plan_page
+
+    source = tmp_path / "nju_jszs.html"
+    source.write_text(
+        """
+        <html><head><title>南京大学--大数据中心--江苏招生考试网</title></head>
+        <body>
+          <div class="center_box">
+            <div class="center_box_title">
+              <h4>2025年　普通类　历史　本科批次　　南京大学03专业组(不限)</h4>
+            </div>
+            <div class="center_box_table">
+              <table>
+                <tr><th>专业名称</th><th>首选科目</th><th>再选科目</th><th>计划数</th><th>变化情况</th><th>学制</th><th>学费</th></tr>
+                <tr>
+                  <td style="font-weight:bold;">人文科学试验班 <span>注</span></td>
+                  <td>历史</td><td>(不限)</td><td>46</td><td>--</td><td>四</td><td>5720</td>
+                </tr>
+                <tr>
+                  <td style="font-weight:bold;">汉语言文学</td>
+                  <td>历史</td><td>(不限)</td><td>10</td><td>--</td><td>四</td><td>5720</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </body></html>
+        """,
+        encoding="utf-8",
+    )
+    source.with_suffix(".html.url").write_text(
+        "https://gaoxiao.jszs.com/College/plannew.html?cid=5&yearno=2025",
+        encoding="utf-8",
+    )
+    official = {
+        (2025, "历史类", "1101", "03"): {
+            "school_code": "1101",
+            "school_name": "南京大学",
+            "sg_info": "首选历史，再选不限",
+        }
+    }
+
+    rows = parse_jszs_plan_page(source, 2025, official)
+
+    assert [row["major_name"] for row in rows] == ["人文科学试验班", "汉语言文学"]
+    assert rows[0]["school_code"] == "1101"
+    assert rows[0]["special_group"] == "1101-03"
+    assert rows[0]["plan_count"] == 46
+    assert rows[0]["tuition"] == 5720
+    assert rows[0]["matched_official_group"] == 1
+    assert rows[0]["source_url"].startswith("https://gaoxiao.jszs.com/")
+
+
 def test_ingest_plan_details_expands_group_cutoff_to_major_rows(tmp_path, monkeypatch) -> None:
     from src.jiangsu.input import ingest
 
@@ -212,3 +265,51 @@ def test_ingest_plan_details_expands_group_cutoff_to_major_rows(tmp_path, monkey
     assert inserted == 1
     assert plan == ("计算机科学与技术", 6, 6380)
     assert cutoff == ("计算机科学与技术", 690, 126)
+
+
+def test_ingest_plan_details_skips_unmatched_non_official_groups(tmp_path, monkeypatch) -> None:
+    from src.jiangsu.input import ingest
+
+    detail_dir = tmp_path / "plan_details"
+    detail_dir.mkdir()
+    path = detail_dir / "plan_details_2025_physics.csv"
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "year", "subject_category", "school_code", "school_name",
+                "special_group", "sg_name", "sg_info", "major_code", "major_name",
+                "plan_count", "tuition", "duration",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "year": "2025",
+                "subject_category": "物理类",
+                "school_code": "9999",
+                "school_name": "未匹配大学",
+                "special_group": "9999-01",
+                "sg_name": "01",
+                "sg_info": "首选物理，再选不限",
+                "major_code": "01",
+                "major_name": "测试专业",
+                "plan_count": "1",
+                "tuition": "5000",
+                "duration": "四年",
+            }
+        )
+
+    monkeypatch.setattr(ingest, "PLAN_DETAIL_DIR", detail_dir)
+
+    with sqlite3.connect(":memory:") as conn:
+        conn.executescript(ingest.SCHEMA_PATH.read_text(encoding="utf-8"))
+        inserted = ingest.ingest_plan_details(conn)
+        plan_count = conn.execute("SELECT COUNT(*) FROM admission_plan").fetchone()[0]
+        cutoff_count = conn.execute(
+            "SELECT COUNT(*) FROM historical_cutoff WHERE major_code = '01'"
+        ).fetchone()[0]
+
+    assert inserted == 0
+    assert plan_count == 0
+    assert cutoff_count == 0
