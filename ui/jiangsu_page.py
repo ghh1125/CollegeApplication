@@ -98,7 +98,7 @@ def render(province: str = "jiangsu") -> None:
                                   help="从 化学/生物/思想政治/地理 选 2 门")
         st.divider()
         main_priority = st.selectbox("主排序", PRIORITIES, index=0, key="js_priority")
-        st.caption("江苏组内专业明细尚不完整，「专业优先」目前作弱排序提示，不保证组内含目标专业。")
+        st.caption("专业优先按已解析到的组内专业做软排序；暂无组内明细的专业组不会被当作目标专业。")
         risk_preference = st.selectbox("风险偏好", ["激进", "均衡", "保守"], index=1, key="js_risk")
 
         st.divider()
@@ -115,6 +115,9 @@ def render(province: str = "jiangsu") -> None:
         st.warning("请在左侧选择「主排序」后查看推荐。"); st.stop()
     if len(reselect) != 2:
         st.warning("请在左侧选择恰好 2 门再选科目。"); st.stop()
+    if main_priority == "城市优先" and not preferred_cities:
+        st.warning("选择「城市优先」时，请至少填写一个偏好城市，例如 南京、苏州。")
+        st.stop()
 
     try:
         profile = StudentProfile(
@@ -141,7 +144,7 @@ def render(province: str = "jiangsu") -> None:
         reco = build_recommendations(
             final, profile, main_priority=main_priority,
             preferred_majors=preferred_majors, preferred_categories=[], preferred_schools=[],
-            preferred_cities=preferred_cities or None, risk_preference=risk_preference,
+            preferred_cities=preferred_cities, risk_preference=risk_preference,
             year=2025, conn=conn,
         )
 
@@ -175,6 +178,6 @@ def render(province: str = "jiangsu") -> None:
             st.dataframe(_groups_df(reserve), width="stretch", hide_index=True)
 
     st.caption(
-        "说明：「投档位次」为该院校专业组近三年加权投档最低位次（组门槛），"
+        "说明：「投档位次」按已有近三年官方院校专业组投档最低位次加权（组门槛），"
         "权重 2025:0.5 / 2024:0.3 / 2023:0.2。组内专业明细持续补充中。"
     )

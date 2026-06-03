@@ -1,14 +1,10 @@
-"""Jiangsu end-to-end recommendation: rank per-major, aggregate into 院校专业组.
+"""Jiangsu end-to-end recommendation: rank 院校专业组.
 
 Jiangsu fills 院校专业组 (not single majors). Pipeline:
-  1. enrich each candidate 专业 with history (录取位次) via common.attach_history,
-     filtered to the student's 首选科类 pool (物理类/历史类) and 江苏 year weights.
-  2. calculate_gap per 专业 (reuse common).
-  3. aggregate 专业 → 专业组 (group by school + special_group):
-       - 组投档位次 = 组内成员最低门槛（max rank number = easiest member to enter）
-       - 组的专业匹配度 = 组内最匹配专业的等级（best member）
-       - 组内列出成员专业及各自位次/匹配标签
-  4. sort 专业组 (reuse common.sort_candidates, treating each group as a program)
+  1. enrich candidate rows with school/profile metadata via common.attach_history.
+  2. override history by official group key (school_code + special_group).
+  3. aggregate rows into 院校专业组 and calculate risk from group-level history.
+  4. sort 专业组 (reuse common.sort_candidates, treating each group as a program).
   5. build 40-slot 志愿表 (reuse common.build_volunteer_list).
 """
 
@@ -33,6 +29,100 @@ from src.jiangsu.config import JIANGSU_YEAR_WEIGHTS, PROVINCE_CONFIG
 HISTORY_RANK_YEARS = (2025, 2024, 2023)
 
 
+def _parse_int(value: Any) -> int | None:
+    """Parse DB numeric values that may arrive as strings."""
+    try:
+        text = str(value).strip().replace(",", "")
+        return int(float(text)) if text and text not in ("-", "--", "—", "None") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def load_group_history(
+    conn: Any,
+    year: int,
+    subject_category: str,
+) -> dict[tuple[str, str], list[dict]]:
+    """Load Jiangsu group-level history keyed by (school_code, special_group).
+
+    Official Jiangsu data is 院校专业组-level. Some group-member major rows may
+    also exist for 2025 after parsing public plan details; those rows carry the
+    same group threshold. For each group/year, keep the row with the largest
+    min_rank (the group entrance threshold); if tied, prefer the synthetic
+    official row major_code='__GROUP__'.
+    """
+    years = [y for y in JIANGSU_YEAR_WEIGHTS if y <= year]
+    if not years:
+        return {}
+
+    placeholders = ", ".join("?" for _ in years)
+    rows = conn.execute(
+        f"""
+        SELECT year, school_code, special_group, min_score, min_rank, plan_count, major_code
+        FROM historical_cutoff
+        WHERE year IN ({placeholders})
+          AND subject_category = ?
+          AND special_group IS NOT NULL
+          AND special_group != ''
+        """,
+        (*years, subject_category),
+    ).fetchall()
+
+    best: dict[tuple[str, str, int], tuple] = {}
+    for row in rows:
+        row_year, school_code, special_group, _score, min_rank, _plan_count, major_code = row
+        parsed_year = _parse_int(row_year)
+        if parsed_year is None:
+            continue
+        key = (str(school_code or ""), str(special_group or ""), parsed_year)
+        rank = _parse_int(min_rank)
+        score = (rank is not None, rank or -1, str(major_code or "") == "__GROUP__")
+        old = best.get(key)
+        if old is None:
+            best[key] = row
+            continue
+        old_rank = _parse_int(old[4])
+        old_score = (old_rank is not None, old_rank or -1, str(old[6] or "") == "__GROUP__")
+        if score > old_score:
+            best[key] = row
+
+    grouped: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for row in best.values():
+        row_year, school_code, special_group, min_score, min_rank, plan_count, _major_code = row
+        grouped[(str(school_code or ""), str(special_group or ""))].append({
+            "year": _parse_int(row_year),
+            "min_rank": _parse_int(min_rank),
+            "min_score": _parse_int(min_score),
+            "plan_count": _parse_int(plan_count),
+        })
+
+    return {
+        key: sorted(records, key=lambda r: int(r["year"] or 0), reverse=True)
+        for key, records in grouped.items()
+    }
+
+
+def _attach_group_history(
+    programs: list[dict],
+    group_history: dict[tuple[str, str], list[dict]],
+    student_rank: int,
+) -> list[dict]:
+    """Attach group-level history to each member row and calculate gap."""
+    enriched: list[dict] = []
+    for program in programs:
+        item = dict(program)
+        key = (str(item.get("school_code") or ""), str(item.get("special_group") or ""))
+        if key in group_history:
+            item["history"] = [dict(record) for record in group_history[key]]
+        else:
+            item["history"] = item.get("history", [])
+        item["gap_info"] = calculate_gap(
+            student_rank, item["history"], year_weights=JIANGSU_YEAR_WEIGHTS
+        )
+        enriched.append(item)
+    return enriched
+
+
 def expand_major_keywords(keywords: list[str], conn: Any) -> set[str]:
     """Expand a shorthand like 计算机 → standard major names via major_description."""
     if not keywords:
@@ -51,6 +141,10 @@ def expand_major_keywords(keywords: list[str], conn: Any) -> set[str]:
 def history_rank_columns(group: dict, years: tuple[int, ...] = HISTORY_RANK_YEARS) -> dict[str, str]:
     """Group-level historical 投档位次 by year (max member rank per year = 组门槛)."""
     by_year: dict[int, int] = {}
+    for h in group.get("history", []):
+        y, r = h.get("year"), h.get("min_rank")
+        if y and r:
+            by_year[int(y)] = int(r)
     for member in group.get("_members", []):
         for h in member.get("history", []):
             y, r = h.get("year"), h.get("min_rank")
@@ -74,22 +168,9 @@ def _aggregate_groups(
 
     groups: list[dict] = []
     for (school_code, sgid), members in buckets.items():
-        # 组投档位次 = 成员中最低门槛（最大位次数 = 最容易进的专业决定进组线）
-        member_ranks = [
-            int(h["min_rank"])
-            for m in members for h in m.get("history", [])
-            if h.get("year") in JIANGSU_YEAR_WEIGHTS and h.get("min_rank")
-        ]
-        # 组的 gap：以组内"最容易进"的成员的加权均值位次为门槛
-        # 取每个成员的 weighted_avg，组门槛 = max（最容易）
-        member_avgs = [
-            m["gap_info"]["weighted_avg"]
-            for m in members
-            if m.get("gap_info", {}).get("weighted_avg") is not None
-        ]
         rep = max(members, key=lambda m: _major_level(
             m, preferred_majors, preferred_categories, expanded_major_names))
-        best_level = _major_level(rep, preferred_majors, preferred_categories, expanded_major_names)
+        group_history = [dict(record) for record in members[0].get("history", [])]
 
         group = {
             "school_code": school_code,
@@ -109,33 +190,13 @@ def _aggregate_groups(
             "sg_name": rep.get("sg_name", ""),
             "sg_info": rep.get("sg_info", ""),
             "subject_requirement_json": rep.get("subject_requirement_json"),
+            "history": group_history,
             "_members": members,
             "_member_count": len(members),
         }
-        # 组门槛 gap：用成员最大 weighted_avg（最容易进的）作为进组位次
-        if member_avgs:
-            threshold = max(member_avgs)
-            # 复刻 calculate_gap 的分档（用组门槛位次直接算 ratio）
-            gap = threshold - student_rank
-            ratio = gap / threshold
-            if ratio > 0.40:
-                tier = "垫"
-            elif ratio > 0.15:
-                tier = "保"
-            elif 0 < ratio <= 0.15:
-                tier = "稳"
-            elif -0.15 <= ratio <= 0:
-                tier = "冲"
-            else:
-                tier = "高危冲"
-            group["gap_info"] = {
-                "weighted_avg": threshold, "gap": gap, "ratio": round(ratio, 4),
-                "tier": tier,
-                "data_years": max((m["gap_info"].get("data_years", 0) for m in members), default=0),
-            }
-        else:
-            group["gap_info"] = {"weighted_avg": None, "gap": None, "ratio": None,
-                                 "tier": "数据不足", "data_years": 0}
+        group["gap_info"] = calculate_gap(
+            student_rank, group_history, year_weights=JIANGSU_YEAR_WEIGHTS
+        )
         groups.append(group)
     return groups
 
@@ -161,11 +222,14 @@ def build_recommendations(
         total = PROVINCE_CONFIG.total_volunteers
     if risk_allocation is None:
         risk_allocation = PROVINCE_CONFIG.risk_allocation
+    if preferred_cities is None:
+        preferred_cities = []
 
     def _run(db_conn: Any) -> dict:
         expanded = expand_major_keywords(preferred_majors, db_conn)
 
-        # 1. enrich members with history (filtered to 首选科类 pool + 江苏 years)
+        # 1. enrich members with common metadata, then override history with
+        #    Jiangsu's official 院校专业组-level history.
         data = load_all_history_data(
             db_conn, year,
             year_weights=JIANGSU_YEAR_WEIGHTS,
@@ -173,9 +237,8 @@ def build_recommendations(
         )
         enriched = attach_history(candidates, data)
         enriched = enrich_with_profiles(enriched, db_conn)
-        for prog in enriched:
-            prog["gap_info"] = calculate_gap(
-                profile.rank, prog["history"], year_weights=JIANGSU_YEAR_WEIGHTS)
+        group_history = load_group_history(db_conn, year, profile.subject_category)
+        enriched = _attach_group_history(enriched, group_history, profile.rank)
 
         # 2. aggregate 专业 → 专业组
         groups = _aggregate_groups(
