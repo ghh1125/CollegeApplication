@@ -4,8 +4,10 @@ pandas
 pydantic>=2
 pydantic-settings
 openpyxl
+xlrd
 python-dotenv
 requests
 beautifulsoup4
 lxml
+pypdf
 ddgs>=0.6

@@ -10,9 +10,10 @@ venv/
 *.db-shm
 *.db-wal
 
-# 江苏：fixture 构建的库和原始数据为验证用假数据/临时抓取，不入库（真数据后补）
-data/jiangsu/college.db
+# 江苏：掌上高考验证用 JSON 不入库；官方标准化 CSV 和真实 college.db 入库
 data/jiangsu/raw/plan/
 data/jiangsu/raw/score/
 data/jiangsu/raw/school_list.json
 data/jiangsu/raw/*.log
+data/jiangsu/raw/official/downloads/
+data/jiangsu/raw/plan_sources/

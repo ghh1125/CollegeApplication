@@ -28,7 +28,7 @@ from src.common.ranking.rank import (
     major_tag_label,
     sort_candidates,
 )
-from src.jiangsu.config import JIANGSU_YEAR_WEIGHTS
+from src.jiangsu.config import JIANGSU_YEAR_WEIGHTS, PROVINCE_CONFIG
 
 HISTORY_RANK_YEARS = (2025, 2024, 2023)
 
@@ -156,6 +156,11 @@ def build_recommendations(
 ) -> dict:
     """Build 江苏 40-院校专业组 recommendations from a filtered 专业 pool."""
     from db import get_conn
+
+    if total is None:
+        total = PROVINCE_CONFIG.total_volunteers
+    if risk_allocation is None:
+        risk_allocation = PROVINCE_CONFIG.risk_allocation
 
     def _run(db_conn: Any) -> dict:
         expanded = expand_major_keywords(preferred_majors, db_conn)

@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "pandas",
     "openpyxl",
+    "xlrd",
     "python-dotenv",
     "openai",
     "pydantic>=2",
@@ -14,6 +15,7 @@ dependencies = [
     "requests",
     "beautifulsoup4",
     "lxml",
+    "pypdf",
     "streamlit>=1.57",
     "ddgs>=0.6",
 ]

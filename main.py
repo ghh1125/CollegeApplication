@@ -56,7 +56,7 @@ _PROVINCE_GROUPS = [
     ("华东", [
         ("浙江", "zhejiang", True),
         ("上海", "shanghai", False),
-        ("江苏", "jiangsu", False),
+        ("江苏", "jiangsu", True),
         ("安徽", "anhui", False),
         ("福建", "fujian", False),
         ("山东", "shandong", False),
@@ -135,6 +135,12 @@ if "_province" not in st.session_state:
     st.stop()
 
 _selected_province: str = st.session_state["_province"]
+
+# 江苏走独立的「院校专业组」页面（模型与浙江不同），渲染后结束本次运行
+if _selected_province == "jiangsu":
+    from ui.jiangsu_page import render as _render_jiangsu
+    _render_jiangsu()
+    st.stop()
 
 # Verify province has data; if not (shouldn't happen via UI, but guard anyway)
 _AVAILABLE = {"zhejiang"}
