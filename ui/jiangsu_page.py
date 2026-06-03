@@ -141,7 +141,10 @@ def render(province: str = "jiangsu") -> None:
         "**最终填报请以《江苏招生考试》招生计划专刊和省考试院官方信息为准。**"
     )
 
-    # ─── 侧边栏：API Key + 表单 ──────────────────────────────────────────────
+    # 表单门控：和浙江一致——先和小明对话收集参数，确认后才展开左侧表单与结果
+    form_ready = bool(st.session_state.get("_js_form_ready", False))
+
+    # ─── 侧边栏：API Key（常驻）+ 表单（门控后出现）──────────────────────────
     with st.sidebar:
         st.header("🔑 AI 设置")
         _user_key = st.text_input("百炼 API Key（AI 对话 / 报告 / 解释需要）", type="password",
@@ -149,29 +152,42 @@ def render(province: str = "jiangsu") -> None:
         _api_key = _user_key.strip() or None
         st.caption("⚠️ 本工具及 AI 建议仅供参考，不构成填报指导，最终以官方为准，由用户自行负责。")
 
-        st.divider()
-        st.header("📋 考生信息（江苏 3+1+2）")
-        rank = st.number_input("首选科类内全省位次", 1, 400_000, value=8000, step=100, key="js_rank")
-        first_choice = st.radio("首选科目", FIRST_CHOICES, horizontal=True, key="js_first",
-                                help="物理 / 历史 二选一，决定录取科类和位次池")
-        reselect = st.multiselect("再选科目（选 2 门）", RESELECT, max_selections=2, key="js_reselect",
-                                  help="从 化学/生物/思想政治/地理 选 2 门")
-        main_priority = st.selectbox("主排序", PRIORITIES, index=0, key="js_priority")
-        st.caption("「专业优先」按已解析的组内专业做软排序；暂无明细的组不会被当作目标专业。")
-        risk_preference = st.selectbox("风险偏好", ["激进", "均衡", "保守"], index=1, key="js_risk")
+        if form_ready:
+            st.divider()
+            st.header("📋 考生信息（江苏 3+1+2）")
+            rank = st.number_input("首选科类内全省位次", 1, 400_000, value=8000, step=100, key="js_rank")
+            first_choice = st.radio("首选科目", FIRST_CHOICES, horizontal=True, key="js_first",
+                                    help="物理 / 历史 二选一，决定录取科类和位次池")
+            reselect = st.multiselect("再选科目（选 2 门）", RESELECT, max_selections=2, key="js_reselect",
+                                      help="从 化学/生物/思想政治/地理 选 2 门")
+            main_priority = st.selectbox("主排序", PRIORITIES, index=0, key="js_priority")
+            st.caption("「专业优先」按已解析的组内专业做软排序；暂无明细的组不会被当作目标专业。")
+            risk_preference = st.selectbox("风险偏好", ["激进", "均衡", "保守"], index=1, key="js_risk")
 
-        st.divider()
-        st.markdown("**可选偏好**")
-        preferred_majors = [s.strip() for s in st.text_input(
-            "想读的专业方向（弱提示，逗号分隔）", key="js_majors",
-            placeholder="如 计算机, 金融").split(",") if s.strip()]
-        school_levels = st.multiselect("学校层次", ["985", "211", "双一流"], key="js_levels")
-        preferred_cities = [c.strip() for c in st.text_input(
-            "偏好城市（逗号分隔）", key="js_cities", placeholder="如 南京, 苏州").split(",") if c.strip()]
+            st.divider()
+            st.markdown("**可选偏好**")
+            preferred_majors = [s.strip() for s in st.text_input(
+                "想读的专业方向（弱提示，逗号分隔）", key="js_majors",
+                placeholder="如 计算机, 金融").split(",") if s.strip()]
+            school_levels = st.multiselect("学校层次", ["985", "211", "双一流"], key="js_levels")
+            preferred_cities = [c.strip() for c in st.text_input(
+                "偏好城市（逗号分隔）", key="js_cities", placeholder="如 南京, 苏州").split(",") if c.strip()]
+        else:
+            st.divider()
+            st.info("先和上方小明对话（或直接说位次/选科/偏好），确认后参数会填到这里供你核对修改。")
 
-    # ─── 推荐管线（主排序已选且再选2门才跑）────────────────────────────────
+    # 表单未就绪时的后备变量，供对话上下文使用
+    if not form_ready:
+        rank = st.session_state.get("js_rank", 8000)
+        first_choice = st.session_state.get("js_first", "物理")
+        reselect = st.session_state.get("js_reselect", [])
+        main_priority = st.session_state.get("js_priority", "请选择…")
+        risk_preference = st.session_state.get("js_risk", "均衡")
+        preferred_majors, school_levels, preferred_cities = [], [], []
+
+    # ─── 推荐管线（门控就绪 + 主排序已选 + 再选2门才跑）────────────────────
     reco = None
-    if main_priority != "请选择…" and len(reselect) == 2:
+    if form_ready and main_priority != "请选择…" and len(reselect) == 2:
         try:
             profile = StudentProfile(
                 rank=int(rank), first_choice=first_choice, selected_subjects=reselect,
@@ -217,9 +233,11 @@ def render(province: str = "jiangsu") -> None:
     _render_advisor(_api_key, _profile_ctx, main_priority)
 
     # ─── 结果 ────────────────────────────────────────────────────────────────
+    if not form_ready:
+        return  # 门控未开：只显示对话，先收集参数
     if reco is None:
         if main_priority == "请选择…":
-            st.warning("请在左侧选择「主排序」，或直接和上方小明对话，即可生成推荐。")
+            st.warning("请在左侧选择「主排序」，或直接和上方小明对话。")
         elif len(reselect) != 2:
             st.warning("请在左侧选择恰好 2 门再选科目。")
         return
@@ -281,7 +299,7 @@ def _render_advisor(api_key, profile_ctx: dict, main_priority: str) -> None:
             _clear = st.button("清除", use_container_width=True, key="js_ai_clear")
 
         if _clear:
-            for k in ("js_ai_chat", "js_ai_parsed", "_js_advisor_ctx"):
+            for k in ("js_ai_chat", "js_ai_parsed", "_js_advisor_ctx", "_js_form_ready"):
                 st.session_state.pop(k, None)
             st.session_state["js_ai_input_n"] = _n + 1
             st.rerun()
@@ -382,6 +400,7 @@ def _render_advisor(api_key, profile_ctx: dict, main_priority: str) -> None:
                         _exp.extend(REGION_EXPANSIONS.get(_c, [_c]))
                     _fill["js_cities"] = ", ".join(dict.fromkeys(_exp))
                 st.session_state["_js_pending_fill"] = _fill
+                st.session_state["_js_form_ready"] = True
                 st.session_state.pop("js_ai_parsed", None)
                 st.session_state["js_ai_chat"].append({"role": "user", "content": "同意，参数已确认"})
                 st.session_state["js_ai_chat"].append({"role": "assistant", "content": (
