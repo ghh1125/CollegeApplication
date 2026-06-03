@@ -344,17 +344,25 @@ def _lookup_discipline_code(normalized_name: str, raw_name: str = "") -> str | N
     return None
 
 
-def calculate_gap(student_rank: int, history: list[dict]) -> dict:
+def calculate_gap(
+    student_rank: int,
+    history: list[dict],
+    year_weights: dict[int, float] | None = None,
+) -> dict:
     """
     Calculate rank gap against weighted historical minimum ranks.
 
     history 格式：[{"year": 2025, "min_rank": 34200}, ...]
+
+    year_weights lets a province supply its own recent-year weighting
+    (江苏 uses {2024,2023,2022}); defaults to the module-level YEAR_WEIGHTS (浙江).
     """
+    weights = year_weights or YEAR_WEIGHTS
 
     valid = [
         (int(h["year"]), int(h["min_rank"]))
         for h in history
-        if h.get("year") in YEAR_WEIGHTS and h.get("min_rank")
+        if h.get("year") in weights and h.get("min_rank")
     ]
 
     if not valid:
@@ -366,8 +374,8 @@ def calculate_gap(student_rank: int, history: list[dict]) -> dict:
             "data_years": 0,
         }
 
-    total_w = sum(YEAR_WEIGHTS[year] for year, _rank in valid)
-    weighted_avg = sum(YEAR_WEIGHTS[year] * rank / total_w for year, rank in valid)
+    total_w = sum(weights[year] for year, _rank in valid)
+    weighted_avg = sum(weights[year] * rank / total_w for year, rank in valid)
     weighted_avg = round(weighted_avg)
 
     gap = weighted_avg - student_rank
@@ -693,17 +701,30 @@ def _enrich_with_history(candidates: list[dict], year: int, conn: Any) -> list[d
 def load_history_indexes(
     conn: Any,
     year: int,
+    year_weights: dict[int, float] | None = None,
+    subject_category: str | None = None,
 ) -> tuple[dict[tuple[str, str], list[dict]], dict[tuple[str, str], list[dict]]]:
-    years = [history_year for history_year in YEAR_WEIGHTS if history_year <= year]
+    """Load and index historical cutoff rows.
+
+    subject_category (江苏 物理类/历史类) filters to one rank pool when given;
+    provinces without separate pools (浙江) pass None and the column is ignored.
+    """
+    weights = year_weights or YEAR_WEIGHTS
+    years = [history_year for history_year in weights if history_year <= year]
     placeholders = ", ".join("?" for _ in years)
+    where = f"year IN ({placeholders})"
+    params: list = list(years)
+    if subject_category:
+        where += " AND subject_category = ?"
+        params.append(subject_category)
     sql = f"""
         SELECT year, school_code, school_name, major_code, major_name,
                min_score, min_rank, plan_count
         FROM historical_cutoff
-        WHERE year IN ({placeholders})
+        WHERE {where}
         ORDER BY year DESC
     """
-    rows = conn.execute(sql, tuple(years)).fetchall()
+    rows = conn.execute(sql, tuple(params)).fetchall()
 
     # Deduplicate: same (school, major, year) may have multiple rows from different
     # major_codes (e.g. different recruitment batches). Keep the row with the lowest
@@ -805,9 +826,20 @@ _load_major_categories = load_major_categories
 _load_discipline_grades = load_discipline_grades
 
 
-def load_all_history_data(conn: Any, year: int) -> HistoryData:
-    """Load all DB data needed by attach_history in one call."""
-    by_code, by_name = load_history_indexes(conn, year)
+def load_all_history_data(
+    conn: Any,
+    year: int,
+    year_weights: dict[int, float] | None = None,
+    subject_category: str | None = None,
+) -> HistoryData:
+    """Load all DB data needed by attach_history in one call.
+
+    year_weights / subject_category are forwarded to load_history_indexes for
+    provinces with their own recent years or separate rank pools (江苏).
+    """
+    by_code, by_name = load_history_indexes(
+        conn, year, year_weights=year_weights, subject_category=subject_category
+    )
     disc_grades, school_best = load_discipline_grades(conn)
     return HistoryData(
         by_code=by_code,

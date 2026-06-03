@@ -9,3 +9,10 @@ venv/
 # SQLite WAL mode temp files
 *.db-shm
 *.db-wal
+
+# 江苏：fixture 构建的库和原始数据为验证用假数据/临时抓取，不入库（真数据后补）
+data/jiangsu/college.db
+data/jiangsu/raw/plan/
+data/jiangsu/raw/score/
+data/jiangsu/raw/school_list.json
+data/jiangsu/raw/*.log
