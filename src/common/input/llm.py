@@ -47,6 +47,19 @@ class ProvinceConfig:
     #   江苏: "3+1+2（首选物理或历史，再选 2 门）"
     subject_system: str = "7 选 3（物理/化学/生物/历史/地理/思想政治/技术）"
 
+    # 志愿单位名称（用于话术）：浙江"专业(含学校)"；江苏"院校专业组"
+    volunteer_unit: str = "专业（含学校）"
+
+    # 收集选科信息的话术提示（填报模式步骤里用）
+    subject_collect_hint: str = "选考科目（7选3，如物理、化学、生物）"
+
+    # AI 在填报模式末尾输出的 JSON 示例（字段随省份不同）
+    json_example: str = (
+        '{"rank":..., "total_score":..., "selected_subjects":[...], '
+        '"preferred_majors":[...], "preferred_cities":[...], '
+        '"main_priority":"专业优先/学校优先/城市优先", "risk_preference":"激进/均衡/保守"}'
+    )
+
 
 # Default config = Zhejiang (backwards-compatible; callers that don't pass
 # a config get Zhejiang behavior unchanged)
@@ -375,6 +388,7 @@ def _build_advisor_system(
     lines += [
         "【规则】",
         "- 填报模式（无推荐表）收集参数流程，严格按顺序执行：",
+        f"  步骤0：确认{province_config.subject_collect_hint}（必填）。",
         "  步骤1：确认主排序。用户未说明时问：「你更看重专业方向、学校排名/层次，还是地理位置？」",
         "  步骤2（BLOCKER）：",
         "    ★ 若 main_priority=专业优先 且 用户还没提过任何偏好专业 → 禁止输出JSON。",
@@ -383,7 +397,7 @@ def _build_advisor_system(
         "      只有用户给出专业方向，或明确说「不知道/随便」（触发问卷引导）后，才能进入步骤3。",
         "  步骤3：所有必要信息收集完毕后，在末尾输出JSON（顾问模式不输出JSON）：",
         '  ```json',
-        '  {"rank":..., "total_score":..., "selected_subjects":[...], "preferred_majors":[...], "preferred_cities":[...], "main_priority":"专业优先/学校优先/城市优先", "risk_preference":"激进/均衡/保守"}',
+        f'  {province_config.json_example}',
         "  preferred_cities 填具体城市名，不填地区概念。常见地区转换：",
         *[f"    {region} → [{chr(44).join(cities)}]"
           for region, cities in REGION_EXPANSIONS.items()],

@@ -15,4 +15,11 @@ PROVINCE_CONFIG = ProvinceConfig(
         "均衡": {"冲": 10, "稳": 15, "保": 10, "垫": 5},
         "保守": {"冲": 6, "稳": 12, "保": 15, "垫": 7},
     },
+    volunteer_unit="院校专业组",
+    subject_collect_hint="首选科目（物理或历史，二选一）和再选 2 门（化学/生物/思想政治/地理）",
+    json_example=(
+        '{"rank":..., "total_score":..., "first_choice":"物理/历史", '
+        '"selected_subjects":[再选2门], "preferred_majors":[...], "preferred_cities":[...], '
+        '"main_priority":"专业优先/学校优先/城市优先", "risk_preference":"激进/均衡/保守"}'
+    ),
 )
