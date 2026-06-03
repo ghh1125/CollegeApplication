@@ -313,3 +313,67 @@ def test_ingest_plan_details_skips_unmatched_non_official_groups(tmp_path, monke
     assert inserted == 0
     assert plan_count == 0
     assert cutoff_count == 0
+
+
+def test_ingest_official_group_plans_fills_missing_groups_across_years(monkeypatch) -> None:
+    from src.jiangsu.input import ingest
+
+    official_rows = [
+        {
+            "year": "2025",
+            "subject_category": "物理类",
+            "school_code": "1101",
+            "school_name": "南京大学",
+            "special_group": "1101-04",
+            "sg_name": "04",
+            "sg_info": "首选物理，再选化学",
+        },
+        {
+            "year": "2024",
+            "subject_category": "历史类",
+            "school_code": "1102",
+            "school_name": "东南大学",
+            "special_group": "1102-01",
+            "sg_name": "01",
+            "sg_info": "首选历史，再选不限",
+        },
+        {
+            "year": "2022",
+            "subject_category": "物理类",
+            "school_code": "1103",
+            "school_name": "河海大学",
+            "special_group": "1103-02",
+            "sg_name": "02",
+            "sg_info": "首选物理，再选不限",
+        },
+    ]
+    monkeypatch.setattr(ingest, "_iter_official_cutoffs", lambda: iter(official_rows))
+
+    with sqlite3.connect(":memory:") as conn:
+        conn.executescript(ingest.SCHEMA_PATH.read_text(encoding="utf-8"))
+        conn.execute(
+            """
+            INSERT INTO admission_plan (
+                year, subject_category, school_code, school_name,
+                special_group, sg_name, sg_info, major_code, major_name
+            ) VALUES (
+                2025, '物理类', '1101', '南京大学',
+                '1101-04', '04', '首选物理，再选化学', '01', '计算机科学与技术'
+            )
+            """
+        )
+
+        inserted = ingest.ingest_official_group_plans(conn, years={2025, 2024, 2023})
+        rows = conn.execute(
+            """
+            SELECT year, subject_category, school_code, major_code, major_name
+            FROM admission_plan
+            WHERE major_code = '__GROUP__'
+            ORDER BY year, school_code
+            """
+        ).fetchall()
+
+    assert inserted == 1
+    assert rows == [
+        (2024, "历史类", "1102", "__GROUP__", "东南大学01专业组-首选历史再选不限")
+    ]

@@ -334,12 +334,15 @@ def ingest_plan_details(conn: sqlite3.Connection) -> int:
     return n
 
 
-def ingest_official_group_plans(conn: sqlite3.Connection, year: int = 2025) -> int:
+def ingest_official_group_plans(
+    conn: sqlite3.Connection,
+    years: set[int] | None = None,
+) -> int:
     """Create fallback admission_plan rows from official group cutoffs.
 
-    This keeps Jiangsu recommendations usable from official data alone. If
-    掌上高考 JSON plan rows also exist, these synthetic rows stay in the same
-    special_group bucket and provide the official group threshold.
+    This keeps Jiangsu recommendations usable from official data alone. These
+    synthetic rows are inserted only when a group has no per-major plan detail,
+    so they preserve the recommendation entry without masking real majors.
     """
     sql = """
         INSERT OR IGNORE INTO admission_plan (
@@ -352,7 +355,7 @@ def ingest_official_group_plans(conn: sqlite3.Connection, year: int = 2025) -> i
     n = 0
     for row in _iter_official_cutoffs():
         row_year = _parse_int(row.get("year"))
-        if row_year != year:
+        if row_year is None or (years is not None and row_year not in years):
             continue
         existing = conn.execute(
             """
@@ -398,7 +401,7 @@ def main() -> None:
     p_details = ingest_plan_details(conn)
     s = ingest_scores(conn)
     p = ingest_plans(conn)
-    p_official = ingest_official_group_plans(conn, year=2025)
+    p_official = ingest_official_group_plans(conn, years={2025, 2024, 2023})
     # quick verification
     cats = conn.execute(
         "SELECT subject_category, COUNT(*) FROM historical_cutoff GROUP BY subject_category"

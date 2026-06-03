@@ -43,6 +43,37 @@ HEADERS = {
 }
 SUBJECTS = ("物理", "历史")
 
+# JSZS uses current school names, while older official cutoff files can contain
+# pre-rename names. Values are searched after the official name and saved under
+# the official cutoff name so downstream matching still uses official codes.
+SCHOOL_NAME_ALIASES = {
+    "安徽师范大学皖江学院": ["芜湖学院"],
+    "北京工商大学嘉华学院": ["北京金融科技学院"],
+    "北京理工大学珠海学院": ["珠海科技学院"],
+    "北京师范大学-香港浸会大学联合国际学院": ["北师香港浸会大学"],
+    "滨州学院": ["山东航空学院"],
+    "常熟理工学院": ["苏州工学院"],
+    "赣南医学院": ["赣南医科大学"],
+    "桂林医学院": ["桂林医科大学"],
+    "合肥学院": ["合肥大学"],
+    "海南医学院": ["海南医科大学"],
+    "湖南理工学院南湖学院": ["岳阳学院"],
+    "湖南文理学院芙蓉学院": ["常德学院"],
+    "吉林化工学院": ["吉林化工大学"],
+    "嘉兴学院": ["嘉兴大学"],
+    "蚌埠医学院": ["蚌埠医科大学"],
+    "牡丹江医学院": ["牡丹江医科大学"],
+    "南昌工程学院": ["江西水利电力大学"],
+    "绍兴文理学院元培学院": ["绍兴理工学院"],
+    "四川外国语大学成都学院": ["成都外国语学院"],
+    "潍坊医学院": ["山东第二医科大学"],
+    "云南大学滇池学院": ["滇池学院"],
+    "云南艺术学院文华学院": ["昆明传媒学院"],
+    "吉首大学张家界学院": ["张家界学院"],
+    "浙江科技学院": ["浙江科技大学"],
+    "重庆科技学院": ["重庆科技大学"],
+}
+
 
 def safe_name(text: str) -> str:
     text = re.sub(r"[^\w\u4e00-\u9fa5()-]+", "_", text.strip())
@@ -120,6 +151,14 @@ def search_cid(school_name: str, timeout: float) -> int | None:
     return None
 
 
+def search_cid_with_aliases(school_name: str, timeout: float) -> tuple[int | None, str]:
+    for candidate in [school_name, *SCHOOL_NAME_ALIASES.get(school_name, [])]:
+        cid = search_cid(candidate, timeout=timeout)
+        if cid is not None:
+            return cid, candidate
+    return None, school_name
+
+
 def plan_url(cid: int, year: int, subject: str) -> str:
     query = urlencode(
         {
@@ -186,10 +225,16 @@ def main() -> None:
             try:
                 cid = cache.get(school_name)
                 if cid is None:
-                    cid = search_cid(school_name, timeout=args.timeout)
+                    cid, matched_name = search_cid_with_aliases(school_name, timeout=args.timeout)
                     if cid is not None:
                         cache[school_name] = cid
                         save_cache(cache)
+                        if matched_name != school_name:
+                            print(
+                                f"[{index}/{len(schools)}] {school_name}: "
+                                f"按别名 {matched_name} 匹配 cid={cid}",
+                                flush=True,
+                            )
                     time.sleep(args.delay)
                 if cid is None:
                     missing += 1

@@ -43,6 +43,37 @@ SUBJECT_TO_FILE = {"物理类": "physics", "历史类": "history"}
 FILE_TO_SUBJECT = {v: k for k, v in SUBJECT_TO_FILE.items()}
 SUBJECT_REQUIREMENT_TERMS = ("不限", "化学", "生物", "思想政治", "政治", "地理")
 
+# JSZS plan pages use current school names. Older Jiangsu official cutoff files
+# can use pre-rename names, so these aliases let fetched JSZS headers attach to
+# the official cutoff group codes and ranks.
+JSZS_SCHOOL_NAME_ALIASES = {
+    "安徽师范大学皖江学院": ["芜湖学院"],
+    "北京工商大学嘉华学院": ["北京金融科技学院"],
+    "北京理工大学珠海学院": ["珠海科技学院"],
+    "北京师范大学-香港浸会大学联合国际学院": ["北师香港浸会大学"],
+    "滨州学院": ["山东航空学院"],
+    "常熟理工学院": ["苏州工学院"],
+    "赣南医学院": ["赣南医科大学"],
+    "桂林医学院": ["桂林医科大学"],
+    "合肥学院": ["合肥大学"],
+    "海南医学院": ["海南医科大学"],
+    "湖南理工学院南湖学院": ["岳阳学院"],
+    "湖南文理学院芙蓉学院": ["常德学院"],
+    "吉林化工学院": ["吉林化工大学"],
+    "嘉兴学院": ["嘉兴大学"],
+    "蚌埠医学院": ["蚌埠医科大学"],
+    "牡丹江医学院": ["牡丹江医科大学"],
+    "南昌工程学院": ["江西水利电力大学"],
+    "绍兴文理学院元培学院": ["绍兴理工学院"],
+    "四川外国语大学成都学院": ["成都外国语学院"],
+    "潍坊医学院": ["山东第二医科大学"],
+    "云南大学滇池学院": ["滇池学院"],
+    "云南艺术学院文华学院": ["昆明传媒学院"],
+    "吉首大学张家界学院": ["张家界学院"],
+    "浙江科技学院": ["浙江科技大学"],
+    "重庆科技学院": ["重庆科技大学"],
+}
+
 FIELDNAMES = [
     "year",
     "subject_category",
@@ -582,6 +613,8 @@ def _official_by_school_group(official_groups: dict[tuple, dict]) -> dict[tuple,
         school_name = clean_text(row.get("school_name") or "")
         if school_name:
             index[(year, subject_category, school_name, sg_name)] = row
+            for alias in JSZS_SCHOOL_NAME_ALIASES.get(school_name, []):
+                index[(year, subject_category, clean_text(alias), sg_name)] = row
     return index
 
 
