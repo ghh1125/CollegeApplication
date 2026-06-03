@@ -67,7 +67,8 @@ def _groups_df(groups: list[dict]) -> pd.DataFrame:
             "再选要求": (g.get("sg_info", "") or "").split("再选", 1)[-1] if "再选" in (g.get("sg_info") or "") else (g.get("sg_info") or ""),
             "专业匹配": g.get("_major_tag", ""),
             **history_rank_columns(g),
-            "投档位次": gi.get("weighted_avg"),
+            "加权门槛位次": gi.get("weighted_avg"),
+            "gap位次": gi.get("gap"),
             "组内专业": inner,
         })
     return pd.DataFrame(rows)
@@ -84,7 +85,8 @@ def render(province: str = "jiangsu") -> None:
     st.info(
         "**江苏为「院校专业组」模式**：本科批按 40 个院校专业组填报，投档检索的是专业组而非单个专业。"
         "本推荐基于江苏省教育考试院官方公布的 2023–2025 院校专业组投档线（物理类/历史类分列）。"
-        "有招生计划明细的组会展开组内专业；暂无明细的组标注「待补充」，专业偏好仅作排序提示、不做硬性筛选。"
+        "「专业组」是一组专业的打包志愿，表格里的「组内专业」是该组包含或已解析到的专业；"
+        "暂无明细的组标注「待补充」，专业偏好仅作排序提示、不做硬性筛选。"
         "**最终填报请以《江苏招生考试》招生计划专刊和省考试院官方信息为准。**"
     )
 
@@ -167,7 +169,14 @@ def render(province: str = "jiangsu") -> None:
             "专业组": st.column_config.TextColumn(width="small"),
             "再选要求": st.column_config.TextColumn(width="small"),
             "专业匹配": st.column_config.TextColumn(width="small"),
-            "投档位次": st.column_config.NumberColumn(width="small"),
+            "加权门槛位次": st.column_config.NumberColumn(
+                width="small",
+                help="不是单年官方投档线，是按已有 2025/2024/2023 专业组投档最低位次加权后的门槛位次。",
+            ),
+            "gap位次": st.column_config.NumberColumn(
+                width="small",
+                help="加权门槛位次 - 考生位次；正数表示位次更安全，负数表示还差这些位次。",
+            ),
             "组内专业": st.column_config.TextColumn(width="large"),
         },
     )
@@ -178,6 +187,8 @@ def render(province: str = "jiangsu") -> None:
             st.dataframe(_groups_df(reserve), width="stretch", hide_index=True)
 
     st.caption(
-        "说明：「投档位次」按已有近三年官方院校专业组投档最低位次加权（组门槛），"
-        "权重 2025:0.5 / 2024:0.3 / 2023:0.2。组内专业明细持续补充中。"
+        "说明：「加权门槛位次」= 按已有近三年官方院校专业组投档最低位次加权后的参考门槛，"
+        "权重 2025:0.5 / 2024:0.3 / 2023:0.2；"
+        "「gap位次」= 加权门槛位次 - 你的位次，正数越大越安全，负数表示还差。"
+        "江苏填报单位是院校专业组，不是单个专业；进组后才对应组内专业。"
     )
