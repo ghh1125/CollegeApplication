@@ -244,6 +244,11 @@ def render(province: str = "jiangsu") -> None:
 
     stats = reco["stats"]
     st.subheader(f"推荐院校专业组（{first_choice}类）")
+    if main_priority == "专业优先" and preferred_cities:
+        st.info(
+            f"ℹ️ 当前是「专业优先」：先按冲稳保和专业匹配排序，**{('、'.join(preferred_cities))}** 只作同档内的次要排序，"
+            "不会强制排到最前。若希望偏好城市的专业组优先出现，请把主排序改成「城市优先」。"
+        )
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("志愿组数", stats["total"])
     c2.metric("冲", stats["冲"]); c3.metric("稳", stats["稳"])
