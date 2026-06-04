@@ -42,10 +42,11 @@ from src.jiangsu.input.filter import (
     filter_by_subject,
     resolve_school_city,
 )
-from src.jiangsu.allocation.recommend import build_recommendations, history_rank_columns
+from src.jiangsu.allocation.recommend import build_recommendations
 
 FIRST_CHOICES = ["物理", "历史"]
 RESELECT = ["化学", "生物", "思想政治", "地理"]
+YEARS = (2025, 2024, 2023)  # 各年独立成块；2025 为主推荐
 PRIORITIES = ["请选择…", "学校优先", "城市优先", "专业优先"]
 _SUBJECT_ALIAS = {"政治": "思想政治", "思政": "思想政治"}
 
@@ -101,12 +102,41 @@ def _groups_df(groups: list[dict]) -> pd.DataFrame:
             "专业组": f"{g.get('sg_name', '')}组",
             "再选要求": sg_info.split("再选", 1)[-1] if "再选" in sg_info else sg_info,
             "专业匹配": g.get("_major_tag", ""),
-            **history_rank_columns(g),
-            "均值位次": gi.get("weighted_avg"),
+            "投档位次": gi.get("weighted_avg"),
             "gap": gi.get("gap"),
             "组内专业": inner,
         })
     return pd.DataFrame(rows)
+
+
+def _render_year_block(reco: dict, year: int, primary: bool) -> None:
+    """Render one year's 院校专业组 recommendation (metrics + table + reserve)."""
+    stats = reco["stats"]
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("志愿组数", stats["total"])
+    c2.metric("冲", stats["冲"]); c3.metric("稳", stats["稳"])
+    c4.metric("保", stats["保"]); c5.metric("垫", stats["垫"])
+    if not primary:
+        st.caption(f"⚠️ {year} 年为历史参考：这是当年的专业组与投档位次，组的编排与今年不同，**不能直接照填**，仅供看趋势。")
+    st.dataframe(
+        _groups_df(reco["volunteers"]), width="stretch", hide_index=True, height=520,
+        column_config={
+            "序号": st.column_config.NumberColumn(width="small"),
+            "层级": st.column_config.TextColumn(width="small"),
+            "学校": st.column_config.TextColumn(width="medium"),
+            "城市": st.column_config.TextColumn(width="small"),
+            "专业组": st.column_config.TextColumn(width="small"),
+            "再选要求": st.column_config.TextColumn(width="small"),
+            "专业匹配": st.column_config.TextColumn(width="small"),
+            "投档位次": st.column_config.NumberColumn(width="small", help=f"{year} 年官方该专业组投档最低位次（进组门槛）"),
+            "gap": st.column_config.NumberColumn(width="small", help="投档位次 - 你的位次，正数更安全"),
+            "组内专业": st.column_config.TextColumn(width="large"),
+        },
+    )
+    reserve = reco.get("reserve", [])
+    if reserve:
+        with st.expander(f"{year} 备选池（高危冲 / 数据不足，{len(reserve)} 组）"):
+            st.dataframe(_groups_df(reserve), width="stretch", hide_index=True)
 
 
 def _group_as_volunteer(g: dict) -> dict:
@@ -187,6 +217,7 @@ def render(province: str = "jiangsu") -> None:
 
     # ─── 推荐管线（门控就绪 + 主排序已选 + 再选2门才跑）────────────────────
     reco = None
+    recos = None
     if form_ready and main_priority != "请选择…" and len(reselect) == 2:
         try:
             profile = StudentProfile(
@@ -201,20 +232,24 @@ def render(province: str = "jiangsu") -> None:
         except Exception as e:  # noqa: BLE001
             st.error(f"输入有误：{e}"); st.stop()
 
+        # 江苏专业组逐年重新编排、组号跨年不可比，故每年单独成一份推荐（不加权）
+        recos = {}
         with get_conn("jiangsu") as conn:
-            eligible, _ = filter_by_subject(profile, year=2025, conn=conn)
-            final, _ = filter_by_constraints(eligible, profile)
-            if school_levels:
-                final, _ = filter_by_school_level(final, school_levels)
-            if preferred_cities and main_priority == "城市优先":
-                final, _ = filter_by_city(final, preferred_cities)
-            reco = build_recommendations(
-                final, profile, main_priority=main_priority,
-                preferred_majors=preferred_majors, preferred_categories=[], preferred_schools=[],
-                preferred_cities=preferred_cities or None, risk_preference=risk_preference,
-                year=2025, conn=conn,
-            )
-        # 顾问上下文：供 AI 解读已生成的方案
+            for _Y in YEARS:
+                _elig, _ = filter_by_subject(profile, year=_Y, conn=conn)
+                _final, _ = filter_by_constraints(_elig, profile)
+                if school_levels:
+                    _final, _ = filter_by_school_level(_final, school_levels)
+                if preferred_cities and main_priority == "城市优先":
+                    _final, _ = filter_by_city(_final, preferred_cities)
+                recos[_Y] = build_recommendations(
+                    _final, profile, main_priority=main_priority,
+                    preferred_majors=preferred_majors, preferred_categories=[], preferred_schools=[],
+                    preferred_cities=preferred_cities or None, risk_preference=risk_preference,
+                    year=_Y, conn=conn,
+                )
+        reco = recos[YEARS[0]]  # 2025 为主推荐
+        # 顾问上下文：供 AI 解读（用 2025 主方案）
         st.session_state["_js_advisor_ctx"] = {
             "volunteers": [_group_as_volunteer(g) for g in reco["volunteers"]],
             "stats": reco["stats"],
@@ -232,52 +267,36 @@ def render(province: str = "jiangsu") -> None:
     # ─── AI 对话顾问 ─────────────────────────────────────────────────────────
     _render_advisor(_api_key, _profile_ctx, main_priority)
 
-    # ─── 结果 ────────────────────────────────────────────────────────────────
+    # ─── 结果：每年单独成块（不加权）──────────────────────────────────────
     if not form_ready:
         return  # 门控未开：只显示对话，先收集参数
-    if reco is None:
+    if recos is None:
         if main_priority == "请选择…":
             st.warning("请在左侧选择「主排序」，或直接和上方小明对话。")
         elif len(reselect) != 2:
             st.warning("请在左侧选择恰好 2 门再选科目。")
         return
 
-    stats = reco["stats"]
     st.subheader(f"推荐院校专业组（{first_choice}类）")
+    st.info(
+        "江苏专业组**每年重新编排、组号跨年不是同一个组**，所以不做跨年加权，而是按年份分别给出：\n\n"
+        "- **2025 推荐**：今年你实际要填报的 40 个院校专业组方案\n"
+        "- **2024 / 2023 参考**：当年同位次能选到的组，帮你看趋势，**不能直接照填**"
+    )
     if main_priority == "专业优先" and preferred_cities:
         st.info(
             f"ℹ️ 当前是「专业优先」：先按冲稳保和专业匹配排序，**{('、'.join(preferred_cities))}** 只作同档内的次要排序，"
             "不会强制排到最前。若希望偏好城市的专业组优先出现，请把主排序改成「城市优先」。"
         )
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("志愿组数", stats["total"])
-    c2.metric("冲", stats["冲"]); c3.metric("稳", stats["稳"])
-    c4.metric("保", stats["保"]); c5.metric("垫", stats["垫"])
 
-    st.dataframe(
-        _groups_df(reco["volunteers"]), width="stretch", hide_index=True, height=560,
-        column_config={
-            "序号": st.column_config.NumberColumn(width="small"),
-            "层级": st.column_config.TextColumn(width="small"),
-            "学校": st.column_config.TextColumn(width="medium"),
-            "城市": st.column_config.TextColumn(width="small"),
-            "专业组": st.column_config.TextColumn(width="small"),
-            "再选要求": st.column_config.TextColumn(width="small"),
-            "专业匹配": st.column_config.TextColumn(width="small"),
-            "均值位次": st.column_config.NumberColumn(width="small", help="该专业组最新一年(2025)官方投档最低位次，作为进组门槛"),
-            "gap": st.column_config.NumberColumn(width="small", help="均值位次 - 你的位次，正数更安全"),
-            "组内专业": st.column_config.TextColumn(width="large"),
-        },
-    )
-
-    reserve = reco.get("reserve", [])
-    if reserve:
-        with st.expander(f"备选池（高危冲 / 数据不足，{len(reserve)} 组）"):
-            st.dataframe(_groups_df(reserve), width="stretch", hide_index=True)
+    tab25, tab24, tab23 = st.tabs(["2025 推荐（按此填报）", "2024 参考", "2023 参考"])
+    for _tab, _Y in ((tab25, 2025), (tab24, 2024), (tab23, 2023)):
+        with _tab:
+            _render_year_block(recos[_Y], _Y, primary=(_Y == 2025))
 
     st.caption(
-        "说明：江苏填报单位是院校专业组（非单专业）。江苏专业组每年重新编排、组号跨年不可比，"
-        "因此冲稳保按**最新一年(2025)官方投档位次**判定；2024/2023 位次列仅作参考。组内专业明细持续补充中。"
+        "说明：江苏填报单位是院校专业组（非单专业）。「投档位次」为各专业组当年官方投档最低位次（进组门槛），"
+        "「gap」= 投档位次 − 你的位次。组内专业明细持续补充中，最终以官方招生计划为准。"
     )
 
 
