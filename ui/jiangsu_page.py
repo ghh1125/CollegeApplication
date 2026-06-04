@@ -322,13 +322,14 @@ def render(province: str = "jiangsu") -> None:
     _v25 = recos[2025]["volunteers"]
     if _v25:
         st.divider()
-        st.markdown("**📈 组内专业历年位次趋势**")
+        st.markdown("**📈 某个专业近三年要多少位次能进**")
         st.caption(
-            "专业本身跨年稳定（计算机就是计算机，只是每年被分到不同组号），所以专业的历年位次可比、能看趋势。"
-            "下表是某专业近三年「进该校该专业所在组」需要的投档位次（同一年里同组专业的投档线相同）。"
+            "选一个学校的专业组，下面会列出组里每个专业最近三年的录取位次，"
+            "帮你看这个专业是越来越难考（位次要求越来越靠前）还是越来越好考。"
+            "注：江苏按「专业组」整体投档，所以同一年里同一个组的专业，录取位次是一样的。"
         )
         _labels = [f"{g.get('volunteer_no')}. {g['school_name']} {g.get('sg_name','')}组" for g in _v25]
-        _sel = st.selectbox("选择 2025 推荐里的一个专业组，查看组内专业三年趋势", _labels, key="js_trend_sel")
+        _sel = st.selectbox("选一个学校专业组", _labels, key="js_trend_sel")
         _gi = _labels.index(_sel) if _sel in _labels else 0
         _tdf = _member_trends_df(_v25[_gi])
         if _tdf.empty:
