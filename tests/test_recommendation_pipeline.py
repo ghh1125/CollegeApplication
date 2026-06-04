@@ -556,7 +556,10 @@ class JiangsuRecommendationTests(unittest.TestCase):
 
         group = result["volunteers"][0]
         self.assertEqual(group["special_group"], "1106-10")
-        self.assertEqual(group["gap_info"]["data_years"], 3)
+        # 江苏专业组逐年重新编号，跨年不可比 → 定档只用最新一年(2025)官方投档位次
+        self.assertEqual(group["gap_info"]["data_years"], 1)
+        self.assertEqual(group["gap_info"]["weighted_avg"], 29638)  # 2025 值，非三年加权
+        # 展示仍保留三年（仅作参考，不参与定档）
         self.assertEqual(
             {row["year"]: row["min_rank"] for row in group["history"]},
             {2025: 29638, 2024: 27764, 2023: 30000},

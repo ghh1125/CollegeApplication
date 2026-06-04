@@ -116,8 +116,12 @@ def _attach_group_history(
             item["history"] = [dict(record) for record in group_history[key]]
         else:
             item["history"] = item.get("history", [])
+        # 江苏专业组逐年重新编号，同一组号跨年不是同一组（如西交03组：2025位次3556、
+        # 2024位次12577），跨年加权会把不可比的组混在一起、算错冲稳保。
+        # 因此只用「最新一年」的官方投档位次定档（history 已按年份降序）。
+        _latest = next((h for h in item["history"] if h.get("min_rank")), None)
         item["gap_info"] = calculate_gap(
-            student_rank, item["history"], year_weights=JIANGSU_YEAR_WEIGHTS
+            student_rank, [_latest] if _latest else [], year_weights=JIANGSU_YEAR_WEIGHTS
         )
         enriched.append(item)
     return enriched
@@ -194,8 +198,11 @@ def _aggregate_groups(
             "_members": members,
             "_member_count": len(members),
         }
+        # 江苏专业组逐年重新编号，同一组号跨年不可比（如西交03组 2025位次3556、
+        # 2024位次12577），跨年加权会算错冲稳保。仅用最新一年官方投档位次定档。
+        _latest = next((h for h in group_history if h.get("min_rank")), None)
         group["gap_info"] = calculate_gap(
-            student_rank, group_history, year_weights=JIANGSU_YEAR_WEIGHTS
+            student_rank, [_latest] if _latest else [], year_weights=JIANGSU_YEAR_WEIGHTS
         )
         groups.append(group)
     return groups

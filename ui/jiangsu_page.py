@@ -264,7 +264,7 @@ def render(province: str = "jiangsu") -> None:
             "专业组": st.column_config.TextColumn(width="small"),
             "再选要求": st.column_config.TextColumn(width="small"),
             "专业匹配": st.column_config.TextColumn(width="small"),
-            "均值位次": st.column_config.NumberColumn(width="small", help="近三年官方专业组投档最低位次加权门槛"),
+            "均值位次": st.column_config.NumberColumn(width="small", help="该专业组最新一年(2025)官方投档最低位次，作为进组门槛"),
             "gap": st.column_config.NumberColumn(width="small", help="均值位次 - 你的位次，正数更安全"),
             "组内专业": st.column_config.TextColumn(width="large"),
         },
@@ -276,8 +276,8 @@ def render(province: str = "jiangsu") -> None:
             st.dataframe(_groups_df(reserve), width="stretch", hide_index=True)
 
     st.caption(
-        "说明：江苏填报单位是院校专业组（非单专业）；「均值位次」按 2025:0.5 / 2024:0.3 / 2023:0.2 加权。"
-        "组内专业明细持续补充中。"
+        "说明：江苏填报单位是院校专业组（非单专业）。江苏专业组每年重新编排、组号跨年不可比，"
+        "因此冲稳保按**最新一年(2025)官方投档位次**判定；2024/2023 位次列仅作参考。组内专业明细持续补充中。"
     )
 
 
