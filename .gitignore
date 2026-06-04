@@ -18,8 +18,9 @@ data/jiangsu/raw/*.log
 data/jiangsu/raw/official/downloads/
 data/jiangsu/raw/plan_sources/
 
-# 上海：当前为 fixture 验证数据，真实数据由 codex 产出后再调整
+# 上海：提交标准化 raw CSV；下载缓存和静态 JSON 不入库
 data/shanghai/college.db
-data/shanghai/raw/official/
-data/shanghai/raw/plan_details/
+data/shanghai/raw/official/downloads/
+data/shanghai/raw/plan_api/
+data/shanghai/raw/plan_sources/
 data/shanghai/raw/*.log
