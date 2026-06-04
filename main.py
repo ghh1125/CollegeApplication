@@ -55,7 +55,7 @@ st.set_page_config(page_title="高考志愿推荐系统", page_icon="🎓", layo
 _PROVINCE_GROUPS = [
     ("华东", [
         ("浙江", "zhejiang", True),
-        ("上海", "shanghai", False),
+        ("上海", "shanghai", True),
         ("江苏", "jiangsu", True),
         ("安徽", "anhui", False),
         ("福建", "fujian", False),
@@ -140,6 +140,11 @@ _selected_province: str = st.session_state["_province"]
 if _selected_province == "jiangsu":
     from ui.jiangsu_page import render as _render_jiangsu
     _render_jiangsu()
+    st.stop()
+
+if _selected_province == "shanghai":
+    from ui.shanghai_page import render as _render_shanghai
+    _render_shanghai()
     st.stop()
 
 # Verify province has data; if not (shouldn't happen via UI, but guard anyway)
