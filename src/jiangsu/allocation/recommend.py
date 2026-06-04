@@ -22,11 +22,43 @@ from src.common.ranking.rank import (
     calculate_gap,
     load_all_history_data,
     major_tag_label,
+    normalize_major_name,
     sort_candidates,
 )
 from src.jiangsu.config import JIANGSU_YEAR_WEIGHTS, PROVINCE_CONFIG
 
 HISTORY_RANK_YEARS = (2025, 2024, 2023)
+
+
+def load_major_trends(
+    conn: Any, subject_category: str,
+) -> dict[tuple[str, str], dict[int, int]]:
+    """Per-major 录取位次 across years, keyed by (school_code, normalized major).
+
+    江苏专业组逐年重排，但「专业」本身跨年稳定（计算机就是计算机，只是被分到不同组号）。
+    因此专业的历年位次趋势是可比的——按 学校+专业 追踪，跨组聚合。
+    每年同一专业若有多行，取最小位次（最难、最有代表性的那条）。
+    """
+    rows = conn.execute(
+        """
+        SELECT year, school_code, major_name, min_rank
+        FROM historical_cutoff
+        WHERE subject_category = ? AND major_code != '__GROUP__'
+              AND min_rank IS NOT NULL
+        """,
+        (subject_category,),
+    ).fetchall()
+    trends: dict[tuple[str, str], dict[int, int]] = {}
+    for year, school_code, major_name, min_rank in rows:
+        y = _parse_int(year)
+        r = _parse_int(min_rank)
+        if y is None or r is None:
+            continue
+        key = (str(school_code or ""), normalize_major_name(major_name))
+        by_year = trends.setdefault(key, {})
+        if y not in by_year or r < by_year[y]:
+            by_year[y] = r
+    return trends
 
 
 def _parse_int(value: Any) -> int | None:
@@ -246,6 +278,7 @@ def build_recommendations(
         enriched = enrich_with_profiles(enriched, db_conn)
         group_history = load_group_history(db_conn, year, profile.subject_category)
         enriched = _attach_group_history(enriched, group_history, profile.rank)
+        trends = load_major_trends(db_conn, profile.subject_category)
 
         # 2. aggregate 专业 → 专业组
         groups = _aggregate_groups(
@@ -282,6 +315,11 @@ def build_recommendations(
                     m["_major_tag"] = major_tag_label(
                         m, preferred_majors=preferred_majors,
                         preferred_categories=preferred_categories, expanded_major_names=expanded)
+                    # 专业历年位次趋势（按 学校+专业 跨组追踪，专业跨年稳定可比）
+                    if m.get("major_code") != "__GROUP__":
+                        _key = (str(m.get("school_code") or ""),
+                                normalize_major_name(m.get("major_name")))
+                        m["_trend"] = trends.get(_key, {})
         return result
 
     if conn is not None:

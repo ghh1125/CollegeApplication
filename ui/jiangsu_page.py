@@ -109,6 +109,30 @@ def _groups_df(groups: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _member_trends_df(group: dict) -> pd.DataFrame:
+    """组内每个专业的三年位次趋势（按 学校+专业 跨组追踪）。"""
+    rows = []
+    for m in group.get("_members", []):
+        if m.get("major_code") == "__GROUP__":
+            continue
+        name = (m.get("major_name") or "").strip()
+        if not name or "合计" in name:
+            continue
+        t = m.get("_trend", {}) or {}
+        r25, r24, r23 = t.get(2025), t.get(2024), t.get(2023)
+        # 趋势：比较最早与最新有效年（位次变小=更难↓，变大=更易↑）
+        seq = [(y, t.get(y)) for y in (2023, 2024, 2025) if t.get(y)]
+        arrow = ""
+        if len(seq) >= 2:
+            first, last = seq[0][1], seq[-1][1]
+            arrow = "↓更难" if last < first else ("↑更易" if last > first else "→持平")
+        rows.append({"专业": name, "2025位次": r25, "2024位次": r24, "2023位次": r23, "趋势": arrow})
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df = df.drop_duplicates(subset=["专业"]).reset_index(drop=True)
+    return df
+
+
 def _render_year_block(reco: dict, year: int, primary: bool) -> None:
     """Render one year's 院校专业组 recommendation (metrics + table + reserve)."""
     stats = reco["stats"]
@@ -293,6 +317,33 @@ def render(province: str = "jiangsu") -> None:
     for _tab, _Y in ((tab25, 2025), (tab24, 2024), (tab23, 2023)):
         with _tab:
             _render_year_block(recos[_Y], _Y, primary=(_Y == 2025))
+
+    # ─── 组内专业历年位次趋势 ────────────────────────────────────────────────
+    _v25 = recos[2025]["volunteers"]
+    if _v25:
+        st.divider()
+        st.markdown("**📈 组内专业历年位次趋势**")
+        st.caption(
+            "专业本身跨年稳定（计算机就是计算机，只是每年被分到不同组号），所以专业的历年位次可比、能看趋势。"
+            "下表是某专业近三年「进该校该专业所在组」需要的投档位次（同一年里同组专业的投档线相同）。"
+        )
+        _labels = [f"{g.get('volunteer_no')}. {g['school_name']} {g.get('sg_name','')}组" for g in _v25]
+        _sel = st.selectbox("选择 2025 推荐里的一个专业组，查看组内专业三年趋势", _labels, key="js_trend_sel")
+        _gi = _labels.index(_sel) if _sel in _labels else 0
+        _tdf = _member_trends_df(_v25[_gi])
+        if _tdf.empty:
+            st.info("该组暂无组内专业明细（待补充）。")
+        else:
+            st.dataframe(
+                _tdf, width="stretch", hide_index=True,
+                column_config={
+                    "专业": st.column_config.TextColumn(width="large"),
+                    "2025位次": st.column_config.NumberColumn(width="small"),
+                    "2024位次": st.column_config.NumberColumn(width="small"),
+                    "2023位次": st.column_config.NumberColumn(width="small"),
+                    "趋势": st.column_config.TextColumn(width="small", help="2023→2025 位次走向：↓更难 ↑更易"),
+                },
+            )
 
     st.caption(
         "说明：江苏填报单位是院校专业组（非单专业）。「投档位次」为各专业组当年官方投档最低位次（进组门槛），"
