@@ -15,6 +15,7 @@ from src.common.input.llm import REGION_EXPANSIONS
 from src.shanghai.config import PROVINCE_CONFIG
 from src.shanghai.input.profile import (
     SELECT_SUBJECTS,
+    Constraints,
     CityPreference,
     MajorPreference,
     Preferences,
@@ -46,10 +47,14 @@ def build_profile(form: dict) -> StudentProfile:
         selected_subjects=list(form.get("selected_subjects") or []),
         risk_preference=form.get("risk_preference", "均衡"),
         preferences=Preferences(
-            cities=CityPreference(preferred=list(form.get("preferred_cities") or [])),
+            cities=CityPreference(
+                preferred=list(form.get("preferred_cities") or []),
+                excluded_regions=list(form.get("excluded_regions") or []),
+            ),
             majors=MajorPreference(preferred_majors=list(form.get("preferred_majors") or [])),
             schools=SchoolPreference(preferred_levels=list(form.get("school_levels") or [])),
         ),
+        constraints=Constraints(accept_private=bool(form.get("accept_private", True))),
     )
 
 
@@ -88,6 +93,8 @@ def recommend_for_years(form: dict, years: tuple[int, ...] = YEARS) -> dict[int,
                 preferred_cities=cities or None, risk_preference=risk,
                 year=year, conn=conn,
             )
+            if year == years[0]:
+                recos[year]["_pool"] = final  # 候选池：通过筛选的全部专业（含所属组）
     return recos
 
 
@@ -147,6 +154,17 @@ def member_trend_rows(group: dict) -> list[dict]:
         rows.append({"专业": name, "2025位次": t.get(2025), "2024位次": t.get(2024),
                      "2023位次": t.get(2023), "趋势": arrow})
     return rows
+
+
+def pool_rows(programs: list[dict]) -> list[dict]:
+    """候选池：通过筛选的全部专业（含所属院校专业组）。"""
+    return [{
+        "学校": p.get("school_name", ""),
+        "城市": resolve_school_city(p.get("school_name", "")),
+        "专业组": f"{p.get('sg_name', '')}组",
+        "专业": p.get("major_name", ""),
+        "选科要求": p.get("sg_info", "") or "不限",
+    } for p in programs]
 
 
 def group_label(g: dict) -> str:

@@ -22,44 +22,10 @@ st.set_page_config(page_title="高考志愿推荐系统", page_icon="🎓", layo
 # ─── 省份定义 ──────────────────────────────────────────────────────────────────
 
 _PROVINCE_GROUPS = [
-    ("华东", [
+    ("已支持省份", [
         ("浙江", "zhejiang", True),
         ("上海", "shanghai", True),
         ("江苏", "jiangsu", True),
-        ("安徽", "anhui", False),
-        ("福建", "fujian", False),
-        ("山东", "shandong", False),
-        ("江西", "jiangxi", False),
-    ]),
-    ("华南 / 华中", [
-        ("广东", "guangdong", False),
-        ("湖南", "hunan", False),
-        ("湖北", "hubei", False),
-        ("河南", "henan", False),
-        ("广西", "guangxi", False),
-        ("海南", "hainan", False),
-    ]),
-    ("华北 / 东北", [
-        ("北京", "beijing", False),
-        ("天津", "tianjin", False),
-        ("河北", "hebei", False),
-        ("山西", "shanxi", False),
-        ("辽宁", "liaoning", False),
-        ("吉林", "jilin", False),
-        ("黑龙江", "heilongjiang", False),
-        ("内蒙古", "neimenggu", False),
-    ]),
-    ("西部", [
-        ("重庆", "chongqing", False),
-        ("四川", "sichuan", False),
-        ("陕西", "shaanxi", False),
-        ("云南", "yunnan", False),
-        ("贵州", "guizhou", False),
-        ("甘肃", "gansu", False),
-        ("新疆", "xinjiang", False),
-        ("宁夏", "ningxia", False),
-        ("青海", "qinghai", False),
-        ("西藏", "xizang", False),
     ]),
 ]
 

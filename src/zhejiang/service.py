@@ -70,11 +70,14 @@ def build_profile(form: dict) -> StudentProfile:
         priority_mode=form.get("main_priority", "均衡模式"),
         risk_preference=form.get("risk_preference", "均衡"),
         preferences=Preferences(
-            cities=CityPreference(preferred=list(form.get("preferred_cities") or [])),
+            cities=CityPreference(
+                preferred=list(form.get("preferred_cities") or []),
+                excluded_regions=list(form.get("excluded_regions") or []),
+            ),
             majors=MajorPreference(preferred_majors=list(form.get("preferred_majors") or [])),
             schools=SchoolPreference(preferred_levels=list(form.get("school_levels") or [])),
         ),
-        constraints=Constraints(),
+        constraints=Constraints(accept_private=bool(form.get("accept_private", True))),
     )
 
 
@@ -110,6 +113,7 @@ def recommend(form: dict) -> dict:
             preferred_cities=cities or None, risk_preference=risk,
             total=PROVINCE_CONFIG.total_volunteers, conn=conn,
         )
+    reco["_pool"] = final  # 候选池：通过筛选的全部学校+专业
     return reco
 
 

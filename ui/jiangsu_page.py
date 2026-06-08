@@ -21,8 +21,10 @@ from src.common.input.llm import (
     should_search,
 )
 from src.common.input.user_profile import QUESTIONS as _PF_QUESTIONS, analyze_questionnaire
+from src.common.reference import REGION_PROVINCES
 from src.jiangsu import service as svc
 
+EXCLUDE_OPTIONS = sorted({p for ps in REGION_PROVINCES.values() for p in ps})
 FIRST_CHOICES = ["物理", "历史"]
 RESELECT_OPTIONS = ["化学", "生物", "思想政治", "地理"]
 PRIORITIES = ["请选择…", "学校优先", "城市优先", "专业优先"]
@@ -178,6 +180,8 @@ def _collect_form() -> dict:
         "preferred_majors": [s.strip() for s in st.session_state.get("js_majors", "").split(",") if s.strip()],
         "school_levels": st.session_state.get("js_levels", []),
         "preferred_cities": [c.strip() for c in st.session_state.get("js_cities", "").split(",") if c.strip()],
+        "accept_private": st.session_state.get("js_private", True),
+        "excluded_regions": st.session_state.get("js_excl", []),
     }
 
 
@@ -202,6 +206,8 @@ def _render_working() -> None:
             st.text_input("想读的专业方向（逗号分隔）", key="js_majors", placeholder="如 计算机, 金融")
             st.multiselect("学校层次", ["985", "211", "双一流"], key="js_levels")
             st.text_input("偏好城市（逗号分隔）", key="js_cities", placeholder="如 南京, 苏州")
+            st.checkbox("接受民办院校", value=True, key="js_private")
+            st.multiselect("排除省份（不想去的）", EXCLUDE_OPTIONS, key="js_excl")
         else:
             st.divider()
             st.info("先在右侧用一句话告诉小明你的情况，他帮你填好；填好后这里可手动微调。")
@@ -328,6 +334,11 @@ def _render_results(recos: dict, form: dict) -> None:
     for tab, year in zip(tabs, (2025, 2024, 2023)):
         with tab:
             _render_year_block(recos[year], year, primary=(year == 2025))
+
+    pool = recos[2025].get("_pool", [])
+    if pool:
+        with st.expander(f"候选池（符合你筛选条件的全部专业，{len(pool)} 条）"):
+            st.dataframe(pd.DataFrame(svc.pool_rows(pool)), width="stretch", hide_index=True)
 
     v25 = recos[2025]["volunteers"]
     if v25:
