@@ -98,6 +98,21 @@ def _render_profiling() -> None:
     _render_questionnaire("js", api_key)
 
 
+def _collect_form() -> dict:
+    return {
+        "rank": st.session_state.get("js_rank", 8000),
+        "first_choice": st.session_state.get("js_first", "物理"),
+        "selected_subjects": st.session_state.get("js_reselect", []),
+        "main_priority": st.session_state.get("js_priority", "请选择…"),
+        "risk_preference": st.session_state.get("js_risk", "均衡"),
+        "preferred_majors": [s.strip() for s in st.session_state.get("js_majors", "").split(",") if s.strip()],
+        "school_levels": st.session_state.get("js_levels", []),
+        "preferred_cities": [c.strip() for c in st.session_state.get("js_cities", "").split(",") if c.strip()],
+        "accept_private": st.session_state.get("js_private", True),
+        "excluded_regions": st.session_state.get("js_excl", []),
+    }
+
+
 def _render_working() -> None:
     form_filled = bool(st.session_state.get("js_form_filled", False))
 

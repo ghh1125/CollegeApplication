@@ -109,6 +109,21 @@ def _render_profiling() -> None:
     _render_questionnaire("sh", api_key)
 
 
+def _collect_form() -> dict:
+    """从 session 读出表单值（AI 填或手填都存在 sh_ 键上）。"""
+    return {
+        "rank": st.session_state.get("sh_rank", 8000),
+        "selected_subjects": st.session_state.get("sh_subjects", []),
+        "main_priority": st.session_state.get("sh_priority", "请选择…"),
+        "risk_preference": st.session_state.get("sh_risk", "均衡"),
+        "preferred_majors": [s.strip() for s in st.session_state.get("sh_majors", "").split(",") if s.strip()],
+        "school_levels": st.session_state.get("sh_levels", []),
+        "preferred_cities": [c.strip() for c in st.session_state.get("sh_cities", "").split(",") if c.strip()],
+        "accept_private": st.session_state.get("sh_private", True),
+        "excluded_regions": st.session_state.get("sh_excl", []),
+    }
+
+
 def _render_working() -> None:
     form_filled = bool(st.session_state.get("sh_form_filled", False))
 

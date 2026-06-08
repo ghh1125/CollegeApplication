@@ -96,6 +96,21 @@ def _render_profiling() -> None:
     _render_questionnaire("zj", api_key)
 
 
+def _collect_form() -> dict:
+    return {
+        "rank": st.session_state.get("zj_rank", 8000),
+        "total_score": st.session_state.get("zj_total_score") or None,
+        "selected_subjects": st.session_state.get("zj_subjects", []),
+        "main_priority": st.session_state.get("zj_priority", "请选择…"),
+        "risk_preference": st.session_state.get("zj_risk", "均衡"),
+        "preferred_majors": [s.strip() for s in st.session_state.get("zj_majors", "").split(",") if s.strip()],
+        "school_levels": st.session_state.get("zj_levels", []),
+        "preferred_cities": [c.strip() for c in st.session_state.get("zj_cities", "").split(",") if c.strip()],
+        "accept_private": st.session_state.get("zj_private", True),
+        "excluded_regions": st.session_state.get("zj_excl", []),
+    }
+
+
 def _render_working() -> None:
     form_filled = bool(st.session_state.get("zj_form_filled", False))
 
