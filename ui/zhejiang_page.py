@@ -20,7 +20,7 @@ from src.common.input.llm import (
     search_web,
     should_search,
 )
-from src.common.input.user_profile import QUESTIONS as _PF_QUESTIONS, analyze_questionnaire
+from ui.questionnaire import render as _render_questionnaire
 from src.common.reference import REGION_PROVINCES
 from src.zhejiang import service as svc
 
@@ -89,98 +89,11 @@ def _render_entry() -> None:
 # ─── ① 兴趣问卷 ──────────────────────────────────────────────────────────────
 
 def _render_profiling() -> None:
-    st.subheader("① 兴趣问卷 · 帮你找专业方向")
     with st.sidebar:
         st.header("🔑 AI 设置")
         api_key = (st.text_input("百炼 API Key", type="password", placeholder="sk-...", key="zj_api_key").strip() or None)
         st.caption("⚠️ AI 建议仅供参考，由用户自行判断。")
-
-    total = len(_PF_QUESTIONS)
-    step = st.session_state.get("zj_pf_step", 0)
-    answers: dict = st.session_state.setdefault("zj_pf_answers", {})
-
-    nav1, nav2 = st.columns(2)
-    with nav1:
-        if st.button("← 返回入口", key="zj_pf_back"):
-            st.session_state["zj_stage"] = "entry"
-            st.rerun()
-    with nav2:
-        if st.button("跳过问卷，直接填志愿 →", key="zj_pf_skip"):
-            st.session_state["zj_stage"] = "working"
-            st.rerun()
-
-    if step < total:
-        q = _PF_QUESTIONS[step]
-        st.progress(step / total, text=f"第 {step + 1} / {total} 题")
-        st.markdown(f"### {q['question']}")
-        opts = q["options"]
-        labels = [f"{k}. {v}" for k, v in opts.items()]
-        prev = answers.get(q["key"])
-        idx = list(opts).index(prev) if prev in opts else 0
-        choice = st.radio("选一个最接近的", labels, index=idx, key=f"zj_pf_q{step}", label_visibility="collapsed")
-        chosen = choice.split(".", 1)[0]
-        b1, b2, _ = st.columns([1, 1, 5])
-        with b1:
-            if step > 0 and st.button("← 上一题", key=f"zj_pf_prev{step}"):
-                answers[q["key"]] = chosen
-                st.session_state["zj_pf_step"] = step - 1
-                st.rerun()
-        with b2:
-            last = step == total - 1
-            if st.button("看推荐 ✓" if last else "下一题 →", type="primary", key=f"zj_pf_next{step}"):
-                answers[q["key"]] = chosen
-                st.session_state["zj_pf_step"] = step + 1
-                st.rerun()
-        return
-
-    st.success("问卷完成！下面是基于你回答的专业方向建议（仅供参考）。")
-    st.caption("方向只是参考，最终读什么由你定。看完点「去填志愿信息」，AI 会帮你填表。")
-    if "zj_pf_result" not in st.session_state:
-        if not api_key:
-            st.warning("请在左侧填入百炼 API Key，以生成专业方向推荐。")
-        else:
-            payload = [
-                {"question": q["question"], "choice": answers.get(q["key"], ""),
-                 "answer": q["options"].get(answers.get(q["key"], ""), "")}
-                for q in _PF_QUESTIONS
-            ]
-            with st.chat_message("assistant"):
-                try:
-                    resp = st.write_stream(analyze_questionnaire(payload, api_key=api_key))
-                except Exception as e:  # noqa: BLE001
-                    resp = f"⚠️ 生成失败：{e}"; st.write(resp)
-            st.session_state["zj_pf_result"] = resp
-    else:
-        with st.chat_message("assistant"):
-            st.write(st.session_state["zj_pf_result"])
-
-    r1, r2, _ = st.columns([1.2, 1.2, 4])
-    with r1:
-        if st.button("↺ 重新答题", key="zj_pf_redo"):
-            for k in ("zj_pf_step", "zj_pf_answers", "zj_pf_result"):
-                st.session_state.pop(k, None)
-            st.rerun()
-    with r2:
-        if st.button("去填志愿信息 →", type="primary", key="zj_pf_to_form"):
-            st.session_state["zj_stage"] = "working"
-            st.rerun()
-
-
-# ─── ② AI 辅助填表 ③ 生成 ④ 改需求 ⑤ 解释 ─────────────────────────────────
-
-def _collect_form() -> dict:
-    return {
-        "rank": st.session_state.get("zj_rank", 8000),
-        "total_score": st.session_state.get("zj_total_score") or None,
-        "selected_subjects": st.session_state.get("zj_subjects", []),
-        "main_priority": st.session_state.get("zj_priority", "请选择…"),
-        "risk_preference": st.session_state.get("zj_risk", "均衡"),
-        "preferred_majors": [s.strip() for s in st.session_state.get("zj_majors", "").split(",") if s.strip()],
-        "school_levels": st.session_state.get("zj_levels", []),
-        "preferred_cities": [c.strip() for c in st.session_state.get("zj_cities", "").split(",") if c.strip()],
-        "accept_private": st.session_state.get("zj_private", True),
-        "excluded_regions": st.session_state.get("zj_excl", []),
-    }
+    _render_questionnaire("zj", api_key)
 
 
 def _render_working() -> None:

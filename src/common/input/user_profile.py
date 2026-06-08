@@ -101,15 +101,18 @@ _SYSTEM = (
 )
 
 
-def analyze_questionnaire(answers: list[dict], api_key: str | None = None):
-    """答卷 → 流式返回专业方向建议。
+def analyze_questionnaire(answers: list[dict], home: str = "", api_key: str | None = None):
+    """答卷 → 流式返回综合建议（专业方向 + 城市 + 填报倾向）。
 
-    answers: [{"question": str, "choice": "A", "answer": str}, ...]
+    answers: [{"question": str, "choice": "A"/"其他", "answer": str}, ...]
+    home: 考生填写的家庭所在城市/省份（用于「离家近」建议），可空。
     """
     lines = ["考生兴趣问卷回答："]
+    if home.strip():
+        lines.append(f"0. 家在：{home.strip()}（给「离家近」类建议时参考）")
     for i, a in enumerate(answers, 1):
-        lines.append(f"{i}. {a['question']} → 选了：{a['answer']}")
-    user_msg = "\n".join(lines) + "\n\n请给出专业方向推荐。"
+        lines.append(f"{i}. {a['question']} → {a['answer']}")
+    user_msg = "\n".join(lines) + "\n\n请给出综合建议。"
     return _stream(
         [{"role": "system", "content": _SYSTEM}, {"role": "user", "content": user_msg}],
         api_key=api_key,

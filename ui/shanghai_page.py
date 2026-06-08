@@ -20,7 +20,7 @@ from src.common.input.llm import (
     search_web,
     should_search,
 )
-from src.common.input.user_profile import QUESTIONS as _PF_QUESTIONS, analyze_questionnaire
+from ui.questionnaire import render as _render_questionnaire
 from src.common.reference import REGION_PROVINCES
 from src.shanghai import service as svc
 
@@ -105,99 +105,8 @@ def _sidebar_api_key(caption: str) -> str | None:
 
 
 def _render_profiling() -> None:
-    st.subheader("① 兴趣问卷 · 帮你找专业方向")
     api_key = _sidebar_api_key("⚠️ AI 建议仅供参考，由用户自行判断。")
-
-    total = len(_PF_QUESTIONS)
-    step = st.session_state.get("sh_pf_step", 0)
-    answers: dict = st.session_state.setdefault("sh_pf_answers", {})
-
-    nav1, nav2 = st.columns(2)
-    with nav1:
-        if st.button("← 返回入口", key="sh_pf_back"):
-            st.session_state["sh_stage"] = "entry"
-            st.rerun()
-    with nav2:
-        if st.button("跳过问卷，直接填志愿 →", key="sh_pf_skip"):
-            st.session_state["sh_stage"] = "working"
-            st.rerun()
-
-    # 答题：一次一题
-    if step < total:
-        q = _PF_QUESTIONS[step]
-        st.progress(step / total, text=f"第 {step + 1} / {total} 题")
-        st.markdown(f"### {q['question']}")
-        opts = q["options"]
-        labels = [f"{k}. {v}" for k, v in opts.items()]
-        prev = answers.get(q["key"])
-        idx = list(opts).index(prev) if prev in opts else 0
-        choice = st.radio("选一个最接近的", labels, index=idx, key=f"sh_pf_q{step}", label_visibility="collapsed")
-        chosen = choice.split(".", 1)[0]
-        b1, b2, _ = st.columns([1, 1, 5])
-        with b1:
-            if step > 0 and st.button("← 上一题", key=f"sh_pf_prev{step}"):
-                answers[q["key"]] = chosen
-                st.session_state["sh_pf_step"] = step - 1
-                st.rerun()
-        with b2:
-            last = step == total - 1
-            if st.button("看推荐 ✓" if last else "下一题 →", type="primary", key=f"sh_pf_next{step}"):
-                answers[q["key"]] = chosen
-                st.session_state["sh_pf_step"] = step + 1
-                st.rerun()
-        return
-
-    # 答完：调 src 分析推荐
-    st.success("问卷完成！下面是基于你回答的专业方向建议（仅供参考）。")
-    st.caption("方向只是参考，最终读什么由你定。看完点「去填志愿信息」，AI 会帮你填表。")
-    if "sh_pf_result" not in st.session_state:
-        if not api_key:
-            st.warning("请在左侧填入百炼 API Key，以生成专业方向推荐。")
-        else:
-            payload = [
-                {"question": q["question"], "choice": answers.get(q["key"], ""),
-                 "answer": q["options"].get(answers.get(q["key"], ""), "")}
-                for q in _PF_QUESTIONS
-            ]
-            with st.chat_message("assistant"):
-                try:
-                    resp = st.write_stream(analyze_questionnaire(payload, api_key=api_key))
-                except Exception as e:  # noqa: BLE001
-                    resp = f"⚠️ 生成失败：{e}"; st.write(resp)
-            st.session_state["sh_pf_result"] = resp
-    else:
-        with st.chat_message("assistant"):
-            st.write(st.session_state["sh_pf_result"])
-
-    r1, r2, _ = st.columns([1.2, 1.2, 4])
-    with r1:
-        if st.button("↺ 重新答题", key="sh_pf_redo"):
-            for k in ("sh_pf_step", "sh_pf_answers", "sh_pf_result"):
-                st.session_state.pop(k, None)
-            st.rerun()
-    with r2:
-        if st.button("去填志愿信息 →", type="primary", key="sh_pf_to_form"):
-            st.session_state["sh_stage"] = "working"
-            st.rerun()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ② AI 辅助填表 ③ 生成 ④ 改需求 ⑤ 解释
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _collect_form() -> dict:
-    """从 session 读出表单值（AI 填或手填都存在 sh_ 键上）。"""
-    return {
-        "rank": st.session_state.get("sh_rank", 8000),
-        "selected_subjects": st.session_state.get("sh_subjects", []),
-        "main_priority": st.session_state.get("sh_priority", "请选择…"),
-        "risk_preference": st.session_state.get("sh_risk", "均衡"),
-        "preferred_majors": [s.strip() for s in st.session_state.get("sh_majors", "").split(",") if s.strip()],
-        "school_levels": st.session_state.get("sh_levels", []),
-        "preferred_cities": [c.strip() for c in st.session_state.get("sh_cities", "").split(",") if c.strip()],
-        "accept_private": st.session_state.get("sh_private", True),
-        "excluded_regions": st.session_state.get("sh_excl", []),
-    }
+    _render_questionnaire("sh", api_key)
 
 
 def _render_working() -> None:
