@@ -24,6 +24,7 @@ TABLE_NAMES = (
     "major_admission_rule",
     "major_subject_requirement",
     "school_profile",
+    "school_info_section",
     "major_profile",
     "city_profile",
 )

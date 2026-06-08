@@ -177,6 +177,20 @@ CREATE TABLE IF NOT EXISTS school_profile (
     UNIQUE(school_name)
 );
 
+CREATE TABLE IF NOT EXISTS school_info_section (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    school_name TEXT NOT NULL,
+    school_id TEXT,
+    section_key TEXT NOT NULL,
+    section_title TEXT NOT NULL,
+    summary TEXT,
+    content TEXT,
+    source_name TEXT DEFAULT '阳光高考',
+    source_url TEXT,
+    fetched_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(school_name, section_key)
+);
+
 CREATE TABLE IF NOT EXISTS major_profile (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     major_name TEXT NOT NULL,

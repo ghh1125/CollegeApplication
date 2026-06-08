@@ -252,6 +252,7 @@ def build_recommendations(
     year: int = 2025,
     total: int | None = None,
     risk_allocation: dict | None = None,
+    use_group_history: bool = True,
     conn: Any | None = None,
 ) -> dict:
     """Build 上海 40-院校专业组 recommendations from a filtered 专业 pool."""
@@ -267,8 +268,9 @@ def build_recommendations(
     def _run(db_conn: Any) -> dict:
         expanded = expand_major_keywords(preferred_majors, db_conn)
 
-        # 1. enrich members with common metadata, then override history with
-        #    Shanghai's official 院校专业组-level history.
+        # 1. enrich members with common metadata. Historical-year reference pages
+        #    use official group-level history; target-year plans use same-major
+        #    history because group numbers can be reused with different content.
         data = load_all_history_data(
             db_conn, year,
             year_weights=SHANGHAI_YEAR_WEIGHTS,
@@ -276,8 +278,9 @@ def build_recommendations(
         )
         enriched = attach_history(candidates, data)
         enriched = enrich_with_profiles(enriched, db_conn)
-        group_history = load_group_history(db_conn, year, profile.subject_category)
-        enriched = _attach_group_history(enriched, group_history, profile.rank)
+        if use_group_history:
+            group_history = load_group_history(db_conn, year, profile.subject_category)
+            enriched = _attach_group_history(enriched, group_history, profile.rank)
         trends = load_major_trends(db_conn, profile.subject_category)
 
         # 2. aggregate 专业 → 专业组
