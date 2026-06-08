@@ -250,14 +250,14 @@ def _render_working() -> None:
         st.warning(err)
         return
     try:
-        recos = svc.recommend_for_years(form)
+        recommendation = svc.recommend_target_and_references(form)
     except Exception as e:  # noqa: BLE001
         st.error(f"生成失败：{e}")
         return
-    reco = recos[svc.YEARS[0]]
-    st.session_state["_sh_advisor_ctx"] = svc.advisor_ctx(reco)
+    target = recommendation["target"]
+    st.session_state["_sh_advisor_ctx"] = svc.advisor_ctx(target)
 
-    _render_results(recos, form)
+    _render_results(recommendation, form)
     st.divider()
     _render_explain(api_key, form)
 
@@ -336,57 +336,69 @@ def _render_fill_assistant(api_key) -> None:
             st.rerun()
 
 
-def _render_results(recos: dict, form: dict) -> None:
+def _render_results(recommendation: dict, form: dict) -> None:
+    target = recommendation["target"]
+    recos = recommendation["references"]           # {year: reco}, 已是低于目标年的历史年
+    ref_years = sorted(recos.keys(), reverse=True)
+    target_year = target.get("_target_year", svc.TARGET_YEAR)
     st.subheader("③ 推荐院校专业组")
     st.info(
-        "上海专业组**每年重新编排、组号跨年不是同一个组**，故不跨年加权，按年份分别给出：\n\n"
-        "- **2025 推荐**：今年实际填报的 24 个院校专业组方案\n"
-        "- **2024 / 2023 参考**：当年同位次能选到的组，看趋势用，**不能直接照填**"
+        f"推荐逻辑：**{target_year} 招生目录决定能填哪些院校专业组和组内专业**；"
+        "**往年录取分数线和位次**用于估算风险。冲稳保主要按位次差判断，分数线作为历史参考展示。"
     )
+    if target.get("_is_fallback"):
+        st.warning(
+            f"{svc.TARGET_YEAR} 上海招生目录尚未发布/导入，**暂用 {target_year} 目录生成主推荐**；"
+            f"{svc.TARGET_YEAR} 目录发布并导入后会自动切换到目标年。下面的历史参考标签页不能直接照填。"
+        )
     if form["main_priority"] == "专业优先" and form["preferred_cities"]:
         st.info(f"ℹ️ 「专业优先」下 **{'、'.join(form['preferred_cities'])}** 只作同档内次要排序，不强制排前。"
                 "想让该城市优先，请把主排序改成「城市优先」。")
-    tabs = st.tabs(["2025 推荐（按此填报）", "2024 参考", "2023 参考"])
-    for tab, year in zip(tabs, (2025, 2024, 2023)):
+    tabs = st.tabs([target.get("_tab_label", f"{target_year} 推荐")] + [f"{y} 历史参考" for y in ref_years])
+    with tabs[0]:
+        _render_year_block(target, target_year, primary=True, target=True)
+    for tab, year in zip(tabs[1:], ref_years):
         with tab:
-            _render_year_block(recos[year], year, primary=(year == 2025))
+            _render_year_block(recos[year], year, primary=False)
 
-    pool = recos[2025].get("_pool", [])
+    pool = target.get("_pool", [])
     if pool:
-        with st.expander(f"候选池（符合你筛选条件的全部专业，{len(pool)} 条）"):
+        with st.expander(f"{target_year} 候选池（符合你筛选条件的全部专业，{len(pool)} 条）"):
             st.dataframe(pd.DataFrame(svc.pool_rows(pool)), width="stretch", hide_index=True)
 
-    v25 = recos[2025]["volunteers"]
-    if v25:
+    target_volunteers = target["volunteers"]
+    if target_volunteers:
         st.divider()
-        st.markdown("**📈 某个专业近三年要多少位次能进**")
-        st.caption("选一个学校的专业组，看组里每个专业最近三年的录取位次，判断越来越难考还是好考。"
-                   "上海按专业组整体投档，同一年同组专业位次相同。")
-        labels = [svc.group_label(g) for g in v25]
+        st.markdown("**📈 目标专业往年分数线和位次**")
+        st.caption("选一个目标专业组，看组里专业在 2025 / 2024 / 2023 的录取分数线和位次。"
+                   "正式填报按院校专业组投档，专业线用于判断组内专业风险和趋势。")
+        labels = [svc.group_label(g) for g in target_volunteers]
         sel = st.selectbox("选一个学校专业组", labels, key="sh_trend_sel")
-        rows = svc.member_trend_rows(v25[labels.index(sel) if sel in labels else 0])
+        rows = svc.member_trend_rows(target_volunteers[labels.index(sel) if sel in labels else 0])
         if rows:
             st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
         else:
             st.info("该组暂无组内专业明细（待补充）。")
 
-    st.caption("说明：上海填报单位是院校专业组（非单专业）。「投档位次」为各专业组当年官方投档最低位次，"
-               "「gap」= 投档位次 − 你的位次。改了左侧信息后再点「🚀 生成志愿」即可重新生成。")
+    st.caption("说明：上海填报单位是院校专业组（非单专业）。「参考位次」来自往年同校同专业/同专业组录取数据，"
+               "「gap」= 参考位次 − 你的位次。改了左侧信息后再点「🚀 生成志愿」即可重新生成。")
 
 
-def _render_year_block(reco: dict, year: int, primary: bool) -> None:
+def _render_year_block(reco: dict, year: int, primary: bool, target: bool = False) -> None:
     stats = reco["stats"]
     c = st.columns(5)
     c[0].metric("志愿组数", stats["total"])
     c[1].metric("冲", stats["冲"]); c[2].metric("稳", stats["稳"])
     c[3].metric("保", stats["保"]); c[4].metric("垫", stats["垫"])
-    if not primary:
+    if target:
+        st.caption(f"{year} 主推荐：候选来自 {year} 招生目录；分数线/位次来自历史录取数据估算风险。")
+    elif not primary:
         st.caption(f"⚠️ {year} 年为历史参考：当年专业组编排与今年不同，**不能直接照填**，仅供看趋势。")
     st.dataframe(
         pd.DataFrame(svc.group_rows(reco["volunteers"])), width="stretch", hide_index=True, height=520,
         column_config={
-            "投档位次": st.column_config.NumberColumn(width="small", help=f"{year} 年该专业组官方投档最低位次"),
-            "gap": st.column_config.NumberColumn(width="small", help="投档位次 - 你的位次，正数更安全"),
+            "参考位次": st.column_config.NumberColumn(width="small", help="往年录取位次参考，正数 gap 更安全"),
+            "gap": st.column_config.NumberColumn(width="small", help="参考位次 - 你的位次，正数更安全"),
             "组内专业": st.column_config.TextColumn(width="large"),
         },
     )
