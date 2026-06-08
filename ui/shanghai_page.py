@@ -23,7 +23,7 @@ from src.common.input.llm import (
     search_web,
     should_search,
 )
-from src.common.input.user_profile import WELCOME as _PF_WELCOME, chat_user_profile
+from src.common.input.user_profile import QUESTIONS as _PF_QUESTIONS, analyze_questionnaire
 from src.shanghai.config import PROVINCE_CONFIG as _SH_CONFIG
 from src.shanghai.input.profile import (
     CityPreference,
@@ -214,12 +214,16 @@ def _render_entry() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _render_profiling() -> None:
-    st.subheader("① 兴趣引导 · 帮你找专业方向")
+    st.subheader("① 兴趣问卷 · 帮你找专业方向")
     with st.sidebar:
         st.header("🔑 AI 设置")
-        api_key = (st.text_input("百炼 API Key（AI 对话需要）", type="password",
+        api_key = (st.text_input("百炼 API Key（分析推荐需要）", type="password",
                                  placeholder="sk-...", key="sh_api_key").strip() or None)
         st.caption("⚠️ AI 建议仅供参考，由用户自行判断。")
+
+    total = len(_PF_QUESTIONS)
+    step = st.session_state.get("sh_pf_step", 0)          # 当前题号
+    answers: dict = st.session_state.setdefault("sh_pf_answers", {})
 
     nav1, nav2 = st.columns([1, 1])
     with nav1:
@@ -227,49 +231,69 @@ def _render_profiling() -> None:
             st.session_state["sh_stage"] = "entry"
             st.rerun()
     with nav2:
-        if st.button("我想好了，去填志愿信息 →", type="primary", key="sh_pf_done"):
+        if st.button("跳过问卷，直接填志愿 →", key="sh_pf_skip"):
             st.session_state["sh_stage"] = "working"
             st.rerun()
 
-    st.caption("聊兴趣/性格/擅长科目，小明会推荐专业方向。这些只是参考，方向定了点右上「去填志愿信息」自己填表。")
+    # ── 答题阶段（一次一题）──────────────────────────────────────────────────
+    if step < total:
+        q = _PF_QUESTIONS[step]
+        st.progress(step / total, text=f"第 {step + 1} / {total} 题")
+        st.markdown(f"### {q['question']}")
+        opts = q["options"]
+        labels = [f"{k}. {v}" for k, v in opts.items()]
+        prev = answers.get(q["key"])
+        idx = list(opts).index(prev) if prev in opts else 0
+        choice = st.radio("选一个最接近的", labels, index=idx, key=f"sh_pf_q{step}",
+                          label_visibility="collapsed")
+        chosen_key = choice.split(".", 1)[0]
 
-    if "sh_pf_chat" not in st.session_state:
-        st.session_state["sh_pf_chat"] = [{"role": "assistant", "content": _PF_WELCOME}]
+        b1, b2, _ = st.columns([1, 1, 5])
+        with b1:
+            if step > 0 and st.button("← 上一题", key=f"sh_pf_prev{step}"):
+                answers[q["key"]] = chosen_key
+                st.session_state["sh_pf_step"] = step - 1
+                st.rerun()
+        with b2:
+            last = step == total - 1
+            if st.button("看推荐 ✓" if last else "下一题 →", type="primary", key=f"sh_pf_next{step}"):
+                answers[q["key"]] = chosen_key
+                st.session_state["sh_pf_step"] = step + 1
+                st.rerun()
+        return
 
-    box = st.container(height=380)
-    with box:
-        for m in st.session_state["sh_pf_chat"]:
-            with st.chat_message(m["role"]):
-                st.write(m["content"])
+    # ── 全部答完：LLM 分析推荐 ───────────────────────────────────────────────
+    st.success("问卷完成！下面是基于你回答的专业方向建议（仅供参考）。")
+    st.caption("方向只是参考，最终读什么由你定。看完点下面「去填志愿信息」自己填表。")
 
-    n = st.session_state.get("sh_pf_input_n", 0)
-    c1, c2 = st.columns([7, 1])
-    with c1:
-        msg = st.text_input("输入", key=f"sh_pf_msg_{n}",
-                            placeholder="比如：我喜欢打游戏和数码，数学还行，物理一般…", label_visibility="collapsed")
-    with c2:
-        send = st.button("发送", use_container_width=True, key="sh_pf_send")
-
-    if send and msg.strip():
-        st.session_state["_sh_pf_pending"] = msg.strip()
-        st.session_state["sh_pf_input_n"] = n + 1
-        st.rerun()
-
-    pending = st.session_state.pop("_sh_pf_pending", None)
-    if pending:
+    if "sh_pf_result" not in st.session_state:
         if not api_key:
-            st.warning("请在左侧填入百炼 API Key 才能和小明对话")
+            st.warning("请在左侧填入百炼 API Key，以生成专业方向推荐。")
         else:
-            st.session_state["sh_pf_chat"].append({"role": "user", "content": pending})
-            with box:
-                with st.chat_message("user"):
-                    st.write(pending)
-                with st.chat_message("assistant"):
-                    try:
-                        resp = st.write_stream(chat_user_profile(st.session_state["sh_pf_chat"], api_key=api_key))
-                    except Exception as e:  # noqa: BLE001
-                        resp = f"⚠️ 生成失败：{e}"; st.write(resp)
-            st.session_state["sh_pf_chat"].append({"role": "assistant", "content": resp})
+            payload = [
+                {"question": q["question"], "choice": answers.get(q["key"], ""),
+                 "answer": q["options"].get(answers.get(q["key"], ""), "")}
+                for q in _PF_QUESTIONS
+            ]
+            with st.chat_message("assistant"):
+                try:
+                    resp = st.write_stream(analyze_questionnaire(payload, api_key=api_key))
+                except Exception as e:  # noqa: BLE001
+                    resp = f"⚠️ 生成失败：{e}"; st.write(resp)
+            st.session_state["sh_pf_result"] = resp
+    else:
+        with st.chat_message("assistant"):
+            st.write(st.session_state["sh_pf_result"])
+
+    r1, r2, _ = st.columns([1.2, 1.2, 4])
+    with r1:
+        if st.button("↺ 重新答题", key="sh_pf_redo"):
+            for k in ("sh_pf_step", "sh_pf_answers", "sh_pf_result"):
+                st.session_state.pop(k, None)
+            st.rerun()
+    with r2:
+        if st.button("去填志愿信息 →", type="primary", key="sh_pf_to_form"):
+            st.session_state["sh_stage"] = "working"
             st.rerun()
 
 
