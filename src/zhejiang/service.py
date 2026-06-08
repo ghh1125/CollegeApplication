@@ -30,7 +30,7 @@ from src.zhejiang.input.filter import (
     filter_by_subject,
     resolve_school_city,
 )
-from src.zhejiang.allocation.recommend import build_recommendations, history_rank_columns
+from src.zhejiang.allocation.recommend import build_recommendations
 from ui.form_helpers import format_sort_reason_for_display
 
 PRIORITIES = ("学校优先", "城市优先", "专业优先")
@@ -119,6 +119,19 @@ def recommend(form: dict) -> dict:
 
 # ─── 结果 → 可展示的行 ───────────────────────────────────────────────────────
 
+_REF_YEARS = (2025, 2024, 2023)
+
+
+def _history_score_rank_columns(program: dict) -> dict:
+    """各年分数线 + 位次（与江苏/上海一致的双列展示）。"""
+    by_year = {int(h["year"]): h for h in program.get("history", []) if h.get("year")}
+    cols: dict = {}
+    for year in _REF_YEARS:
+        cols[f"{year}分数线"] = by_year.get(year, {}).get("min_score") or ""
+        cols[f"{year}位次"] = by_year.get(year, {}).get("min_rank") or ""
+    return cols
+
+
 def volunteer_rows(programs: list[dict], main_priority: str) -> list[dict]:
     rows = []
     for idx, p in enumerate(programs, start=1):
@@ -130,9 +143,9 @@ def volunteer_rows(programs: list[dict], main_priority: str) -> list[dict]:
             "城市": p.get("school_city") or resolve_school_city(p.get("school_name", "")),
             "专业": p.get("major_name", ""),
             "专业匹配": p.get("_major_tag", ""),
-            **history_rank_columns(p),
             "均值位次": gi.get("weighted_avg"),
             "gap": gi.get("gap"),
+            **_history_score_rank_columns(p),
             "排序理由": format_sort_reason_for_display(p, main_priority),
             "历史年数": gi.get("data_years"),
             "选科要求": _fmt_req(p.get("subject_requirement_json")),
