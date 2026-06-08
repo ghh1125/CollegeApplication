@@ -87,5 +87,15 @@ class LLMPromptTests(unittest.TestCase):
         self.assertNotIn("请直接分4段输出", prompt)
 
 
+class LLMClientConfigTests(unittest.TestCase):
+    """LLM client setup should fail with user-facing config errors."""
+
+    def test_get_client_rejects_non_ascii_api_key_before_openai_client(self) -> None:
+        from src.common.input.llm import get_client
+
+        with self.assertRaisesRegex(RuntimeError, "API Key.*中文"):
+            get_client("你的key")
+
+
 if __name__ == "__main__":
     unittest.main()

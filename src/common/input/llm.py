@@ -82,7 +82,16 @@ _DEFAULT_PROVINCE_CONFIG = ProvinceConfig()
 
 
 def get_client(api_key: str | None = None) -> Any:
-    key = api_key or config.require_dashscope_api_key()
+    key = (api_key or config.require_dashscope_api_key()).strip()
+    if not key:
+        raise RuntimeError("百炼 API Key 不能为空。")
+    try:
+        key.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise RuntimeError(
+            "百炼 API Key 只能包含英文、数字和英文符号，不能包含中文或中文说明；"
+            "请检查左侧输入框或 .env 里的 DASHSCOPE_API_KEY。"
+        ) from exc
     try:
         from openai import OpenAI
     except ImportError as exc:
