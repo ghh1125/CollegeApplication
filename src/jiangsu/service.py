@@ -72,33 +72,74 @@ def validate_form(form: dict) -> str | None:
     return None
 
 
-# ─── 三年推荐编排 ─────────────────────────────────────────────────────────────
+TARGET_YEAR = 2026                  # 目标填报年：候选来自当年招生目录
+REFERENCE_YEARS = (2025, 2024, 2023)  # 历史分数线/位次参考年
 
-def recommend_for_years(form: dict, years: tuple[int, ...] = YEARS) -> dict[int, dict]:
-    profile = build_profile(form)
+
+# ─── 目标年 + 历史参考推荐编排 ───────────────────────────────────────────────
+
+def _build_recommendation_for_plan_year(conn: Any, form: dict, profile, plan_year: int, history_year: int) -> dict:
     main_priority = form["main_priority"]
     majors = list(form.get("preferred_majors") or [])
     levels = list(form.get("school_levels") or [])
     cities = list(form.get("preferred_cities") or [])
     risk = form.get("risk_preference", "均衡")
 
+    eligible, _ = filter_by_subject(profile, year=plan_year, conn=conn)
+    final, _ = filter_by_constraints(eligible, profile)
+    if levels:
+        final, _ = filter_by_school_level(final, levels)
+    if cities and main_priority == "城市优先":
+        final, _ = filter_by_city(final, cities)
+    reco = build_recommendations(
+        final, profile, main_priority=main_priority,
+        preferred_majors=majors, preferred_categories=[], preferred_schools=[],
+        preferred_cities=cities or None, risk_preference=risk,
+        year=history_year, conn=conn,
+    )
+    reco["_pool"] = final
+    return reco
+
+
+def _available_plan_years(conn: Any) -> set[int]:
+    rows = conn.execute("SELECT DISTINCT year FROM admission_plan").fetchall()
+    return {int(r[0]) for r in rows if r[0] is not None}
+
+
+def recommend_target_and_references(form: dict) -> dict:
+    """目标年推荐 + 历史参考；2026 目录未导入时自动回退到最新有数据年（2025）。"""
+    profile = build_profile(form)
+    with get_conn("jiangsu") as conn:
+        plan_years = _available_plan_years(conn)
+        effective_target = TARGET_YEAR if TARGET_YEAR in plan_years else (
+            max(plan_years) if plan_years else TARGET_YEAR)
+        is_fallback = effective_target != TARGET_YEAR
+        history_year = effective_target if effective_target in REFERENCE_YEARS else REFERENCE_YEARS[0]
+
+        target = _build_recommendation_for_plan_year(
+            conn, form, profile, plan_year=effective_target, history_year=history_year)
+        target["_target_year"] = effective_target
+        target["_is_fallback"] = is_fallback
+        target["_tab_label"] = (
+            f"{TARGET_YEAR} 目标志愿（招生目录 + {REFERENCE_YEARS[0]} 历史线）"
+            if not is_fallback else
+            f"{effective_target} 推荐（{TARGET_YEAR} 目录未发布，暂用 {effective_target} 目录）"
+        )
+        ref_years = [y for y in REFERENCE_YEARS if y < effective_target]
+        references = {
+            year: _build_recommendation_for_plan_year(conn, form, profile, plan_year=year, history_year=year)
+            for year in ref_years
+        }
+    return {"target": target, "references": references}
+
+
+def recommend_for_years(form: dict, years: tuple[int, ...] = YEARS) -> dict[int, dict]:
+    """（兼容保留）各年独立推荐。"""
+    profile = build_profile(form)
     recos: dict[int, dict] = {}
     with get_conn("jiangsu") as conn:
         for year in years:
-            eligible, _ = filter_by_subject(profile, year=year, conn=conn)
-            final, _ = filter_by_constraints(eligible, profile)
-            if levels:
-                final, _ = filter_by_school_level(final, levels)
-            if cities and main_priority == "城市优先":
-                final, _ = filter_by_city(final, cities)
-            recos[year] = build_recommendations(
-                final, profile, main_priority=main_priority,
-                preferred_majors=majors, preferred_categories=[], preferred_schools=[],
-                preferred_cities=cities or None, risk_preference=risk,
-                year=year, conn=conn,
-            )
-            if year == years[0]:
-                recos[year]["_pool"] = final  # 候选池：通过筛选的全部专业（含所属组）
+            recos[year] = _build_recommendation_for_plan_year(conn, form, profile, plan_year=year, history_year=year)
     return recos
 
 
@@ -116,6 +157,15 @@ def member_majors(group: dict) -> list[str]:
     return [n for n in names if not (n in seen or seen.add(n))]
 
 
+def history_score_rank_columns(group: dict, years: tuple[int, ...] = REFERENCE_YEARS) -> dict:
+    by_year = {int(h["year"]): h for h in group.get("history", []) if h.get("year")}
+    cols: dict = {}
+    for year in years:
+        cols[f"{year}分数线"] = by_year.get(year, {}).get("min_score") or ""
+        cols[f"{year}位次"] = by_year.get(year, {}).get("min_rank") or ""
+    return cols
+
+
 def group_rows(groups: list[dict]) -> list[dict]:
     rows = []
     for idx, g in enumerate(groups, start=1):
@@ -131,8 +181,9 @@ def group_rows(groups: list[dict]) -> list[dict]:
             "专业组": f"{g.get('sg_name', '')}组",
             "再选要求": sg_info.split("再选", 1)[-1] if "再选" in sg_info else sg_info,
             "专业匹配": g.get("_major_tag", ""),
-            "投档位次": gi.get("weighted_avg"),
+            "参考位次": gi.get("weighted_avg"),
             "gap": gi.get("gap"),
+            **history_score_rank_columns(g),
             "组内专业": inner,
         })
     return rows
@@ -149,12 +200,23 @@ def member_trend_rows(group: dict) -> list[dict]:
             continue
         seen.add(name)
         t = m.get("_trend", {}) or {}
-        seq = [t.get(y) for y in (2023, 2024, 2025) if t.get(y)]
+        hist = {int(h["year"]): h for h in m.get("history", []) if h.get("year")}
+
+        def _rank(y: int) -> int | None:
+            return t.get(y) or hist.get(y, {}).get("min_rank")
+
+        def _score(y: int) -> int | None:
+            return hist.get(y, {}).get("min_score")
+
+        seq = [_rank(y) for y in (2023, 2024, 2025) if _rank(y)]
         arrow = ""
         if len(seq) >= 2:
             arrow = "↓更难" if seq[-1] < seq[0] else ("↑更易" if seq[-1] > seq[0] else "→持平")
-        rows.append({"专业": name, "2025位次": t.get(2025), "2024位次": t.get(2024),
-                     "2023位次": t.get(2023), "趋势": arrow})
+        rows.append({"专业": name,
+                     "2025分数线": _score(2025), "2025位次": _rank(2025),
+                     "2024分数线": _score(2024), "2024位次": _rank(2024),
+                     "2023分数线": _score(2023), "2023位次": _rank(2023),
+                     "趋势": arrow})
     return rows
 
 
