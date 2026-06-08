@@ -203,6 +203,39 @@ def _city_quality_tier(source_name: str) -> str:
     return "template"
 
 
+def _school_profile_block(p: dict) -> str:
+    """学校画像行：只输出有值的字段（简介/类型/建校/院士博硕点/校训/标签）。"""
+    if not p:
+        return "学校画像：暂无"
+    parts: list[str] = []
+    if p.get("summary"):
+        parts.append(str(p["summary"]))
+    meta = []
+    for label, key in (("类型", "school_type"), ("性质", "school_nature"), ("层次", "education_level")):
+        if p.get(key):
+            meta.append(f"{label}{p[key]}")
+    if p.get("founded_year"):
+        meta.append(f"{p['founded_year']}年建校")
+    if meta:
+        parts.append("、".join(meta))
+    counts = []
+    if p.get("academician_count"):
+        counts.append(f"{p['academician_count']}位院士")
+    if p.get("doctor_count"):
+        counts.append(f"{p['doctor_count']}个博士点")
+    if p.get("master_count"):
+        counts.append(f"{p['master_count']}个硕士点")
+    if counts:
+        parts.append("、".join(counts))
+    if p.get("motto"):
+        parts.append(f"校训「{p['motto']}」")
+    if p.get("tags"):
+        parts.append(f"标签：{p['tags']}")
+    if p.get("source_url"):
+        parts.append(f"来源：{p['source_url']}")
+    return "学校画像：" + "；".join(parts)
+
+
 def _city_profile_block(city_profile: dict) -> str:
     """Build the city profile line for the prompt, labelled by data quality tier."""
     source = city_profile.get("source_name") or ""
@@ -281,8 +314,8 @@ def explain_volunteer(
 - 预警：{warnings or "无"}
 
 【本地结构化画像（来自数据库，优先引用，不编造）】
-- 学校画像：{school_profile.get("summary") or "暂无"}；标签：{school_profile.get("tags") or "暂无"}；来源：{school_profile.get("source_url") or "暂无"}
-- 专业画像：{major_profile.get("summary") or "暂无"}；就业/去向：{major_profile.get("career_direction") or "暂无"}；fallback：{major_profile.get("fallback_from") or "无"}；来源：{major_profile.get("source_url") or "暂无"}
+- {_school_profile_block(school_profile)}
+- 专业画像：{major_profile.get("summary") or "暂无"}；学什么：{major_profile.get("learn_what") or "暂无"}；就业/去向：{major_profile.get("career_direction") or "暂无"}；fallback：{major_profile.get("fallback_from") or "无"}；来源：{major_profile.get("source_url") or "暂无"}
 - {_city_profile_block(city_profile)}
 {search_block}
 【禁止输出的词】：前景不错、就业面广、高度契合、相对稳定、值得关注、综合来看
