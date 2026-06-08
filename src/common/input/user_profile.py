@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from src.common.input.llm import _stream
+from src.common.input.llm import ANALYSIS_FRAMEWORK, _stream
 
 # 问卷题库：每题一个 question + 4 个选项。可按需增删。
 QUESTIONS: list[dict] = [
@@ -80,9 +80,9 @@ _SYSTEM = (
     "4. **一句心里话**：诚实提醒这只是参考方向，最终要结合分数、兴趣和家庭情况自己定。\n"
     "\n"
     "风格要求：\n"
-    "- 用大白话，像学长学姐聊天，不端着；就业用真实数字区间，绝不说「前景广阔」这类空话。\n"
-    "- 内容要具体到能落地，不要敷衍；总长度 400-600 字。\n"
-    "- 不要问位次/分数（那是下一步填志愿做的事），不要输出 JSON 或代码块。"
+    "- 用大白话，像学长学姐聊天，不端着；内容要具体到能落地，不要敷衍；总长度 400-600 字。\n"
+    "- 不要问位次/分数（那是下一步填志愿做的事），不要输出 JSON 或代码块。\n\n"
+    + ANALYSIS_FRAMEWORK
 )
 
 

@@ -21,6 +21,21 @@ REGION_EXPANSIONS: dict[str, list[str]] = {
 }
 
 
+# 张雪峰式分析框架：实在、就业优先、给真实数字、点明取舍和坑、不画饼。
+# 注入到「解释志愿 / 家长报告 / 兴趣问卷 / 顾问对话」各 prompt，统一全系统话术风格。
+ANALYSIS_FRAMEWORK = (
+    "【分析风格（务必遵守）】\n"
+    "- 就业倒推法：先说这个专业/学校**中等毕业生（20-50% 普通水平、非顶尖）5 年后的真实去向和大致月薪区间**，"
+    "给具体数字，绝不说「前景不错」「就业面广」「值得关注」这类空话。\n"
+    "- 中位数原则：以普通毕业生的实际情况为准，不拿少数顶尖/逆袭案例当普遍结果。\n"
+    "- 家庭与试错成本：涉及取舍时，点明不同家庭/分数段该怎么选——普通家庭优先就业和稳妥，"
+    "有底气再冲兴趣/名校；说清这个选择一旦不合适的试错成本。\n"
+    "- 专业 / 学校 / 城市谁更重要：在这条志愿上直说三者的轻重和理由，不和稀泥。\n"
+    "- 冷热与坑：诚实点出专业冷热、是否要读研才好就业、是否劝退、调剂/地域风险等真实信息。\n"
+    "- 表达：第一句直接给结论，再用数字和事实支撑；不绕弯子、不铺垫一堆才说重点。"
+)
+
+
 @dataclass
 class ProvinceConfig:
     """Province-specific settings injected into LLM prompts and allocation logic.
@@ -318,6 +333,8 @@ def explain_volunteer(
 - 专业画像：{major_profile.get("summary") or "暂无"}；学什么：{major_profile.get("learn_what") or "暂无"}；就业/去向：{major_profile.get("career_direction") or "暂无"}；fallback：{major_profile.get("fallback_from") or "无"}；来源：{major_profile.get("source_url") or "暂无"}
 - {_city_profile_block(city_profile)}
 {search_block}
+{ANALYSIS_FRAMEWORK}
+
 【禁止输出的词】：前景不错、就业面广、高度契合、相对稳定、值得关注、综合来看
 
 请按以下要求输出4句话（不加标题、不加序号）：
@@ -402,13 +419,7 @@ def _build_advisor_system(
                 "学校和专业作为次要参考；建议调整时先问「这个城市是否符合你的地区预期」"
             ),
         }.get(_priority, "")
-        lines += [
-            "【分析框架】",
-            "- 就业倒推法：解释志愿/专业时先给中等毕业生（非顶尖）的典型去向和薪资区间，不说「前景不错」等模糊话",
-            "- 中位数原则：看20-50%普通毕业生5年后的实际情况，不引用极端顶尖案例",
-            "- 家庭背景分流：用户问开放性问题时先反问家庭背景和试错成本，再给针对性建议",
-            "- 表达规则：第一句直接给结论，引用具体数字，不先铺垫四段再给判断",
-        ]
+        lines += [ANALYSIS_FRAMEWORK]
         if _priority_focus:
             lines.append(_priority_focus)
         lines.append("")
@@ -560,6 +571,8 @@ def generate_overall_report(
 【学校分布Top5】
 {", ".join(f"{s}({n}个)" for s, n in top_schools)}
 {search_block}
+{ANALYSIS_FRAMEWORK}
+
 【禁止输出的词】：比例合理、高度聚焦、利于发展、整体来看、综合考量、值得注意
 
 请直接分4段输出（不加标题序号）：
