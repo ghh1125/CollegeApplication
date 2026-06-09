@@ -61,6 +61,10 @@ def _quotas(ratio: tuple[int, int, int], total: int = TARGET_TOTAL) -> tuple[int
     return c, w, b
 
 
+HOME_PROVINCE = "浙江"
+HOME_BONUS = 10  # 本省加权：浙江任何城市 > 外省一线（10+tier vs 0+tier）
+
+
 def _load_extras(conn: Any) -> dict:
     """排序主键要用的学校/专业附加数据。"""
     sp = {
@@ -71,15 +75,21 @@ def _load_extras(conn: Any) -> dict:
         _norm(r[0]): (r[1] or "")
         for r in conn.execute("SELECT major_name, career_direction FROM major_profile WHERE career_direction!=''")
     }
-    return {"sp": sp, "career": career}
+    # 城市 → tier（5一线…1普通地级市），用于地域折价
+    city_tier = {r[0]: (r[1] or 1) for r in conn.execute("SELECT city_name, city_tier FROM city_profile")}
+    # 学校 → 地域折价系数 = (本省? 10 : 0) + 城市tier；浙江权重最高
+    region: dict[str, int] = {}
+    for name, prov, city in conn.execute("SELECT school_name, province, city FROM school_master"):
+        tier = city_tier.get(city) or city_tier.get((city or "") + "市") or 1
+        region[name] = (HOME_BONUS if prov == HOME_PROVINCE else 0) + tier
+    return {"sp": sp, "career": career, "region": region}
 
 
 # 有「行业特色」的学校类型（用于 5000-50000 段排序主键）
 _INDUSTRY_TYPES = {"财经类", "政法类", "师范类", "医药类", "理工类", "农林类", "语言类", "艺术类", "体育类"}
-_LEVEL_SCORE = {"985": 4, "211": 3, "双一流": 2, "其他": 1}
 
 
-def _score_fn(seg: SegmentConfig, rank: int, sp: dict) -> Callable[[dict], tuple]:
+def _score_fn(seg: SegmentConfig, rank: int, sp: dict, region: dict) -> Callable[[dict], tuple]:
     """返回 row → 排序分数元组（越大越优先），按该段排序主键。"""
     def score(r: dict) -> tuple:
         info = sp.get(r["院校名称"], {})
@@ -89,10 +99,10 @@ def _score_fn(seg: SegmentConfig, rank: int, sp: dict) -> Callable[[dict], tuple
                 vals.append(_GRADE_SCORE.get(r.get("学科评估", ""), 0))
             elif k == "baoyan":
                 vals.append(info.get("baoyan", 0.0))
-            elif k == "industry":      # 行业特色：有特色类型优先，再按层次
+            elif k == "industry":      # 行业特色：有特色类型优先
                 vals.append(1 if info.get("stype") in _INDUSTRY_TYPES else 0)
-            elif k == "region":        # 地域折价：层次高的优先（折价系数低）
-                vals.append(_LEVEL_SCORE.get(r.get("层次", "其他"), 1))
+            elif k == "region":        # 地域折价系数：本省(浙江)最高，外省按城市等级
+                vals.append(region.get(r["院校名称"], 1))
             elif k == "public":        # 公办属性
                 vals.append(1 if info.get("nature") == "公办" else 0)
             elif k == "admit_prob":    # 录取概率：过安全门槛后，位次越接近考生(学校越好)越优先
@@ -144,8 +154,8 @@ def generate(student: Any, exclude_keywords: list[str] | None = None) -> list[di
     seg = _segment(rank)
     with get_conn("zhejiang") as conn:
         extras = _load_extras(conn)
-    sp, career = extras["sp"], extras["career"]
-    scorefn = _score_fn(seg, rank, sp)
+    sp, career, region = extras["sp"], extras["career"], extras["region"]
+    scorefn = _score_fn(seg, rank, sp, region)
 
     # 分冲稳保
     chong, wen, bao = [], [], []
