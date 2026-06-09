@@ -188,6 +188,7 @@ def _render_screening(s: StudentInput) -> None:
                "未用（缺结构化数据）：学费、单科最低分、调剂规则。")
     with st.spinner("筛选中…"):
         rows = screen(s)
+    st.session_state["zj_screen_rows"] = rows  # 供第三步「排除专业」做选项
     if not rows:
         st.warning("没有符合条件的学校专业，试着放宽意向学科或地域偏好。")
         return
@@ -216,10 +217,12 @@ def _render_final(s: StudentInput) -> None:
 
     st.divider()
     st.subheader("第三步 · 专业过滤 → 生成最终 80 志愿")
+    # 排除专业的选项来自第一步初步筛选结果（去重保序）
+    screen_rows = st.session_state.get("zj_screen_rows", [])
+    exclude_opts = list(dict.fromkeys(r["专业名称"] for r in screen_rows))
     with st.expander("专业过滤（过滤后再生成）", expanded=True):
-        custom = st.text_input("自定义排除专业（关键词，逗号分隔）",
-                               placeholder="例：护理, 旅游管理, 园艺",
-                               help="专业名包含任一关键词的会被剔除")
+        excluded = st.multiselect("排除专业（从初步筛选结果里选，可多选）", exclude_opts,
+                                  help="选中的专业会从最终志愿里剔除；选项来自上面第一步筛出的专业")
         c1, c2, c3 = st.columns(3)
         c1.checkbox("天坑专业过滤", value=False, disabled=True, help="暂无数据，占位")
         c2.checkbox("教育部预警专业过滤", value=False, disabled=True, help="暂无数据，占位")
@@ -228,9 +231,8 @@ def _render_final(s: StudentInput) -> None:
 
     if not st.button("生成最终志愿（80个）", type="primary", use_container_width=True):
         return
-    kws = [k for k in custom.replace("，", ",").split(",") if k.strip()]
     with st.spinner("生成中…"):
-        rows = generate(s, exclude_keywords=kws)
+        rows = generate(s, exclude_keywords=excluded)
     if not rows:
         st.warning("过滤后没有候选了，放宽过滤条件试试。")
         return
