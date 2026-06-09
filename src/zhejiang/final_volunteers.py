@@ -30,6 +30,8 @@ TARGET_TOTAL = 80
 # 冲稳保分界（按 录取位次/考生位次）
 CHONG_MAX = 0.95   # < 0.95 = 冲
 WEN_MAX = 1.05     # 0.95~1.05 = 稳，> 1.05 = 保
+# 保底"录取概率≥99%"的安全余量启发式：录取位次 ≥ 考生位次 ×1.1（比你低 10%+ 算很稳）
+SAFE_MARGIN = 1.1
 
 _GRADE_SCORE = {"A+": 9, "A": 8, "A-": 7, "B+": 6, "B": 5, "B-": 4, "C+": 3, "C": 2, "C-": 1}
 
@@ -93,9 +95,9 @@ def _score_fn(seg: SegmentConfig, rank: int, sp: dict) -> Callable[[dict], tuple
                 vals.append(_LEVEL_SCORE.get(r.get("层次", "其他"), 1))
             elif k == "public":        # 公办属性
                 vals.append(1 if info.get("nature") == "公办" else 0)
-            elif k == "admit_prob":    # 录取概率：位次余量越大越稳
+            elif k == "admit_prob":    # 录取概率：过安全门槛后，位次越接近考生(学校越好)越优先
                 r25 = r.get("2025最低位次") or rank
-                vals.append(r25 / rank)
+                vals.append(-r25)      # -位次：越小(越好/越接近)分越高
         return tuple(vals)
     return score
 
@@ -153,9 +155,12 @@ def generate(student: Any, exclude_keywords: list[str] | None = None) -> list[di
 
     qc, qw, qb = _quotas(seg.ratio)
     g = seg.gradient(rank)
+    # 保底先过"≥99%稳"安全门槛(录取位次≥考生×SAFE_MARGIN)；够名额才用，否则退回全部保底
+    bao_safe = [r for r in bao if (r["2025最低位次"] or rank) >= rank * SAFE_MARGIN]
+    bao_pool = bao_safe if len(bao_safe) >= qb else bao
     sel_c = _select(chong, qc, g, scorefn)
     sel_w = _select(wen, qw, g, scorefn)
-    sel_b = _select(bao, qb, g, scorefn)
+    sel_b = _select(bao_pool, qb, g, scorefn)
     for r in sel_c:
         r["_cwb"] = "冲"
     for r in sel_w:
