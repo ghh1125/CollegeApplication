@@ -117,6 +117,18 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class PersonaTests(unittest.TestCase):
+    def test_classify_boundaries(self):
+        from src.zhejiang.persona import classify, LATEST_FIRST_SEGMENT_RANK
+        self.assertEqual(classify(1).key, "elite")
+        self.assertEqual(classify(5000).key, "elite")
+        self.assertEqual(classify(5001).key, "premium")
+        self.assertEqual(classify(50000).key, "premium")
+        self.assertEqual(classify(50001).key, "core")
+        self.assertEqual(classify(LATEST_FIRST_SEGMENT_RANK).key, "core")
+        self.assertEqual(classify(LATEST_FIRST_SEGMENT_RANK + 1).key, "below")
+
+
 class ScreeningTests(unittest.TestCase):
     """筛选+组装+排序（需真实库，缺库则跳过）。"""
 
