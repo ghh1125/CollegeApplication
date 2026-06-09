@@ -22,8 +22,11 @@ from src.zhejiang.input.medical_rules import conditions_for, restricted_classes,
 
 YEAR = 2025
 REF_YEARS = (2025, 2024, 2023)
+RANK_HEADROOM = 1000  # 只看 2025位次 ≥ (考生位次 - 1000) 的专业，剔掉够不到的顶尖校
 # 选科：用户输入用「政治」，库里用「思想政治」
 _SUBJECT_ALIASES = {"政治": "思想政治", "思政": "思想政治", "生物学": "生物", "信息技术": "技术", "通用技术": "技术"}
+# 专业类名 → 4 位码（大类招生如「计算机类」直接按类名映射）
+_CLASSNAME_TO_CODE = {name: code for code, name in MAJOR_CLASS_NAMES.items()}
 
 
 def _norm(name: str) -> str:
@@ -65,11 +68,15 @@ def _level_label(school_name: str) -> str:
 
 def _load_lookups(conn: Any) -> dict:
     """一次性预加载：national_code、3年位次、学科评估、学校省份。"""
-    # 专业名(归一化) → national_code
-    name2code = {
-        _norm(r[0]): r[1]
-        for r in conn.execute("SELECT name, national_code FROM major_description WHERE national_code!=''")
-    }
+    # 专业名(归一化) → national_code。同名（本科+专科）优先取本科（前2位 01-13）。
+    _benke = {"01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13"}
+    name2code: dict[str, str] = {}
+    for name, code in conn.execute("SELECT name, national_code FROM major_description WHERE national_code!=''"):
+        n = _norm(name)
+        cur = name2code.get(n)
+        if cur and cur[:2] in _benke and code[:2] not in _benke:
+            continue  # 已有本科码，不被专科码覆盖
+        name2code[n] = code
     # (school_code, major_code) → {year: min_rank}
     hist: dict[tuple[str, str], dict[int, int]] = {}
     for sc, mc, yr, rank in conn.execute(
@@ -92,6 +99,7 @@ def screen(student: Any, year: int = YEAR) -> list[dict]:
     selected = {_SUBJECT_ALIASES.get(s, s) for s in (student.selected_subjects or [])}
     want_classes = set(student.major_classes or [])              # 专业类 4 位码
     pref_provs = set(student.region.provinces) if student.region.has_preference else set()
+    rank_floor = max(1, int(student.rank) - RANK_HEADROOM)       # 2025位次下界
 
     # 体检受限（色觉）：受限专业类 + 受限专业名
     med_conditions = conditions_for(getattr(student.medical, "color_vision", "正常"),
@@ -118,8 +126,10 @@ def screen(student: Any, year: int = YEAR) -> list[dict]:
             continue
         nrm = _norm(mn)
         code6 = name2code.get(nrm, "")
-        class4 = code6[:4] if code6 else ""
-        # 2. 学科（专业类）—— 用户选了才筛；无 national_code 的（试验班/大类）在筛选开启时排除
+        # 专业类码：优先 national_code 前4位；否则若专业名本身是大类名(如「计算机类」)直接映射
+        class4 = code6[:4] if code6 else _CLASSNAME_TO_CODE.get(nrm, "")
+        men2 = (code6[:2] if code6 else class4[:2])  # 门类码
+        # 2. 学科（专业类）—— 用户选了才筛；无法归类的（试验班）在筛选开启时排除
         if want_classes:
             if not class4 or class4 not in want_classes:
                 continue
@@ -133,23 +143,29 @@ def screen(student: Any, year: int = YEAR) -> list[dict]:
             continue
 
         ranks = hist.get((sc, mc), {})
+        # 5. 位次筛选：只保留 2025位次 ≥ (考生位次-1000) 的专业（够不到的顶尖校剔除）
+        r2025 = ranks.get(2025)
+        if r2025 is None or r2025 < rank_floor:
+            continue
         # 学科评估：本科专业 → 研究生学科码 → 等级
         disc_code = _lookup_discipline_code(normalize_major_name(mn), raw_name=mn)
         grade = disc.get((sn, disc_code or ""), "")
+        # 专科段（前2位 41-59）：本科专业类表不含，单独标「专科(高职)」
+        is_zhuanke = code6[:2].isdigit() and int(code6[:2]) >= 40 if code6 else False
         out.append({
             "专业名称": mn, "专业代码": mc,
-            "二级学科": MAJOR_CLASS_NAMES.get(class4, "—"),
+            "二级学科": MAJOR_CLASS_NAMES.get(class4, "专科" if is_zhuanke else "—"),
             "学科评估": grade or "—",
-            "类别": CATEGORY_NAMES.get(code6[:2], "—") if code6 else "—",
+            "类别": CATEGORY_NAMES.get(men2, "专科(高职)" if is_zhuanke else "—"),
             "院校名称": sn, "院校代码": sc,
             "层次": _level_label(sn),
-            "2025最低位次": ranks.get(2025),
+            "2025最低位次": r2025,
             "2024最低位次": ranks.get(2024),
             "2023最低位次": ranks.get(2023),
         })
 
-    # 排序：按 2025 最低位次升序（缺 2025 的排末尾）
-    out.sort(key=lambda r: r["2025最低位次"] if r["2025最低位次"] is not None else 10**9)
+    # 排序：按 2025 最低位次升序
+    out.sort(key=lambda r: r["2025最低位次"])
     for i, r in enumerate(out, 1):
         r["排序"] = i
     return out
