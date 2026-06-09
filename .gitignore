@@ -23,3 +23,8 @@ data/shanghai/raw/official/downloads/
 data/shanghai/raw/plan_api/
 data/shanghai/raw/plan_sources/
 data/shanghai/raw/*.log
+
+# 浙江掌上高考招生计划抓取产物（半成品/可重抓）
+data/zhejiang/raw/plan/
+data/zhejiang/raw/plan_school_list.json
+data/zhejiang/raw/plan_scrape.log
