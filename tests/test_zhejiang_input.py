@@ -16,25 +16,32 @@ from src.zhejiang.input.disciplines import (
     classes_grouped,
 )
 from src.zhejiang.input.student_input import Budget, StudentInput
-from src.zhejiang.input.medical_rules import color_vision_restrictions
+from src.zhejiang.input import medical_rules as mr
 
 
 class MedicalRuleTests(unittest.TestCase):
-    def test_normal_no_restriction(self):
-        r = color_vision_restrictions("正常")
-        self.assertEqual(r["forbid"], [])
+    def test_conditions_for(self):
+        self.assertEqual(mr.conditions_for("正常"), [])
+        self.assertEqual(mr.conditions_for("色弱"), ["色弱"])
+        self.assertIn("色盲", mr.conditions_for("色盲", 4.5))
+        self.assertIn("视力低于4.8", mr.conditions_for("色盲", 4.5))
+        self.assertEqual(mr.conditions_for("正常", 4.9), ["视力低于5.0"])
 
-    def test_blind_more_than_weak(self):
-        blind = color_vision_restrictions("色盲")["forbid"]
-        weak = color_vision_restrictions("色弱")["forbid"]
+    def test_blind_superset_of_weak(self):
+        weak = set(mr.restricted_majors("色弱"))
+        blind = set(mr.restricted_majors("色盲"))
+        self.assertTrue(weak.issubset(blind))   # 色盲含色弱全部
         self.assertGreater(len(blind), len(weak))
-        # 临床医学类(1002) 色盲色弱都不予录取
-        self.assertIn("1002", blind)
-        self.assertIn("1002", weak)
 
-    def test_codes_are_valid_classes(self):
-        for c in color_vision_restrictions("色盲")["forbid"]:
-            self.assertIn(c, MAJOR_CLASS_NAMES)
+    def test_class_codes_valid(self):
+        for cond in mr.RULES:
+            for c in mr.restricted_classes(cond):
+                self.assertIn(c, MAJOR_CLASS_NAMES)
+
+    def test_medical_classes_in_color_rules(self):
+        # 「医学类各专业」→ 临床医学类(1002) 应在色弱/色盲整类里
+        self.assertIn("1002", mr.restricted_classes("色弱"))
+        self.assertIn("0703", mr.restricted_classes("色盲"))  # 化学类
 
 
 class DisciplineTableTests(unittest.TestCase):
