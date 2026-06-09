@@ -16,6 +16,25 @@ from src.zhejiang.input.disciplines import (
     classes_grouped,
 )
 from src.zhejiang.input.student_input import Budget, StudentInput
+from src.zhejiang.input.medical_rules import color_vision_restrictions
+
+
+class MedicalRuleTests(unittest.TestCase):
+    def test_normal_no_restriction(self):
+        r = color_vision_restrictions("正常")
+        self.assertEqual(r["forbid"], [])
+
+    def test_blind_more_than_weak(self):
+        blind = color_vision_restrictions("色盲")["forbid"]
+        weak = color_vision_restrictions("色弱")["forbid"]
+        self.assertGreater(len(blind), len(weak))
+        # 临床医学类(1002) 色盲色弱都不予录取
+        self.assertIn("1002", blind)
+        self.assertIn("1002", weak)
+
+    def test_codes_are_valid_classes(self):
+        for c in color_vision_restrictions("色盲")["forbid"]:
+            self.assertIn(c, MAJOR_CLASS_NAMES)
 
 
 class DisciplineTableTests(unittest.TestCase):

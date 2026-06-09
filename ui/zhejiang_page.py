@@ -48,52 +48,54 @@ def render(province: str = "zhejiang") -> None:
     st.subheader("第一步 · 填写你的信息")
     st.caption("先把下面信息填好，后面据此筛选和推荐志愿。带 * 为必填。")
 
-    with st.form("zj_input_form"):
-        c1, c2 = st.columns(2)
-        with c1:
-            rank = st.number_input("全省位次 *（省内排名）", min_value=1, max_value=400_000,
-                                   value=8000, step=100)
-        with c2:
-            total_score = st.number_input("高考分数 *（满分 750）", min_value=0, max_value=750,
-                                          value=600, step=1)
+    # 不用 st.form：表单内控件提交前不重跑，地域「有/无偏好」联动会失效。
+    # 用普通控件 + 保存按钮，地域选项可实时联动。
+    c1, c2 = st.columns(2)
+    with c1:
+        rank = st.number_input("全省位次 *（省内排名）", min_value=1, max_value=400_000,
+                               value=8000, step=100)
+    with c2:
+        total_score = st.number_input("高考分数 *（满分 750）", min_value=0, max_value=750,
+                                      value=600, step=1)
 
-        selected = st.multiselect("选考科目 *（7 选 3）", SUBJECTS_7, max_selections=3,
-                                  help="政治/历史/地理/物理/化学/生物/技术，选 3 门")
+    selected = st.multiselect("选考科目 *（7 选 3）", SUBJECTS_7, max_selections=3,
+                              help="政治/历史/地理/物理/化学/生物/技术，选 3 门")
 
-        classes = st.multiselect("意向学科（专业类，可多选）", _CLASS_OPTIONS,
-                                 help="选到「专业类」级别，如 工学·计算机类。可不填。")
+    classes = st.multiselect("意向学科（专业类，可多选）", _CLASS_OPTIONS,
+                             help="选到「专业类」级别，如 工学·计算机类。可不填。")
 
-        budget = st.selectbox("经济预算（每年学费）", _BUDGET_OPTIONS, index=0)
+    budget = st.selectbox("经济预算（每年学费）", _BUDGET_OPTIONS, index=0)
 
-        st.markdown("**地域偏好**")
-        has_region = st.radio("是否有地域偏好", ["无偏好", "有偏好"], horizontal=True,
-                              label_visibility="collapsed")
+    st.markdown("**地域偏好**")
+    has_region = st.radio("是否有地域偏好", ["无偏好", "有偏好"], horizontal=True,
+                          label_visibility="collapsed", key="zj_has_region")
+    region_provinces: list[str] = []
+    if has_region == "有偏好":
         region_provinces = st.multiselect(
             "偏好省份（按选择顺序＝优先级，从高到低）", PROVINCES,
-            help="选了「有偏好」才生效；先选的优先级更高",
-            disabled=(has_region == "无偏好"),
+            help="先选的优先级更高",
         )
 
-        st.markdown("**体检结果**（可不填，将来用于体检受限专业的提示）")
-        m1, m2, m3 = st.columns(3)
-        with m1:
-            height = st.number_input("身高 cm", min_value=0, max_value=250, value=0, step=1)
-        with m2:
-            color_vision = st.selectbox("色觉", _COLOR_VISION, index=0)
-        with m3:
-            vision = st.number_input("裸眼视力（较差眼，如 4.8）", min_value=0.0, max_value=5.3,
-                                     value=0.0, step=0.1)
+    st.markdown("**体检结果**（可不填，将来用于体检受限专业的提示）")
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        height = st.number_input("身高 cm", min_value=0, max_value=250, value=0, step=1)
+    with m2:
+        color_vision = st.selectbox("色觉", _COLOR_VISION, index=0)
+    with m3:
+        vision = st.number_input("裸眼视力（较差眼，如 4.8）", min_value=0.0, max_value=5.3,
+                                 value=0.0, step=0.1)
 
-        st.markdown("**单科成绩**（可不填，将来用于单科要求校验）")
-        s1, s2, s3 = st.columns(3)
-        with s1:
-            chinese = st.number_input("语文", min_value=0, max_value=150, value=0, step=1)
-        with s2:
-            math = st.number_input("数学", min_value=0, max_value=150, value=0, step=1)
-        with s3:
-            foreign = st.number_input("外语", min_value=0, max_value=150, value=0, step=1)
+    st.markdown("**单科成绩**（可不填，将来用于单科要求校验）")
+    s1, s2, s3 = st.columns(3)
+    with s1:
+        chinese = st.number_input("语文", min_value=0, max_value=150, value=0, step=1)
+    with s2:
+        math = st.number_input("数学", min_value=0, max_value=150, value=0, step=1)
+    with s3:
+        foreign = st.number_input("外语", min_value=0, max_value=150, value=0, step=1)
 
-        submitted = st.form_submit_button("保存信息", type="primary", use_container_width=True)
+    submitted = st.button("保存信息", type="primary", use_container_width=True)
 
     if submitted:
         try:
