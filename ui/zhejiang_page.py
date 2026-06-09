@@ -179,20 +179,23 @@ def _render_summary(s: StudentInput) -> None:
 
 def _render_screening(s: StudentInput) -> None:
     import pandas as pd
-    from src.zhejiang.screening import screen
+    from src.zhejiang.screening import candidate_pool
 
     st.divider()
     st.subheader("第二步 · 可填学校专业（按 2025 位次排序）")
-    st.caption("位次窗口：只看录取位次在你位次 ±20% 内的专业（两头太离谱的已剔除）。"
+    st.caption("位次窗口：默认录取位次在你位次 ±20% 内；候选太少时自动放宽（与第三步一致）。"
                "已用：选科、意向学科、地域偏好、体检色觉。"
                "未用（缺结构化数据）：学费、单科最低分、调剂规则。")
     with st.spinner("筛选中…"):
-        rows = screen(s)
+        rows, reach, safe = candidate_pool(s)
     st.session_state["zj_screen_rows"] = rows  # 供第三步「排除专业」做选项
     if not rows:
         st.warning("没有符合条件的学校专业，试着放宽意向学科或地域偏好。")
         return
-    st.success(f"共筛出 {len(rows)} 条")
+    rank = int(s.rank)
+    win = f"位次 [{max(1, int(rank * reach))}, {int(rank * safe)}]"
+    widened = "（候选偏少，已自动放宽窗口）" if (reach < 0.8 or safe > 1.2) else ""
+    st.success(f"共筛出 {len(rows)} 条 · {win}{widened}")
     df = pd.DataFrame(rows)[[
         "排序", "专业名称", "专业代码", "二级学科", "学科评估", "类别",
         "院校名称", "院校代码", "层次", "2025最低位次", "2024最低位次", "2023最低位次",
