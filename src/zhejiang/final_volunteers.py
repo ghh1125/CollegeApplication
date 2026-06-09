@@ -62,7 +62,7 @@ def _quotas(ratio: tuple[int, int, int], total: int = TARGET_TOTAL) -> tuple[int
 
 
 HOME_PROVINCE = "浙江"
-HOME_BONUS = 10  # 本省加权：浙江任何城市 > 外省一线（10+tier vs 0+tier）
+HOME_SCORE = 10  # 本省(浙江)统一最高值，高于外省任何城市等级(tier 1~5)；省内不再细分
 
 
 def _load_extras(conn: Any) -> dict:
@@ -77,11 +77,13 @@ def _load_extras(conn: Any) -> dict:
     }
     # 城市 → tier（5一线…1普通地级市），用于地域折价
     city_tier = {r[0]: (r[1] or 1) for r in conn.execute("SELECT city_name, city_tier FROM city_profile")}
-    # 学校 → 地域折价系数 = (本省? 10 : 0) + 城市tier；浙江权重最高
+    # 学校 → 地域折价系数：本省(浙江)统一最高值；外省按城市等级(tier)
     region: dict[str, int] = {}
     for name, prov, city in conn.execute("SELECT school_name, province, city FROM school_master"):
-        tier = city_tier.get(city) or city_tier.get((city or "") + "市") or 1
-        region[name] = (HOME_BONUS if prov == HOME_PROVINCE else 0) + tier
+        if prov == HOME_PROVINCE:
+            region[name] = HOME_SCORE
+        else:
+            region[name] = city_tier.get(city) or city_tier.get((city or "") + "市") or 1
     return {"sp": sp, "career": career, "region": region}
 
 
