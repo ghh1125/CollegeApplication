@@ -140,6 +140,7 @@ def render(province: str = "zhejiang") -> None:
         _render_summary(saved)
         _render_persona(saved)
         _render_screening(saved)
+        _render_final(saved)
 
 
 def _render_persona(s: StudentInput) -> None:
@@ -204,5 +205,50 @@ def _render_screening(s: StudentInput) -> None:
             "2025最低位次": st.column_config.NumberColumn(width="small"),
             "2024最低位次": st.column_config.NumberColumn(width="small"),
             "2023最低位次": st.column_config.NumberColumn(width="small"),
+        },
+    )
+
+
+def _render_final(s: StudentInput) -> None:
+    """专业过滤面板 + 生成最终 80 志愿表。"""
+    import pandas as pd
+    from src.zhejiang.final_volunteers import generate
+
+    st.divider()
+    st.subheader("第三步 · 专业过滤 → 生成最终 80 志愿")
+    with st.expander("专业过滤（过滤后再生成）", expanded=True):
+        custom = st.text_input("自定义排除专业（关键词，逗号分隔）",
+                               placeholder="例：护理, 旅游管理, 园艺",
+                               help="专业名包含任一关键词的会被剔除")
+        c1, c2, c3 = st.columns(3)
+        c1.checkbox("天坑专业过滤", value=False, disabled=True, help="暂无数据，占位")
+        c2.checkbox("教育部预警专业过滤", value=False, disabled=True, help="暂无数据，占位")
+        c3.checkbox("教育部撤销专业过滤", value=False, disabled=True, help="暂无数据，占位")
+        st.caption("学科范围（一级/二级）请在最上方表单调整后重新保存。天坑/预警/撤销暂留空。")
+
+    if not st.button("生成最终志愿（80个）", type="primary", use_container_width=True):
+        return
+    kws = [k for k in custom.replace("，", ",").split(",") if k.strip()]
+    with st.spinner("生成中…"):
+        rows = generate(s, exclude_keywords=kws)
+    if not rows:
+        st.warning("过滤后没有候选了，放宽过滤条件试试。")
+        return
+    from collections import Counter
+    cwb = Counter(r["冲稳保"] for r in rows)
+    st.success(f"共 {len(rows)} 个志愿 · 冲 {cwb['冲']} / 稳 {cwb['稳']} / 保 {cwb['保']}")
+    df = pd.DataFrame(rows)[[
+        "序号", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估",
+        "考研路径", "专业发展路径", "类别", "院校名称", "院校代码", "层次",
+        "2025最低位次", "2024最低位次", "2023最低位次", "三年平均位次",
+    ]]
+    st.dataframe(
+        df, width="stretch", hide_index=True, height=600,
+        column_config={
+            "序号": st.column_config.NumberColumn(width="small"),
+            "冲稳保": st.column_config.TextColumn(width="small"),
+            "学科评估": st.column_config.TextColumn(width="small"),
+            "专业发展路径": st.column_config.TextColumn(width="medium"),
+            "层次": st.column_config.TextColumn(width="small"),
         },
     )

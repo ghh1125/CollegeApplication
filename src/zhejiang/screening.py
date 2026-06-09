@@ -96,16 +96,20 @@ def _load_lookups(conn: Any) -> dict:
     return {"name2code": name2code, "hist": hist, "disc": disc, "prov": prov}
 
 
-def screen(student: Any, year: int = YEAR) -> list[dict]:
-    """按学生输入筛选 + 组装 + 按 2025 位次排序，返回结果行。"""
+def screen(student: Any, year: int = YEAR,
+           reach: float | None = None, safe: float | None = None) -> list[dict]:
+    """按学生输入筛选 + 组装 + 按 2025 位次排序，返回结果行。
+
+    reach/safe：可覆盖画像默认的位次窗口倍率（候选不足凑满 80 时放宽用）。
+    """
     selected = {_SUBJECT_ALIASES.get(s, s) for s in (student.selected_subjects or [])}
     want_cats = set(getattr(student, "major_categories", []) or [])  # 一级学科：门类 2 位码
     want_classes = set(student.major_classes or [])                  # 二级学科：专业类 4 位码
     pref_provs = set(student.region.provinces) if student.region.has_preference else set()
-    # 候选位次窗口 [rank_lo(冲), rank_hi(保)]，倍率取自画像
+    # 候选位次窗口 [rank_lo(冲), rank_hi(保)]，倍率默认取自画像，可被 reach/safe 覆盖
     persona = classify(int(student.rank))
-    rank_lo = max(1, int(student.rank * persona.reach_mult))
-    rank_hi = int(student.rank * persona.safe_mult)
+    rank_lo = max(1, int(student.rank * (reach if reach is not None else persona.reach_mult)))
+    rank_hi = int(student.rank * (safe if safe is not None else persona.safe_mult))
 
     # 体检受限（色觉）：受限专业类 + 受限专业名
     med_conditions = conditions_for(getattr(student.medical, "color_vision", "正常"),

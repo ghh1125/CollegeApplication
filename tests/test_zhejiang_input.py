@@ -175,3 +175,35 @@ class ScreeningTests(unittest.TestCase):
                     major_classes=["1002"], medical={"color_vision": "色盲"})
         rows = self.screen(s)
         self.assertEqual(len(rows), 0)  # 临床医学类被色盲剔除
+
+
+class FinalVolunteerTests(unittest.TestCase):
+    """最终 80 志愿生成（需真实库，缺库则跳过）。"""
+
+    def setUp(self):
+        import os
+        if not os.path.exists("data/zhejiang/college.db"):
+            self.skipTest("no zhejiang db")
+        from src.zhejiang.final_volunteers import generate
+        from src.zhejiang.input.student_input import StudentInput
+        self.generate = generate
+        self.SI = StudentInput
+
+    def test_generate_80_and_columns(self):
+        s = self.SI(rank=8000, total_score=620, selected_subjects=["物理", "化学", "生物"])
+        rows = self.generate(s)
+        self.assertEqual(len(rows), 80)  # 凑满 80
+        # 列齐全
+        for col in ("序号", "冲稳保", "专业名称", "考研路径", "专业发展路径", "三年平均位次"):
+            self.assertIn(col, rows[0])
+        # 按 2025 位次升序编号
+        r25 = [r["2025最低位次"] for r in rows]
+        self.assertEqual(r25, sorted(r25))
+        self.assertEqual([r["序号"] for r in rows], list(range(1, 81)))
+        # 冲稳保都有
+        self.assertEqual({r["冲稳保"] for r in rows}, {"冲", "稳", "保"})
+
+    def test_exclude_keywords(self):
+        s = self.SI(rank=8000, total_score=620, selected_subjects=["物理", "化学", "生物"])
+        rows = self.generate(s, exclude_keywords=["护理"])
+        self.assertTrue(all("护理" not in r["专业名称"] for r in rows))
