@@ -99,8 +99,8 @@ def _score_fn(seg: SegmentConfig, rank: int, sp: dict, region: dict) -> Callable
                 vals.append(_GRADE_SCORE.get(r.get("学科评估", ""), 0))
             elif k == "baoyan":
                 vals.append(info.get("baoyan", 0.0))
-            elif k == "industry":      # 行业特色：有特色类型优先
-                vals.append(1 if info.get("stype") in _INDUSTRY_TYPES else 0)
+            elif k == "industry":      # 行业特色：留空待确认，暂置中性(0)不参与排序
+                vals.append(0)
             elif k == "region":        # 地域折价系数：本省(浙江)最高，外省按城市等级
                 vals.append(region.get(r["院校名称"], 1))
             elif k == "public":        # 公办属性
