@@ -129,6 +129,7 @@ def render(province: str = "zhejiang") -> None:
     saved: StudentInput | None = st.session_state.get("zj_input")
     if saved:
         _render_summary(saved)
+        _render_screening(saved)
 
 
 def _render_summary(s: StudentInput) -> None:
@@ -148,4 +149,34 @@ def _render_summary(s: StudentInput) -> None:
         ("地域偏好", region), ("体检", med_str), ("单科成绩", sc_str),
     ]:
         st.write(f"- **{label}**：{val}")
-    st.caption("信息已保存，下一步会据此筛选可填的学校专业（开发中）。")
+
+
+def _render_screening(s: StudentInput) -> None:
+    import pandas as pd
+    from src.zhejiang.screening import screen
+
+    st.divider()
+    st.subheader("第二步 · 可填学校专业（按 2025 位次排序）")
+    st.caption("已用：选科、意向学科、地域偏好、体检色觉筛选。"
+               "未用（缺结构化数据）：学费、单科最低分、调剂规则。")
+    with st.spinner("筛选中…"):
+        rows = screen(s)
+    if not rows:
+        st.warning("没有符合条件的学校专业，试着放宽意向学科或地域偏好。")
+        return
+    st.success(f"共筛出 {len(rows)} 条")
+    df = pd.DataFrame(rows)[[
+        "排序", "专业名称", "专业代码", "二级学科", "学科评估", "类别",
+        "院校名称", "院校代码", "层次", "2025最低位次", "2024最低位次", "2023最低位次",
+    ]]
+    st.dataframe(
+        df, width="stretch", hide_index=True, height=600,
+        column_config={
+            "排序": st.column_config.NumberColumn(width="small"),
+            "学科评估": st.column_config.TextColumn(width="small"),
+            "层次": st.column_config.TextColumn(width="small"),
+            "2025最低位次": st.column_config.NumberColumn(width="small"),
+            "2024最低位次": st.column_config.NumberColumn(width="small"),
+            "2023最低位次": st.column_config.NumberColumn(width="small"),
+        },
+    )

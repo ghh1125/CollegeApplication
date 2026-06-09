@@ -115,3 +115,37 @@ class StudentInputTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ScreeningTests(unittest.TestCase):
+    """筛选+组装+排序（需真实库，缺库则跳过）。"""
+
+    def setUp(self):
+        import os
+        if not os.path.exists("data/zhejiang/college.db"):
+            self.skipTest("no zhejiang db")
+        from src.zhejiang.screening import screen
+        from src.zhejiang.input.student_input import StudentInput
+        self.screen = screen
+        self.SI = StudentInput
+
+    def test_screen_filters_and_sorts(self):
+        s = self.SI(rank=8000, total_score=620, selected_subjects=["物理", "化学", "生物"],
+                    major_classes=["0809"])  # 计算机类
+        rows = self.screen(s)
+        self.assertGreater(len(rows), 0)
+        # 全部是计算机类
+        self.assertTrue(all(r["二级学科"] == "计算机类" for r in rows))
+        # 按 2025 位次升序
+        ranks = [r["2025最低位次"] for r in rows if r["2025最低位次"] is not None]
+        self.assertEqual(ranks, sorted(ranks))
+        # 列齐全
+        for col in ("排序", "专业名称", "学科评估", "类别", "院校名称", "层次"):
+            self.assertIn(col, rows[0])
+
+    def test_medical_color_blind_excludes(self):
+        # 色盲应剔除临床医学类(1002)
+        s = self.SI(rank=8000, total_score=620, selected_subjects=["物理", "化学", "生物"],
+                    major_classes=["1002"], medical={"color_vision": "色盲"})
+        rows = self.screen(s)
+        self.assertEqual(len(rows), 0)  # 临床医学类被色盲剔除
