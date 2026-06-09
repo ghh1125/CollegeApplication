@@ -19,10 +19,12 @@ from src.common.reference import SCHOOL_LEVEL_MAP
 from src.common.ranking.rank import _lookup_discipline_code, normalize_major_name
 from src.zhejiang.input.disciplines import CATEGORY_NAMES, MAJOR_CLASS_NAMES
 from src.zhejiang.input.medical_rules import conditions_for, restricted_classes, restricted_majors
+from src.zhejiang.persona import classify
 
 YEAR = 2025
 REF_YEARS = (2025, 2024, 2023)
-RANK_HEADROOM = 1000  # 只看 2025位次 ≥ (考生位次 - 1000) 的专业，剔掉够不到的顶尖校
+# 候选位次窗口：只保留 2025位次 落在 [考生位次×reach, 考生位次×safe] 内的专业，
+# 两头太离谱的都砍掉（默认 ±20%，倍率随画像在 persona.py 调）。
 # 选科：用户输入用「政治」，库里用「思想政治」
 _SUBJECT_ALIASES = {"政治": "思想政治", "思政": "思想政治", "生物学": "生物", "信息技术": "技术", "通用技术": "技术"}
 # 专业类名 → 4 位码（大类招生如「计算机类」直接按类名映射）
@@ -99,7 +101,10 @@ def screen(student: Any, year: int = YEAR) -> list[dict]:
     selected = {_SUBJECT_ALIASES.get(s, s) for s in (student.selected_subjects or [])}
     want_classes = set(student.major_classes or [])              # 专业类 4 位码
     pref_provs = set(student.region.provinces) if student.region.has_preference else set()
-    rank_floor = max(1, int(student.rank) - RANK_HEADROOM)       # 2025位次下界
+    # 候选位次窗口 [rank_lo(冲), rank_hi(保)]，倍率取自画像
+    persona = classify(int(student.rank))
+    rank_lo = max(1, int(student.rank * persona.reach_mult))
+    rank_hi = int(student.rank * persona.safe_mult)
 
     # 体检受限（色觉）：受限专业类 + 受限专业名
     med_conditions = conditions_for(getattr(student.medical, "color_vision", "正常"),
@@ -143,9 +148,9 @@ def screen(student: Any, year: int = YEAR) -> list[dict]:
             continue
 
         ranks = hist.get((sc, mc), {})
-        # 5. 位次筛选：只保留 2025位次 ≥ (考生位次-1000) 的专业（够不到的顶尖校剔除）
+        # 5. 位次窗口：只保留 2025位次 落在 [冲, 保] 之间（两头太离谱的都砍）
         r2025 = ranks.get(2025)
-        if r2025 is None or r2025 < rank_floor:
+        if r2025 is None or r2025 < rank_lo or r2025 > rank_hi:
             continue
         # 学科评估：本科专业 → 研究生学科码 → 等级
         disc_code = _lookup_discipline_code(normalize_major_name(mn), raw_name=mn)

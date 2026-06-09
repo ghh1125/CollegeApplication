@@ -34,6 +34,10 @@ class Persona:
     feature: str      # 核心特征
     pain: str         # 典型痛点
     value: str        # 智能体核心价值
+    # 候选位次窗口（× 考生位次）：reach=冲到多难(<1，位次更小)，safe=保到多稳(>1，位次更大)
+    # 默认 ±20% 对称窗口；位次越靠后绝对宽度越大、越靠前越窄（自带"极小梯度"特性）。
+    reach_mult: float = 0.8
+    safe_mult: float = 1.2
 
 
 PERSONAS: dict[str, Persona] = {

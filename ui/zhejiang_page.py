@@ -171,7 +171,8 @@ def _render_screening(s: StudentInput) -> None:
 
     st.divider()
     st.subheader("第二步 · 可填学校专业（按 2025 位次排序）")
-    st.caption("已用：选科、意向学科、地域偏好、体检色觉筛选。"
+    st.caption("位次窗口：只看录取位次在你位次 ±20% 内的专业（两头太离谱的已剔除）。"
+               "已用：选科、意向学科、地域偏好、体检色觉。"
                "未用（缺结构化数据）：学费、单科最低分、调剂规则。")
     with st.spinner("筛选中…"):
         rows = screen(s)
