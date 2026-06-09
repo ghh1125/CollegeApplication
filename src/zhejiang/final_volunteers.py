@@ -23,8 +23,8 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from db import get_conn
-from src.zhejiang.persona import ELITE_MAX, PREMIUM_MAX
-from src.zhejiang.screening import _norm, candidate_pool
+from src.zhejiang.persona import ELITE_MAX, PREMIUM_MAX, classify
+from src.zhejiang.screening import _norm, screen
 
 TARGET_TOTAL = 80
 # 冲稳保分界（按 录取位次/考生位次）
@@ -134,9 +134,21 @@ def _select(cands: list[dict], quota: int, gradient: int, scorefn: Callable[[dic
     return picked
 
 
+def _pool_at_least(student: Any) -> list[dict]:
+    """取候选池；不足 80 时逐步放宽位次窗口（保侧放得更宽），直至够 80 或窗口到顶。"""
+    p = classify(int(student.rank))
+    reach, safe = p.reach_mult, p.safe_mult
+    pool = screen(student)
+    while len(pool) < TARGET_TOTAL and (reach > 0.2 or safe < 4.0):
+        reach = max(0.2, reach - 0.1)
+        safe = min(4.0, safe + 0.3)
+        pool = screen(student, reach=reach, safe=safe)
+    return pool
+
+
 def generate(student: Any, exclude_keywords: list[str] | None = None) -> list[dict]:
     """生成最终 80 志愿。exclude_keywords：专业名包含任一关键词则剔除（用户自定义过滤）。"""
-    pool, _, _ = candidate_pool(student, minimum=TARGET_TOTAL)
+    pool = _pool_at_least(student)
     kws = [k.strip() for k in (exclude_keywords or []) if k.strip()]
     if kws:
         pool = [r for r in pool if not any(k in r["专业名称"] for k in kws)]

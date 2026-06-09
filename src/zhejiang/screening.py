@@ -181,18 +181,3 @@ def screen(student: Any, year: int = YEAR,
     for i, r in enumerate(out, 1):
         r["排序"] = i
     return out
-
-
-def candidate_pool(student: Any, minimum: int = 80) -> tuple[list[dict], float, float]:
-    """候选池：默认按画像 ±窗口；候选不足 minimum 时逐步放宽（保侧更宽）直至够或到顶。
-
-    返回 (候选行, 实际reach, 实际safe)。第一步展示与第三步生成共用，保证两边一致。
-    """
-    p = classify(int(student.rank))
-    reach, safe = p.reach_mult, p.safe_mult
-    pool = screen(student, reach=reach, safe=safe)
-    while len(pool) < minimum and (reach > 0.2 or safe < 4.0):
-        reach = max(0.2, reach - 0.1)
-        safe = min(4.0, safe + 0.3)
-        pool = screen(student, reach=reach, safe=safe)
-    return pool, reach, safe
