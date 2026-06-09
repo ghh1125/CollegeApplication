@@ -23,7 +23,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from src.zhejiang.input.disciplines import MAJOR_CLASS_NAMES, classes_grouped
+from src.zhejiang.input.disciplines import CATEGORY_NAMES, MAJOR_CLASS_NAMES, classes_grouped
 
 # ─── 选项常量（页面渲染表单直接用，逻辑留在 src）──────────────────────────────
 
@@ -126,7 +126,8 @@ class StudentInput(BaseModel):
     rank: int                                       # 1. 位次（省内排名）
     total_score: int                                # 2. 高考分数（浙江满分 750）
     selected_subjects: list[str]                    # 3. 选科 7选3
-    major_classes: list[str] = Field(default_factory=list)  # 4. 学科多选（专业类 4 位码）
+    major_categories: list[str] = Field(default_factory=list)  # 4a. 一级学科（门类 2 位码）
+    major_classes: list[str] = Field(default_factory=list)     # 4b. 二级学科（专业类 4 位码）
     budget: Budget = Budget.ANY                     # 5. 经济预算
     region: RegionPreference = RegionPreference()   # 6. 地域偏好
     medical: MedicalExam = MedicalExam()            # 7. 体检
@@ -153,6 +154,19 @@ class StudentInput(BaseModel):
         invalid = set(norm) - set(SUBJECTS_7)
         assert not invalid, f"非法选科：{invalid}"
         return norm
+
+    @field_validator("major_categories")
+    @classmethod
+    def _major_categories(cls, v: list[str]) -> list[str]:
+        # 只保留合法的 2 位门类码，去重保序
+        seen: set[str] = set()
+        out: list[str] = []
+        for code in v:
+            code = str(code).strip()
+            if code in CATEGORY_NAMES and code not in seen:
+                seen.add(code)
+                out.append(code)
+        return out
 
     @field_validator("major_classes")
     @classmethod

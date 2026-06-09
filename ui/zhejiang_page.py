@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from src.zhejiang.input.disciplines import CATEGORY_NAMES
 from src.zhejiang.input.student_input import (
     Budget,
     MAJOR_CLASSES_GROUPED,
@@ -27,6 +28,10 @@ for _cat, _classes in MAJOR_CLASSES_GROUPED.items():
         _CLASS_LABEL_TO_CODE[_label] = _code
         _CODE_TO_LABEL[_code] = _label
         _CLASS_OPTIONS.append(_label)
+
+# 一级学科（门类）多选：标签「门类名」↔ 2 位码
+_CAT_LABEL_TO_CODE = {name: code for code, name in CATEGORY_NAMES.items()}
+_CAT_OPTIONS = list(_CAT_LABEL_TO_CODE.keys())
 
 _BUDGET_OPTIONS = [b.value for b in Budget]
 _COLOR_VISION = ["正常", "色弱", "色盲"]
@@ -61,8 +66,11 @@ def render(province: str = "zhejiang") -> None:
     selected = st.multiselect("选考科目 *（7 选 3）", SUBJECTS_7, max_selections=3,
                               help="政治/历史/地理/物理/化学/生物/技术，选 3 门")
 
-    classes = st.multiselect("意向学科（专业类，可多选）", _CLASS_OPTIONS,
-                             help="选到「专业类」级别，如 工学·计算机类。可不填。")
+    st.markdown("**意向学科**（一级/二级可任填，命中任一即保留；都不填=不限）")
+    categories = st.multiselect("一级学科（门类，可多选）", _CAT_OPTIONS,
+                                help="选整个门类，如 工学，囊括其下所有专业类。")
+    classes = st.multiselect("二级学科（专业类，可多选）", _CLASS_OPTIONS,
+                             help="精确到「专业类」，如 工学·计算机类。")
 
     budget = st.selectbox("经济预算（每年学费）", _BUDGET_OPTIONS, index=0)
 
@@ -103,6 +111,7 @@ def render(province: str = "zhejiang") -> None:
                 rank=int(rank),
                 total_score=int(total_score),
                 selected_subjects=selected,
+                major_categories=[_CAT_LABEL_TO_CODE[l] for l in categories],
                 major_classes=[_CLASS_LABEL_TO_CODE[l] for l in classes],
                 budget=Budget(budget),
                 region={
@@ -149,7 +158,9 @@ def _render_persona(s: StudentInput) -> None:
 def _render_summary(s: StudentInput) -> None:
     st.divider()
     st.markdown("**已填写的信息**")
-    classes = "、".join(_CODE_TO_LABEL.get(c, c) for c in s.major_classes) or "未选"
+    cats = "、".join(CATEGORY_NAMES.get(c, c) for c in s.major_categories)
+    cls = "、".join(_CODE_TO_LABEL.get(c, c) for c in s.major_classes)
+    classes = "；".join(x for x in [cats, cls] if x) or "未选（不限）"
     region = ("无偏好" if not s.region.has_preference
               else "、".join(s.region.provinces) + "（按优先级）")
     med = s.medical

@@ -88,6 +88,10 @@ class StudentInputTests(unittest.TestCase):
         s = self._base(major_classes=["0809", "9999", "0809", "0807"])
         self.assertEqual(s.major_classes, ["0809", "0807"])  # 去非法 + 去重保序
 
+    def test_major_categories_filter_invalid_and_dedup(self):
+        s = self._base(major_categories=["08", "99", "08", "07"])
+        self.assertEqual(s.major_categories, ["08", "07"])  # 去非法(99) + 去重保序
+
     def test_region_requires_provinces_when_preferred(self):
         with self.assertRaises(Exception):
             self._base(region={"has_preference": True, "provinces": []})
@@ -154,6 +158,16 @@ class ScreeningTests(unittest.TestCase):
         # 列齐全
         for col in ("排序", "专业名称", "学科评估", "类别", "院校名称", "层次"):
             self.assertIn(col, rows[0])
+
+    def test_filter_by_category_includes_all_classes(self):
+        # 选一级学科「工学(08)」应包含其下多个专业类（计算机类0809 等）
+        s = self.SI(rank=8000, total_score=620, selected_subjects=["物理", "化学", "生物"],
+                    major_categories=["08"])
+        rows = self.screen(s)
+        self.assertGreater(len(rows), 0)
+        self.assertTrue(all(r["类别"] == "工学" for r in rows))
+        # 应不止一个专业类
+        self.assertGreater(len({r["二级学科"] for r in rows}), 1)
 
     def test_medical_color_blind_excludes(self):
         # 色盲应剔除临床医学类(1002)

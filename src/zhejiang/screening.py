@@ -99,7 +99,8 @@ def _load_lookups(conn: Any) -> dict:
 def screen(student: Any, year: int = YEAR) -> list[dict]:
     """按学生输入筛选 + 组装 + 按 2025 位次排序，返回结果行。"""
     selected = {_SUBJECT_ALIASES.get(s, s) for s in (student.selected_subjects or [])}
-    want_classes = set(student.major_classes or [])              # 专业类 4 位码
+    want_cats = set(getattr(student, "major_categories", []) or [])  # 一级学科：门类 2 位码
+    want_classes = set(student.major_classes or [])                  # 二级学科：专业类 4 位码
     pref_provs = set(student.region.provinces) if student.region.has_preference else set()
     # 候选位次窗口 [rank_lo(冲), rank_hi(保)]，倍率取自画像
     persona = classify(int(student.rank))
@@ -134,9 +135,11 @@ def screen(student: Any, year: int = YEAR) -> list[dict]:
         # 专业类码：优先 national_code 前4位；否则若专业名本身是大类名(如「计算机类」)直接映射
         class4 = code6[:4] if code6 else _CLASSNAME_TO_CODE.get(nrm, "")
         men2 = (code6[:2] if code6 else class4[:2])  # 门类码
-        # 2. 学科（专业类）—— 用户选了才筛；无法归类的（试验班）在筛选开启时排除
-        if want_classes:
-            if not class4 or class4 not in want_classes:
+        # 2. 学科 —— 选了一级(门类)或二级(专业类)才筛：命中任一即通过。
+        #    无法归类的（试验班/专科）在筛选开启时排除。
+        if want_cats or want_classes:
+            hit = (class4 and class4 in want_classes) or (men2 and men2 in want_cats)
+            if not hit:
                 continue
         # 3. 地域偏好
         if pref_provs and prov.get(sn, "") not in pref_provs:
