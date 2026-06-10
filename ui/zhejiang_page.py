@@ -176,23 +176,68 @@ def _render_summary(s: StudentInput) -> None:
         st.write(f"- **{label}**：{val}")
 
 
+def _build_filter_opts(rows: list[dict]) -> tuple[list[str], dict[str, tuple]]:
+    """从第一步筛选结果构造三级分层选项：门类 / 门类·专业类 / 门类·专业类·具体专业。
+    返回 (option_list, label_map)；label_map: label → (level, cat, cls, maj)。
+    """
+    cat_seen: set[str] = set()
+    cls_seen: set[str] = set()
+    maj_seen: set[str] = set()
+    cat_list: list[str] = []
+    cls_list: list[str] = []
+    maj_list: list[str] = []
+    label_map: dict[str, tuple] = {}
+
+    for r in rows:
+        cat = r.get("类别") or ""
+        cls = r.get("二级学科") or ""
+        maj = r.get("专业名称") or ""
+        if not cat or cat in ("—", "专科(高职)"):
+            cat = ""
+        if not cls or cls in ("—", "专科"):
+            cls = ""
+
+        if cat and cat not in cat_seen:
+            cat_seen.add(cat)
+            cat_list.append(cat)
+            label_map[cat] = ("cat", cat, "", "")
+
+        cls_lbl = f"{cat}·{cls}" if cat and cls else ""
+        if cls_lbl and cls_lbl not in cls_seen:
+            cls_seen.add(cls_lbl)
+            cls_list.append(cls_lbl)
+            label_map[cls_lbl] = ("cls", cat, cls, "")
+
+        if maj:
+            if cls_lbl:
+                maj_lbl = f"{cls_lbl}·{maj}"
+            elif cat:
+                maj_lbl = f"{cat}··{maj}"
+            else:
+                maj_lbl = maj
+            if maj_lbl not in maj_seen:
+                maj_seen.add(maj_lbl)
+                maj_list.append(maj_lbl)
+                label_map[maj_lbl] = ("maj", cat, cls, maj)
+
+    return cat_list + cls_list + maj_list, label_map
+
+
 def _render_screening(s: StudentInput) -> None:
     import pandas as pd
     from src.zhejiang.screening import screen
 
     st.divider()
-    st.subheader("第二步 · 初步筛选（按省份排，浙江最前）")
-    st.caption("不按位次过滤——选科/学科匹配的全部列出，冲稳保留到下一步。"
-               "已用：选科、学科门类、地域偏好、体检色觉。"
-               "未用（缺结构化数据）：学费/学制、单科最低分、调剂规则。")
+    st.subheader("第一步 · 初步筛选（按省份排，浙江最前）")
+    st.caption("已用：选科、学科门类、地域偏好、体检色觉、2025位次≥你的位次。"
+               "未用（缺数据）：学费/学制、单科最低分、调剂规则。")
     with st.spinner("筛选中…"):
         rows = screen(s)
-    st.session_state["zj_screen_rows"] = rows  # 供下一步「排除专业」做选项
+    st.session_state["zj_screen_rows"] = rows
     if not rows:
         st.warning("没有符合条件的学校专业，试着放宽学科门类或地域偏好。")
         return
     st.success(f"共筛出 {len(rows)} 条")
-    # 内部键 → 用户列名
     df = pd.DataFrame(rows)[[
         "排序", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称", "院校代码",
         "层次", "城市", "办学类型", "学制", "学费/年", "2025最低位次", "2024最低位次", "2023最低位次",
@@ -209,6 +254,40 @@ def _render_screening(s: StudentInput) -> None:
             "2023最低位次": st.column_config.NumberColumn(width="small"),
         },
     )
+
+    # ── 专业意向过滤（出现在第一表格下方，影响第二步志愿生成）──────────────────
+    st.divider()
+    st.subheader("专业意向过滤")
+    st.caption("以下设置将影响第二步志愿生成。选项来源于上方初步筛选结果，支持三级粒度：门类 / 门类·专业类 / 门类·专业类·具体专业。")
+
+    opts, label_map = _build_filter_opts(rows)
+    fc, pc = st.columns(2)
+    with fc:
+        excluded = st.multiselect(
+            "非意向专业剔除",
+            opts,
+            key="zj_filter_exclude",
+            help="选中的门类/专业类/具体专业将从志愿里完全排除",
+        )
+    with pc:
+        preferred = st.multiselect(
+            "专业偏好",
+            opts,
+            key="zj_filter_prefer",
+            help="选中的门类/专业类/具体专业在生成志愿时优先排列",
+        )
+    moe_warn = st.toggle(
+        "教育部专业预警过滤",
+        value=False,
+        disabled=True,
+        help="教育部发布的就业预警专业；暂无公开结构化数据，功能预留",
+    )
+    st.session_state["zj_intent_filter"] = {
+        "excluded": excluded,
+        "preferred": preferred,
+        "label_map": label_map,
+        "moe_warn": moe_warn,
+    }
 
 
 def _render_final(s: StudentInput) -> None:
