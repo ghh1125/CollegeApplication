@@ -266,18 +266,19 @@ def _render_screening(s: StudentInput) -> None:
         "moe_warn": moe_warn,
     }
 
-    # ── 过滤后结果表格（实时反映意向过滤设置）────────────────────────────────
-    filtered_rows = _apply_intent_filter(rows, excl_cats, excl_cls, excl_majs,
-                                         pref_cats, pref_cls, pref_majs)
-    # 重新编号
-    filtered_rows = [{**r, "排序": i, "预警状态": "—"} for i, r in enumerate(filtered_rows, 1)]
-    st.session_state["zj_filtered_rows"] = filtered_rows
+    if st.button("开始二轮筛选", type="primary", use_container_width=True):
+        filtered = _apply_intent_filter(rows, excl_cats, excl_cls, excl_majs,
+                                        pref_cats, pref_cls, pref_majs)
+        st.session_state["zj_filtered_rows"] = [
+            {**r, "排序": i, "预警状态": "—"} for i, r in enumerate(filtered, 1)
+        ]
+
+    filtered_rows: list[dict] = st.session_state.get("zj_filtered_rows", [])
+    if not filtered_rows:
+        return
 
     st.divider()
-    st.subheader("过滤结果")
-    if not filtered_rows:
-        st.warning("当前过滤条件下没有结果，请调整意向设置。")
-        return
+    st.subheader("二轮筛选")
     removed = len(rows) - len(filtered_rows)
     msg = f"共 {len(filtered_rows)} 条"
     if removed:
