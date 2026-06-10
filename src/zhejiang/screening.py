@@ -107,7 +107,20 @@ def _load_lookups(conn: Any) -> dict:
     for sn, nat, rk in conn.execute("SELECT school_name, school_nature, ruanke_rank FROM school_profile"):
         nature[sn] = nat or ""
         ruanke[sn] = rk  # None if unranked
-    return {"name2code": name2code, "hist": hist, "disc": disc, "prov": prov, "city": city, "nature": nature, "ruanke": ruanke}
+    # school_name → charter fields (2026)
+    charter: dict[str, dict] = {}
+    for sn, tuition, physical, language, rules in conn.execute(
+        """SELECT school_name, tuition_text, physical_requirement_text,
+                  language_requirement_text, admission_rules_text
+           FROM admission_charter WHERE year=2026 AND fetch_status='ok'"""
+    ):
+        charter[sn] = {
+            "tuition_text": tuition or "",
+            "physical_text": physical or "",
+            "language_text": language or "",
+            "rules_text": rules or "",
+        }
+    return {"name2code": name2code, "hist": hist, "disc": disc, "prov": prov, "city": city, "nature": nature, "ruanke": ruanke, "charter": charter}
 
 
 HOME_PROVINCE = "浙江"
@@ -142,7 +155,7 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
         ).fetchall()
 
     name2code, hist, disc = lk["name2code"], lk["hist"], lk["disc"]
-    prov, city, nature, ruanke = lk["prov"], lk["city"], lk["nature"], lk["ruanke"]
+    prov, city, nature, ruanke, charter = lk["prov"], lk["city"], lk["nature"], lk["ruanke"], lk["charter"]
     out: list[dict] = []
     for sc, sn, mc, mn, req, tuition, duration in rows_raw:
         sc, mc = str(sc), str(mc)
@@ -177,6 +190,7 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
         is_zhuanke = code6[:2].isdigit() and int(code6[:2]) >= 40 if code6 else False
         if is_zhuanke:
             continue
+        ch = charter.get(sn, {})
         out.append({
             "专业名称": mn, "专业代码": mc,
             "二级学科": MAJOR_CLASS_NAMES.get(class4, "—"),
@@ -186,8 +200,11 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             "层次": _level_label(sn),
             "城市": city.get(sn) or "—",
             "办学类型": nature.get(sn) or "—",
-            "学制": duration or "—",          # 数据暂缺，多为 —
-            "学费/年": tuition or "—",         # 数据暂缺，多为 —
+            "学制": duration or "—",
+            "学费/年": ch.get("tuition_text") or tuition or "—",
+            "体检要求": ch.get("physical_text") or "—",
+            "外语要求": ch.get("language_text") or "—",
+            "章程": "有" if ch else "—",
             "省份": prov.get(sn, ""),
             "_ruanke_rank": ruanke.get(sn),
             "2025最低位次": ranks.get(2025),
