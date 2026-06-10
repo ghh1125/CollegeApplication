@@ -191,6 +191,32 @@ CREATE TABLE IF NOT EXISTS school_info_section (
     UNIQUE(school_name, section_key)
 );
 
+CREATE TABLE IF NOT EXISTS admission_charter (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    year INTEGER NOT NULL,
+    school_name TEXT NOT NULL,
+    school_id TEXT,
+    province_scope TEXT DEFAULT '浙江',
+    title TEXT,
+    content TEXT,
+    content_html TEXT,
+    image_urls TEXT,
+    source_name TEXT DEFAULT '高校官网',
+    source_url TEXT,
+    source_type TEXT DEFAULT 'html',
+    fetch_status TEXT DEFAULT 'ok',
+    ocr_status TEXT DEFAULT 'not_needed',
+    tuition_text TEXT,
+    housing_fee_text TEXT,
+    admission_rules_text TEXT,
+    language_requirement_text TEXT,
+    physical_requirement_text TEXT,
+    contact_text TEXT,
+    plan_policy_text TEXT,
+    fetched_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(year, school_name)
+);
+
 CREATE TABLE IF NOT EXISTS major_profile (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     major_name TEXT NOT NULL,

@@ -101,9 +101,13 @@ def _load_lookups(conn: Any) -> dict:
     for sn, p, ct in conn.execute("SELECT school_name, province, city FROM school_master"):
         prov[sn] = p or ""
         city[sn] = ct or ""
-    # school_name → 办学类型（school_profile.school_nature）
-    nature = {r[0]: (r[1] or "") for r in conn.execute("SELECT school_name, school_nature FROM school_profile")}
-    return {"name2code": name2code, "hist": hist, "disc": disc, "prov": prov, "city": city, "nature": nature}
+    # school_name → 办学类型（school_profile.school_nature）; 软科排名
+    ruanke: dict[str, int | None] = {}
+    nature: dict[str, str] = {}
+    for sn, nat, rk in conn.execute("SELECT school_name, school_nature, ruanke_rank FROM school_profile"):
+        nature[sn] = nat or ""
+        ruanke[sn] = rk  # None if unranked
+    return {"name2code": name2code, "hist": hist, "disc": disc, "prov": prov, "city": city, "nature": nature, "ruanke": ruanke}
 
 
 HOME_PROVINCE = "浙江"
@@ -138,7 +142,7 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
         ).fetchall()
 
     name2code, hist, disc = lk["name2code"], lk["hist"], lk["disc"]
-    prov, city, nature = lk["prov"], lk["city"], lk["nature"]
+    prov, city, nature, ruanke = lk["prov"], lk["city"], lk["nature"], lk["ruanke"]
     out: list[dict] = []
     for sc, sn, mc, mn, req, tuition, duration in rows_raw:
         sc, mc = str(sc), str(mc)
@@ -183,16 +187,18 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             "学制": duration or "—",          # 数据暂缺，多为 —
             "学费/年": tuition or "—",         # 数据暂缺，多为 —
             "省份": prov.get(sn, ""),
+            "_ruanke_rank": ruanke.get(sn),
             "2025最低位次": ranks.get(2025),
             "2024最低位次": ranks.get(2024),
             "2023最低位次": ranks.get(2023),
         })
 
-    # 排序：省份(浙江最前) → 大学 → 2025位次(无则排末尾)
+    # 排序：省份(浙江最前) → 软科排名(有排名优先，小=好) → 无排名按校名 → 2025位次
     def _key(r: dict) -> tuple:
         p = r["省份"]
+        rk = r["_ruanke_rank"]
         r25 = r["2025最低位次"]
-        return (p != HOME_PROVINCE, p, r["院校名称"], r25 is None, r25 or 0)
+        return (p != HOME_PROVINCE, p, rk is None, rk or 0, r["院校名称"], r25 is None, r25 or 0)
 
     out.sort(key=_key)
     return out
