@@ -134,15 +134,23 @@ def _select(cands: list[dict], quota: int, gradient: int, scorefn: Callable[[dic
     return picked
 
 
+def _window(full: list[dict], rank: int, reach: float, safe: float) -> list[dict]:
+    """从初筛全量池里按位次窗口 [rank×reach, rank×safe] 取候选（无 2025 位次的丢弃）。"""
+    lo, hi = max(1, int(rank * reach)), int(rank * safe)
+    return [r for r in full if r["2025最低位次"] is not None and lo <= r["2025最低位次"] <= hi]
+
+
 def _pool_at_least(student: Any) -> list[dict]:
-    """取候选池；不足 80 时逐步放宽位次窗口（保侧放得更宽），直至够 80 或窗口到顶。"""
-    p = classify(int(student.rank))
+    """初筛全量池 → 按画像位次窗口收窄；不足 80 时逐步放宽窗口（保侧更宽），直至够 80 或到顶。"""
+    full = screen(student)                         # 第一步全量池（已不按位次过滤）
+    rank = int(student.rank)
+    p = classify(rank)
     reach, safe = p.reach_mult, p.safe_mult
-    pool = screen(student)
+    pool = _window(full, rank, reach, safe)
     while len(pool) < TARGET_TOTAL and (reach > 0.2 or safe < 4.0):
         reach = max(0.2, reach - 0.1)
         safe = min(4.0, safe + 0.3)
-        pool = screen(student, reach=reach, safe=safe)
+        pool = _window(full, rank, reach, safe)
     return pool
 
 

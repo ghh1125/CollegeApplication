@@ -1,11 +1,16 @@
-"""浙江筛选 + 组装 + 排序（重构版第二步）。
+"""浙江第一步：初步筛选（铺出候选池）。
 
-用用户已填、且**有数据**的维度筛选候选「学校+专业」，组装成结果表，按 2025 最低位次排序。
-参与筛选：选科(7选3) / 学科(专业类) / 地域偏好 / 体检色觉。
+用用户已填、且**有数据**的维度筛选「学校+专业」，组装成表。
+**不按位次过滤**——选科/学科匹配的全部列出，冲稳保留到第二步。
+按 省份排序（浙江最前）→ 同省按大学 → 同校按 2025 位次。
+
+参与筛选：选科(7选3) / 学科门类(一级) / 地域偏好 / 体检色觉。
 暂不参与（缺结构化数据）：经济预算(学费) / 单科最低分 / 调剂规则。
 
-输出列：排序 | 专业名称(代码) | 二级学科 | 学科评估结果 | 类别(门类) |
-        院校名称(代码) | 985/211/双一流/其他 | 2025/2024/2023 最低位次
+输出键（UI 显示名见 ui 层）：
+  排序 | 专业名称 | 专业代码 | 二级学科(=专业类) | 学科评估 | 类别(门类) |
+  院校名称 | 院校代码 | 层次(=院校级别) | 城市 | 办学类型 | 学制 | 学费/年 |
+  省份 | 2025/2024/2023最低位次
 """
 
 from __future__ import annotations
@@ -19,7 +24,6 @@ from src.common.reference import SCHOOL_LEVEL_MAP
 from src.common.ranking.rank import _lookup_discipline_code, normalize_major_name
 from src.zhejiang.input.disciplines import CATEGORY_NAMES, MAJOR_CLASS_NAMES
 from src.zhejiang.input.medical_rules import conditions_for, restricted_classes, restricted_majors
-from src.zhejiang.persona import classify
 
 YEAR = 2025
 REF_YEARS = (2025, 2024, 2023)
@@ -91,25 +95,29 @@ def _load_lookups(conn: Any) -> dict:
         (str(r[0]), str(r[1])): str(r[2])
         for r in conn.execute("SELECT school_name, discipline_code, grade FROM discipline_evaluation")
     }
-    # school_name → province
-    prov = {r[0]: (r[1] or "") for r in conn.execute("SELECT school_name, province FROM school_master")}
-    return {"name2code": name2code, "hist": hist, "disc": disc, "prov": prov}
+    # school_name → province / city（school_master）
+    prov: dict[str, str] = {}
+    city: dict[str, str] = {}
+    for sn, p, ct in conn.execute("SELECT school_name, province, city FROM school_master"):
+        prov[sn] = p or ""
+        city[sn] = ct or ""
+    # school_name → 办学类型（school_profile.school_nature）
+    nature = {r[0]: (r[1] or "") for r in conn.execute("SELECT school_name, school_nature FROM school_profile")}
+    return {"name2code": name2code, "hist": hist, "disc": disc, "prov": prov, "city": city, "nature": nature}
 
 
-def screen(student: Any, year: int = YEAR,
-           reach: float | None = None, safe: float | None = None) -> list[dict]:
-    """按学生输入筛选 + 组装 + 按 2025 位次排序，返回结果行。
+HOME_PROVINCE = "浙江"
 
-    reach/safe：可覆盖画像默认的位次窗口倍率（候选不足凑满 80 时放宽用）。
+
+def screen(student: Any, year: int = YEAR) -> list[dict]:
+    """初步筛选：按 选科/学科门类/地域/体检 过滤，**不按位次过滤**。
+
+    返回全部匹配的「学校+专业」，按 省份(浙江最前)→大学→2025位次 排序。
     """
     selected = {_SUBJECT_ALIASES.get(s, s) for s in (student.selected_subjects or [])}
     want_cats = set(getattr(student, "major_categories", []) or [])  # 一级学科：门类 2 位码
     want_classes = set(student.major_classes or [])                  # 二级学科：专业类 4 位码
     pref_provs = set(student.region.provinces) if student.region.has_preference else set()
-    # 候选位次窗口 [rank_lo(冲), rank_hi(保)]，倍率默认取自画像，可被 reach/safe 覆盖
-    persona = classify(int(student.rank))
-    rank_lo = max(1, int(student.rank * (reach if reach is not None else persona.reach_mult)))
-    rank_hi = int(student.rank * (safe if safe is not None else persona.safe_mult))
 
     # 体检受限（色觉）：受限专业类 + 受限专业名
     med_conditions = conditions_for(getattr(student.medical, "color_vision", "正常"),
@@ -123,13 +131,15 @@ def screen(student: Any, year: int = YEAR,
     with get_conn("zhejiang") as conn:
         lk = _load_lookups(conn)
         rows_raw = conn.execute(
-            """SELECT school_code, school_name, major_code, major_name, subject_requirement_json
+            """SELECT school_code, school_name, major_code, major_name,
+                      subject_requirement_json, tuition, duration
                FROM admission_plan WHERE year=?""", (year,)
         ).fetchall()
 
-    name2code, hist, disc, prov = lk["name2code"], lk["hist"], lk["disc"], lk["prov"]
+    name2code, hist, disc = lk["name2code"], lk["hist"], lk["disc"]
+    prov, city, nature = lk["prov"], lk["city"], lk["nature"]
     out: list[dict] = []
-    for sc, sn, mc, mn, req in rows_raw:
+    for sc, sn, mc, mn, req, tuition, duration in rows_raw:
         sc, mc = str(sc), str(mc)
         # 1. 选科
         if not _subject_ok(req, selected):
@@ -139,7 +149,7 @@ def screen(student: Any, year: int = YEAR,
         # 专业类码：优先 national_code 前4位；否则若专业名本身是大类名(如「计算机类」)直接映射
         class4 = code6[:4] if code6 else _CLASSNAME_TO_CODE.get(nrm, "")
         men2 = (code6[:2] if code6 else class4[:2])  # 门类码
-        # 2. 学科 —— 选了一级(门类)或二级(专业类)才筛：命中任一即通过。
+        # 2. 学科门类 —— 选了一级(门类)或二级(专业类)才筛：命中任一即通过。
         #    无法归类的（试验班/专科）在筛选开启时排除。
         if want_cats or want_classes:
             hit = (class4 and class4 in want_classes) or (men2 and men2 in want_cats)
@@ -155,10 +165,6 @@ def screen(student: Any, year: int = YEAR,
             continue
 
         ranks = hist.get((sc, mc), {})
-        # 5. 位次窗口：只保留 2025位次 落在 [冲, 保] 之间（两头太离谱的都砍）
-        r2025 = ranks.get(2025)
-        if r2025 is None or r2025 < rank_lo or r2025 > rank_hi:
-            continue
         # 学科评估：本科专业 → 研究生学科码 → 等级
         disc_code = _lookup_discipline_code(normalize_major_name(mn), raw_name=mn)
         grade = disc.get((sn, disc_code or ""), "")
@@ -171,13 +177,23 @@ def screen(student: Any, year: int = YEAR,
             "类别": CATEGORY_NAMES.get(men2, "专科(高职)" if is_zhuanke else "—"),
             "院校名称": sn, "院校代码": sc,
             "层次": _level_label(sn),
-            "2025最低位次": r2025,
+            "城市": city.get(sn) or "—",
+            "办学类型": nature.get(sn) or "—",
+            "学制": duration or "—",          # 数据暂缺，多为 —
+            "学费/年": tuition or "—",         # 数据暂缺，多为 —
+            "省份": prov.get(sn, ""),
+            "2025最低位次": ranks.get(2025),
             "2024最低位次": ranks.get(2024),
             "2023最低位次": ranks.get(2023),
         })
 
-    # 排序：按 2025 最低位次升序
-    out.sort(key=lambda r: r["2025最低位次"])
+    # 排序：省份(浙江最前) → 大学 → 2025位次(无则排末尾)
+    def _key(r: dict) -> tuple:
+        p = r["省份"]
+        r25 = r["2025最低位次"]
+        return (p != HOME_PROVINCE, p, r["院校名称"], r25 is None, r25 or 0)
+
+    out.sort(key=_key)
     for i, r in enumerate(out, 1):
         r["排序"] = i
     return out

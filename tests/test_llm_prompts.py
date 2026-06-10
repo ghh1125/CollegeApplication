@@ -96,6 +96,43 @@ class LLMClientConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "API Key.*中文"):
             get_client("你的key")
 
+    def test_llm_stream_uses_qwen37_plus_by_default(self) -> None:
+        from config import config
+        from src.common.input import llm
+
+        captured: dict[str, str] = {}
+        original_get_client = llm.get_client
+
+        class FakeDelta:
+            content = "ok"
+
+        class FakeChoice:
+            delta = FakeDelta()
+
+        class FakeChunk:
+            choices = [FakeChoice()]
+
+        class FakeCompletions:
+            def create(self, **kwargs):  # noqa: ANN001
+                captured["model"] = kwargs["model"]
+                return [FakeChunk()]
+
+        class FakeChat:
+            completions = FakeCompletions()
+
+        class FakeClient:
+            chat = FakeChat()
+
+        llm.get_client = lambda api_key=None: FakeClient()
+        try:
+            output = "".join(llm._stream([{"role": "user", "content": "test"}], api_key="sk-test"))
+        finally:
+            llm.get_client = original_get_client
+
+        self.assertEqual(config.dashscope_model, "qwen3.7-plus")
+        self.assertEqual(captured["model"], "qwen3.7-plus")
+        self.assertEqual(output, "ok")
+
 
 if __name__ == "__main__":
     unittest.main()

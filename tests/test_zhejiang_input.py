@@ -46,9 +46,10 @@ class MedicalRuleTests(unittest.TestCase):
 
 class DisciplineTableTests(unittest.TestCase):
     def test_12_categories(self):
-        # 12 个本科门类（军事学 11 不在招生口径）
-        self.assertEqual(len(CATEGORY_NAMES), 12)
+        # 13 个门类：12 本科门类(军事学 11 不在招生口径) + 交叉学科(14,暂无数据)
+        self.assertEqual(len(CATEGORY_NAMES), 13)
         self.assertEqual(CATEGORY_NAMES["08"], "工学")
+        self.assertEqual(CATEGORY_NAMES["14"], "交叉学科")
 
     def test_class_lookup(self):
         self.assertEqual(class_name("0809"), "计算机类")
@@ -152,11 +153,15 @@ class ScreeningTests(unittest.TestCase):
         self.assertGreater(len(rows), 0)
         # 全部是计算机类
         self.assertTrue(all(r["二级学科"] == "计算机类" for r in rows))
-        # 按 2025 位次升序
-        ranks = [r["2025最低位次"] for r in rows if r["2025最低位次"] is not None]
-        self.assertEqual(ranks, sorted(ranks))
-        # 列齐全
-        for col in ("排序", "专业名称", "学科评估", "类别", "院校名称", "层次"):
+        # 不按位次过滤：含无 2025 位次的行也保留
+        # 省份排序：浙江最前（所有浙江行在非浙江行之前）
+        is_home = [r["省份"] == "浙江" for r in rows]
+        first_non_home = is_home.index(False) if False in is_home else len(is_home)
+        self.assertTrue(all(is_home[:first_non_home]))
+        self.assertTrue(not any(is_home[first_non_home:]))
+        # 列齐全（含新列）
+        for col in ("排序", "专业名称", "学科评估", "类别", "院校名称", "层次",
+                    "城市", "办学类型", "学制", "学费/年", "省份"):
             self.assertIn(col, rows[0])
 
     def test_filter_by_category_includes_all_classes(self):

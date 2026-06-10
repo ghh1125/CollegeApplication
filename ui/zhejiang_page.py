@@ -66,11 +66,9 @@ def render(province: str = "zhejiang") -> None:
     selected = st.multiselect("选考科目 *（7 选 3）", SUBJECTS_7, max_selections=3,
                               help="政治/历史/地理/物理/化学/生物/技术，选 3 门")
 
-    st.markdown("**意向学科**（一级/二级可任填，命中任一即保留；都不填=不限）")
-    categories = st.multiselect("一级学科（门类，可多选）", _CAT_OPTIONS,
-                                help="选整个门类，如 工学，囊括其下所有专业类。")
-    classes = st.multiselect("二级学科（专业类，可多选）", _CLASS_OPTIONS,
-                             help="精确到「专业类」，如 工学·计算机类。")
+    categories = st.multiselect("学科门类（一级，可多选；选「全部」或不选=不限）",
+                                ["全部"] + _CAT_OPTIONS,
+                                help="选整个门类，如 工学，囊括其下所有专业。")
 
     budget = st.selectbox("经济预算（每年学费）", _BUDGET_OPTIONS, index=0)
 
@@ -111,8 +109,9 @@ def render(province: str = "zhejiang") -> None:
                 rank=int(rank),
                 total_score=int(total_score),
                 selected_subjects=selected,
-                major_categories=[_CAT_LABEL_TO_CODE[l] for l in categories],
-                major_classes=[_CLASS_LABEL_TO_CODE[l] for l in classes],
+                # 「全部」或不选 → 不限（空列表）
+                major_categories=[_CAT_LABEL_TO_CODE[l] for l in categories if l != "全部"],
+                major_classes=[],
                 budget=Budget(budget),
                 region={
                     "has_preference": has_region == "有偏好",
@@ -182,27 +181,29 @@ def _render_screening(s: StudentInput) -> None:
     from src.zhejiang.screening import screen
 
     st.divider()
-    st.subheader("第二步 · 可填学校专业（按 2025 位次排序）")
-    st.caption("位次窗口：只看录取位次在你位次 ±20% 内的专业（两头太离谱的已剔除）。"
-               "已用：选科、意向学科、地域偏好、体检色觉。"
-               "未用（缺结构化数据）：学费、单科最低分、调剂规则。")
+    st.subheader("第二步 · 初步筛选（按省份排，浙江最前）")
+    st.caption("不按位次过滤——选科/学科匹配的全部列出，冲稳保留到下一步。"
+               "已用：选科、学科门类、地域偏好、体检色觉。"
+               "未用（缺结构化数据）：学费/学制、单科最低分、调剂规则。")
     with st.spinner("筛选中…"):
         rows = screen(s)
-    st.session_state["zj_screen_rows"] = rows  # 供第三步「排除专业」做选项
+    st.session_state["zj_screen_rows"] = rows  # 供下一步「排除专业」做选项
     if not rows:
-        st.warning("没有符合条件的学校专业，试着放宽意向学科或地域偏好。")
+        st.warning("没有符合条件的学校专业，试着放宽学科门类或地域偏好。")
         return
     st.success(f"共筛出 {len(rows)} 条")
+    # 内部键 → 用户列名
     df = pd.DataFrame(rows)[[
-        "排序", "专业名称", "专业代码", "二级学科", "学科评估", "类别",
-        "院校名称", "院校代码", "层次", "2025最低位次", "2024最低位次", "2023最低位次",
-    ]]
+        "排序", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称", "院校代码",
+        "层次", "城市", "办学类型", "学制", "学费/年", "2025最低位次", "2024最低位次", "2023最低位次",
+    ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
     st.dataframe(
         df, width="stretch", hide_index=True, height=600,
         column_config={
             "排序": st.column_config.NumberColumn(width="small"),
-            "学科评估": st.column_config.TextColumn(width="small"),
-            "层次": st.column_config.TextColumn(width="small"),
+            "学科评估结果": st.column_config.TextColumn(width="small"),
+            "院校级别": st.column_config.TextColumn(width="small"),
+            "城市": st.column_config.TextColumn(width="small"),
             "2025最低位次": st.column_config.NumberColumn(width="small"),
             "2024最低位次": st.column_config.NumberColumn(width="small"),
             "2023最低位次": st.column_config.NumberColumn(width="small"),
