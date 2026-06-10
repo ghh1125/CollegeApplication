@@ -43,22 +43,6 @@ def _reset() -> None:
             del st.session_state[k]
 
 
-def _collect_form() -> dict:
-    """Return the current Zhejiang form context used by AI helpers/tests."""
-
-    return {
-        "rank": st.session_state.get("zj_rank", 8000),
-        "selected_subjects": st.session_state.get("zj_subjects", []),
-        "main_priority": st.session_state.get("zj_priority", "请选择…"),
-        "risk_preference": st.session_state.get("zj_risk", "均衡"),
-        "preferred_majors": [s.strip() for s in st.session_state.get("zj_majors", "").split(",") if s.strip()],
-        "school_levels": st.session_state.get("zj_levels", []),
-        "preferred_cities": [c.strip() for c in st.session_state.get("zj_cities", "").split(",") if c.strip()],
-        "accept_private": st.session_state.get("zj_private", True),
-        "excluded_regions": st.session_state.get("zj_excl", []),
-    }
-
-
 def render(province: str = "zhejiang") -> None:
     st.title("高考志愿推荐系统 · 浙江")
     if st.button("← 切换省份", key="zj_back"):
@@ -225,7 +209,8 @@ def _render_screening(s: StudentInput) -> None:
 
     st.divider()
     st.subheader("第一步 · 初步筛选（按省份排，浙江最前）")
-    st.caption("已用：选科、学科门类、地域偏好、体检色觉、2025位次≥你的位次。学费/体检/外语来源于院校招生章程（56%覆盖率）。")
+    st.caption("已用：选科、学科门类、地域偏好、体检色觉、2025位次≥你的位次。"
+               "未用（缺数据）：学费/学制、单科最低分、调剂规则。")
     with st.spinner("筛选中…"):
         rows = screen(s)
     st.session_state["zj_screen_rows"] = rows
@@ -235,8 +220,7 @@ def _render_screening(s: StudentInput) -> None:
     st.success(f"共筛出 {len(rows)} 条")
     df = pd.DataFrame(rows)[[
         "排序", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称", "院校代码",
-        "层次", "城市", "办学类型", "学制", "学费/年", "体检要求", "外语要求", "章程",
-        "2025最低位次", "2024最低位次", "2023最低位次",
+        "层次", "城市", "办学类型", "学制", "学费/年", "2025最低位次", "2024最低位次", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
     st.dataframe(
         df, width="stretch", hide_index=True, height=600,
@@ -303,7 +287,7 @@ def _render_screening(s: StudentInput) -> None:
 
     df2 = pd.DataFrame(filtered_rows)[[
         "排序", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称", "预警状态",
-        "院校代码", "层次", "城市", "办学类型", "学制", "学费/年", "体检要求", "外语要求", "章程",
+        "院校代码", "层次", "城市", "办学类型", "学制", "学费/年",
         "2025最低位次", "2024最低位次", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
     st.dataframe(
