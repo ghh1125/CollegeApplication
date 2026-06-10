@@ -24,16 +24,12 @@ st.set_page_config(page_title="高考志愿推荐系统", page_icon="🎓", layo
 _PROVINCE_GROUPS = [
     ("已支持省份", [
         ("浙江", "zhejiang", True),
-        ("上海", "shanghai", True),
-        ("江苏", "jiangsu", True),
     ]),
 ]
 
 # 已接入的省份 → 渲染函数
 _PROVINCE_PAGES = {
     "zhejiang": ("ui.zhejiang_page", "render"),
-    "jiangsu": ("ui.jiangsu_page", "render"),
-    "shanghai": ("ui.shanghai_page", "render"),
 }
 
 
