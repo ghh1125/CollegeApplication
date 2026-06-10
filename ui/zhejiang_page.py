@@ -289,6 +289,72 @@ def _render_screening(s: StudentInput) -> None:
         "moe_warn": moe_warn,
     }
 
+    # ── 过滤后结果表格（实时反映意向过滤设置）────────────────────────────────
+    filtered_rows = _apply_intent_filter(rows, excluded, preferred, label_map)
+    # 重新编号
+    filtered_rows = [{**r, "排序": i, "预警状态": "—"} for i, r in enumerate(filtered_rows, 1)]
+    st.session_state["zj_filtered_rows"] = filtered_rows
+
+    st.divider()
+    st.subheader("过滤结果")
+    if not filtered_rows:
+        st.warning("当前过滤条件下没有结果，请调整意向设置。")
+        return
+    removed = len(rows) - len(filtered_rows)
+    msg = f"共 {len(filtered_rows)} 条"
+    if removed:
+        msg += f"（已过滤 {removed} 条）"
+    st.success(msg)
+
+    df2 = pd.DataFrame(filtered_rows)[[
+        "排序", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称", "预警状态",
+        "院校代码", "层次", "城市", "办学类型", "学制", "学费/年",
+        "2025最低位次", "2024最低位次", "2023最低位次",
+    ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
+    st.dataframe(
+        df2, width="stretch", hide_index=True, height=600,
+        column_config={
+            "排序": st.column_config.NumberColumn(width="small"),
+            "学科评估结果": st.column_config.TextColumn(width="small"),
+            "预警状态": st.column_config.TextColumn(width="small"),
+            "院校级别": st.column_config.TextColumn(width="small"),
+            "城市": st.column_config.TextColumn(width="small"),
+            "2025最低位次": st.column_config.NumberColumn(width="small"),
+            "2024最低位次": st.column_config.NumberColumn(width="small"),
+            "2023最低位次": st.column_config.NumberColumn(width="small"),
+        },
+    )
+
+
+def _apply_intent_filter(
+    rows: list[dict],
+    excluded: list[str],
+    preferred: list[str],
+    label_map: dict[str, tuple],
+) -> list[dict]:
+    """按非意向剔除 + 专业偏好过滤 rows。
+    - excluded: 命中任一标签 → 剔除
+    - preferred: 若有选择，只保留命中的行；无选择 = 不限
+    """
+    def matches(r: dict, labels: list[str]) -> bool:
+        for lbl in labels:
+            info = label_map.get(lbl)
+            if not info:
+                continue
+            level, cat, cls, maj = info
+            if level == "cat" and r.get("类别") == cat:
+                return True
+            if level == "cls" and r.get("类别") == cat and r.get("二级学科") == cls:
+                return True
+            if level == "maj" and r.get("专业名称") == maj:
+                return True
+        return False
+
+    out = [r for r in rows if not matches(r, excluded)]
+    if preferred:
+        out = [r for r in out if matches(r, preferred)]
+    return out
+
 
 def _render_final(s: StudentInput) -> None:
     """专业过滤面板 + 生成最终 80 志愿表。"""
