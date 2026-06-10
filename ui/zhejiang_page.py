@@ -176,51 +176,31 @@ def _render_summary(s: StudentInput) -> None:
         st.write(f"- **{label}**：{val}")
 
 
-def _build_filter_opts(rows: list[dict]) -> tuple[list[str], dict[str, tuple]]:
-    """从第一步筛选结果构造三级分层选项：门类 / 门类·专业类 / 门类·专业类·具体专业。
-    返回 (option_list, label_map)；label_map: label → (level, cat, cls, maj)。
+def _build_filter_opts_by_level(rows: list[dict]) -> tuple[list[str], list[str], list[str]]:
+    """从第一步筛选结果提取三级独立选项，顺序与表格一致（去重）。
+    返回 (门类列表, 专业大类列表, 具体专业列表)。
     """
+    _SKIP = {"—", "专科(高职)", "专科", ""}
     cat_seen: set[str] = set()
     cls_seen: set[str] = set()
     maj_seen: set[str] = set()
-    cat_list: list[str] = []
-    cls_list: list[str] = []
-    maj_list: list[str] = []
-    label_map: dict[str, tuple] = {}
-
+    cats: list[str] = []
+    clss: list[str] = []
+    majs: list[str] = []
     for r in rows:
         cat = r.get("类别") or ""
         cls = r.get("二级学科") or ""
         maj = r.get("专业名称") or ""
-        if not cat or cat in ("—", "专科(高职)"):
-            cat = ""
-        if not cls or cls in ("—", "专科"):
-            cls = ""
-
-        if cat and cat not in cat_seen:
+        if cat and cat not in _SKIP and cat not in cat_seen:
             cat_seen.add(cat)
-            cat_list.append(cat)
-            label_map[cat] = ("cat", cat, "", "")
-
-        cls_lbl = f"{cat}·{cls}" if cat and cls else ""
-        if cls_lbl and cls_lbl not in cls_seen:
-            cls_seen.add(cls_lbl)
-            cls_list.append(cls_lbl)
-            label_map[cls_lbl] = ("cls", cat, cls, "")
-
-        if maj:
-            if cls_lbl:
-                maj_lbl = f"{cls_lbl}·{maj}"
-            elif cat:
-                maj_lbl = f"{cat}··{maj}"
-            else:
-                maj_lbl = maj
-            if maj_lbl not in maj_seen:
-                maj_seen.add(maj_lbl)
-                maj_list.append(maj_lbl)
-                label_map[maj_lbl] = ("maj", cat, cls, maj)
-
-    return cat_list + cls_list + maj_list, label_map
+            cats.append(cat)
+        if cls and cls not in _SKIP and cls not in cls_seen:
+            cls_seen.add(cls)
+            clss.append(cls)
+        if maj and maj not in maj_seen:
+            maj_seen.add(maj)
+            majs.append(maj)
+    return cats, clss, majs
 
 
 def _render_screening(s: StudentInput) -> None:
@@ -258,24 +238,22 @@ def _render_screening(s: StudentInput) -> None:
     # ── 专业意向过滤（出现在第一表格下方，影响第二步志愿生成）──────────────────
     st.divider()
     st.subheader("专业意向过滤")
-    st.caption("以下设置将影响第二步志愿生成。选项来源于上方初步筛选结果，支持三级粒度：门类 / 门类·专业类 / 门类·专业类·具体专业。")
+    st.caption("选项来源于上方初步筛选结果；三列分别对应三个粒度：学科门类 / 专业大类 / 具体专业。改选后过滤结果实时刷新。")
 
-    opts, label_map = _build_filter_opts(rows)
-    fc, pc = st.columns(2)
-    with fc:
-        excluded = st.multiselect(
-            "非意向专业剔除",
-            opts,
-            key="zj_filter_exclude",
-            help="选中的门类/专业类/具体专业将从志愿里完全排除",
-        )
-    with pc:
-        preferred = st.multiselect(
-            "专业偏好",
-            opts,
-            key="zj_filter_prefer",
-            help="选中的门类/专业类/具体专业在生成志愿时优先排列",
-        )
+    cats, clss, majs = _build_filter_opts_by_level(rows)
+
+    st.markdown("**非意向专业剔除**（命中任一层 → 剔除）")
+    ec1, ec2, ec3 = st.columns(3)
+    excl_cats = ec1.multiselect("学科门类", cats, key="zj_excl_cat")
+    excl_cls  = ec2.multiselect("专业大类", clss, key="zj_excl_cls")
+    excl_majs = ec3.multiselect("具体专业", majs, key="zj_excl_maj")
+
+    st.markdown("**专业偏好**（若有选择，只保留命中行；无选择 = 不限）")
+    pc1, pc2, pc3 = st.columns(3)
+    pref_cats = pc1.multiselect("学科门类", cats, key="zj_pref_cat")
+    pref_cls  = pc2.multiselect("专业大类", clss, key="zj_pref_cls")
+    pref_majs = pc3.multiselect("具体专业", majs, key="zj_pref_maj")
+
     moe_warn = st.toggle(
         "教育部专业预警过滤",
         value=False,
@@ -283,14 +261,14 @@ def _render_screening(s: StudentInput) -> None:
         help="教育部发布的就业预警专业；暂无公开结构化数据，功能预留",
     )
     st.session_state["zj_intent_filter"] = {
-        "excluded": excluded,
-        "preferred": preferred,
-        "label_map": label_map,
+        "excl_cats": excl_cats, "excl_cls": excl_cls, "excl_majs": excl_majs,
+        "pref_cats": pref_cats, "pref_cls": pref_cls, "pref_majs": pref_majs,
         "moe_warn": moe_warn,
     }
 
     # ── 过滤后结果表格（实时反映意向过滤设置）────────────────────────────────
-    filtered_rows = _apply_intent_filter(rows, excluded, preferred, label_map)
+    filtered_rows = _apply_intent_filter(rows, excl_cats, excl_cls, excl_majs,
+                                         pref_cats, pref_cls, pref_majs)
     # 重新编号
     filtered_rows = [{**r, "排序": i, "预警状态": "—"} for i, r in enumerate(filtered_rows, 1)]
     st.session_state["zj_filtered_rows"] = filtered_rows
@@ -328,31 +306,26 @@ def _render_screening(s: StudentInput) -> None:
 
 def _apply_intent_filter(
     rows: list[dict],
-    excluded: list[str],
-    preferred: list[str],
-    label_map: dict[str, tuple],
+    excl_cats: list[str], excl_cls: list[str], excl_majs: list[str],
+    pref_cats: list[str], pref_cls: list[str], pref_majs: list[str],
 ) -> list[dict]:
-    """按非意向剔除 + 专业偏好过滤 rows。
-    - excluded: 命中任一标签 → 剔除
-    - preferred: 若有选择，只保留命中的行；无选择 = 不限
-    """
-    def matches(r: dict, labels: list[str]) -> bool:
-        for lbl in labels:
-            info = label_map.get(lbl)
-            if not info:
-                continue
-            level, cat, cls, maj = info
-            if level == "cat" and r.get("类别") == cat:
-                return True
-            if level == "cls" and r.get("类别") == cat and r.get("二级学科") == cls:
-                return True
-            if level == "maj" and r.get("专业名称") == maj:
-                return True
-        return False
+    """非意向剔除 + 专业偏好过滤。每级独立集合，命中任一层即生效。"""
+    ec, el, em = set(excl_cats), set(excl_cls), set(excl_majs)
+    pc, pl, pm = set(pref_cats), set(pref_cls), set(pref_majs)
 
-    out = [r for r in rows if not matches(r, excluded)]
-    if preferred:
-        out = [r for r in out if matches(r, preferred)]
+    def is_excluded(r: dict) -> bool:
+        return (r.get("类别") in ec or
+                r.get("二级学科") in el or
+                r.get("专业名称") in em)
+
+    def is_preferred(r: dict) -> bool:
+        return (r.get("类别") in pc or
+                r.get("二级学科") in pl or
+                r.get("专业名称") in pm)
+
+    out = [r for r in rows if not is_excluded(r)]
+    if pc or pl or pm:
+        out = [r for r in out if is_preferred(r)]
     return out
 
 
