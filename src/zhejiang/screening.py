@@ -173,13 +173,15 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
         # 学科评估：本科专业 → 研究生学科码 → 等级
         disc_code = _lookup_discipline_code(normalize_major_name(mn), raw_name=mn)
         grade = disc.get((sn, disc_code or ""), "")
-        # 专科段（前2位 41-59）：本科专业类表不含，单独标「专科(高职)」
+        # 专科段（前2位 41-59）：直接剔除，只保留本科
         is_zhuanke = code6[:2].isdigit() and int(code6[:2]) >= 40 if code6 else False
+        if is_zhuanke:
+            continue
         out.append({
             "专业名称": mn, "专业代码": mc,
-            "二级学科": MAJOR_CLASS_NAMES.get(class4, "专科" if is_zhuanke else "—"),
+            "二级学科": MAJOR_CLASS_NAMES.get(class4, "—"),
             "学科评估": grade or "—",
-            "类别": CATEGORY_NAMES.get(men2, "专科(高职)" if is_zhuanke else "—"),
+            "类别": CATEGORY_NAMES.get(men2, "—"),
             "院校名称": sn, "院校代码": sc,
             "层次": _level_label(sn),
             "城市": city.get(sn) or "—",
