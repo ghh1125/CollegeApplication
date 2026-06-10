@@ -109,10 +109,11 @@ def _load_lookups(conn: Any) -> dict:
 HOME_PROVINCE = "浙江"
 
 
-def screen(student: Any, year: int = YEAR) -> list[dict]:
-    """初步筛选：按 选科/学科门类/地域/体检 过滤，**不按位次过滤**。
+def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
+    """全量候选池：按 选科/学科门类/地域/体检 过滤，**不含位次过滤**。
 
-    返回全部匹配的「学校+专业」，按 省份(浙江最前)→大学→2025位次 排序。
+    返回全部匹配的「学校+专业」，按 省份(浙江最前)→大学→2025位次 排序（未编号）。
+    第二步冲稳保用这个（需要比考生难的「冲」）。
     """
     selected = {_SUBJECT_ALIASES.get(s, s) for s in (student.selected_subjects or [])}
     want_cats = set(getattr(student, "major_categories", []) or [])  # 一级学科：门类 2 位码
@@ -194,6 +195,17 @@ def screen(student: Any, year: int = YEAR) -> list[dict]:
         return (p != HOME_PROVINCE, p, r["院校名称"], r25 is None, r25 or 0)
 
     out.sort(key=_key)
+    return out
+
+
+def screen(student: Any, year: int = YEAR) -> list[dict]:
+    """第一步初步筛选（显示用）：在全量池基础上**只保留考生能上的**——
+    即 2025最低位次 ≥ 考生位次（位次比你大=录取门槛比你低=你能上）。
+    无 2025 位次的（缺数据）不参与，不显示。按 省份(浙江最前)→大学→位次 排序并编号。
+    """
+    rank = int(student.rank)
+    out = [r for r in _full_pool(student, year)
+           if r["2025最低位次"] is not None and r["2025最低位次"] >= rank]
     for i, r in enumerate(out, 1):
         r["排序"] = i
     return out

@@ -24,7 +24,7 @@ from typing import Any, Callable
 
 from db import get_conn
 from src.zhejiang.persona import ELITE_MAX, PREMIUM_MAX, classify
-from src.zhejiang.screening import _norm, screen
+from src.zhejiang.screening import _full_pool, _norm
 
 TARGET_TOTAL = 80
 # 冲稳保分界（按 录取位次/考生位次）
@@ -142,7 +142,7 @@ def _window(full: list[dict], rank: int, reach: float, safe: float) -> list[dict
 
 def _pool_at_least(student: Any) -> list[dict]:
     """初筛全量池 → 按画像位次窗口收窄；不足 80 时逐步放宽窗口（保侧更宽），直至够 80 或到顶。"""
-    full = screen(student)                         # 第一步全量池（已不按位次过滤）
+    full = _full_pool(student)                     # 全量池（不含位次过滤，保留比考生难的「冲」）
     rank = int(student.rank)
     p = classify(rank)
     reach, safe = p.reach_mult, p.safe_mult
