@@ -370,7 +370,8 @@ def _render_final(s: StudentInput) -> None:
         st.session_state["zj_step3_rows_key"] = rows_key
 
     st.divider()
-    st.subheader("第三步 · 生成参考 80 志愿")
+    st.subheader("第三步 · 三轮分档（冲 / 稳 / 保）")
+    st.caption("从二轮候选池中按历年最低位次分档，生成冲/稳/保三个候选池；最终参考 80 志愿从这三个池中按比例选出。")
 
     COLS = [
         "序号", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估", "保研率", "专业发展路径",
@@ -394,22 +395,19 @@ def _render_final(s: StudentInput) -> None:
     def _df(rows: list[dict]) -> "pd.DataFrame":
         return pd.DataFrame(rows).reindex(columns=COLS)
 
-    # ── 阶段一：生成并展示冲/稳/保候选池 ──────────────────────────────────
+    # ── 3a：按位次范围分档，展示三个完整候选池（无数量限制）──────────────
     if "zj_step3_pools" not in st.session_state:
-        if st.button("生成参考候选池（冲/稳/保三档）", type="primary", use_container_width=True):
-            with st.spinner("计算候选池…"):
+        if st.button("开始三轮分档", type="primary", use_container_width=True):
+            with st.spinner("按位次分档中…"):
                 chong_t, wen_t, bao_t, final = generate(s, filtered_rows)
             st.session_state["zj_step3_pools"] = (chong_t, wen_t, bao_t)
-            st.session_state["zj_step3_final"] = final   # 一并缓存，避免重复计算
+            st.session_state["zj_step3_final"] = final
             st.rerun()
         return
 
     chong_t, wen_t, bao_t = st.session_state["zj_step3_pools"]
 
-    st.info(
-        f"候选池已生成：冲 {len(chong_t)} 条 / 稳 {len(wen_t)} 条 / 保 {len(bao_t)} 条。"
-        "查看下方三档后，点击「确认生成最终 80 志愿」。"
-    )
+    st.success(f"三轮分档完成：冲 {len(chong_t)} 条 / 稳 {len(wen_t)} 条 / 保 {len(bao_t)} 条（以下为各档全部候选，无数量限制）")
     with st.expander(f"冲 · 候选池（{len(chong_t)} 条）", expanded=True):
         st.dataframe(_df(chong_t), hide_index=True, height=400, column_config=COL_CFG) if chong_t else st.info("无冲的候选")
     with st.expander(f"稳 · 候选池（{len(wen_t)} 条）", expanded=True):
@@ -417,13 +415,16 @@ def _render_final(s: StudentInput) -> None:
     with st.expander(f"保 · 候选池（{len(bao_t)} 条）", expanded=True):
         st.dataframe(_df(bao_t), hide_index=True, height=400, column_config=COL_CFG) if bao_t else st.info("无保的候选")
 
-    # ── 阶段二：确认后展示最终 80 志愿 ────────────────────────────────────
+    # ── 3b：从三轮候选池按数量规则选出参考 80 志愿 ────────────────────────
+    st.divider()
+    st.subheader("最终 · 参考 80 志愿")
+    st.caption("从三轮冲/稳/保候选池中按数量规则（位次段决定冲/稳/保比例）选出 80 个志愿。")
+
     if "zj_step3_final" not in st.session_state or not st.session_state["zj_step3_final"]:
-        st.warning("二轮筛选结果不足，请放宽筛选条件后重新进行二轮筛选。")
+        st.warning("三轮候选池数量不足，请放宽筛选条件后重新进行二轮筛选。")
         return
 
-    st.divider()
-    if st.button("确认，生成参考 80 志愿 ✓", type="primary", use_container_width=True,
+    if st.button("从三轮候选池生成参考 80 志愿", type="primary", use_container_width=True,
                  key="btn_confirm_final"):
         st.session_state["zj_step3_show_final"] = True
 
