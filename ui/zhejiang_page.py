@@ -375,32 +375,31 @@ def _render_final(s: StudentInput) -> None:
         f"共 {len(final)} 个志愿 · 冲 {cwb.get('冲',0)} / 稳 {cwb.get('稳',0)} / 保 {cwb.get('保',0)}"
     )
 
+    def _df(rows: list[dict]) -> "pd.DataFrame":
+        return pd.DataFrame(rows).reindex(columns=COLS)
+
     # 三档候选表（可折叠）
     with st.expander(f"冲 · 候选池（{len(chong_t)} 条）", expanded=False):
         if chong_t:
-            st.dataframe(pd.DataFrame(chong_t)[COLS], hide_index=True, height=400,
-                         column_config=COL_CFG)
+            st.dataframe(_df(chong_t), hide_index=True, height=400, column_config=COL_CFG)
         else:
             st.info("无冲的候选（往年录取均不优于考生位次）")
 
     with st.expander(f"稳 · 候选池（{len(wen_t)} 条）", expanded=False):
         if wen_t:
-            st.dataframe(pd.DataFrame(wen_t)[COLS], hide_index=True, height=400,
-                         column_config=COL_CFG)
+            st.dataframe(_df(wen_t), hide_index=True, height=400, column_config=COL_CFG)
         else:
             st.info("无稳的候选")
 
     with st.expander(f"保 · 候选池（{len(bao_t)} 条）", expanded=False):
         if bao_t:
-            st.dataframe(pd.DataFrame(bao_t)[COLS], hide_index=True, height=400,
-                         column_config=COL_CFG)
+            st.dataframe(_df(bao_t), hide_index=True, height=400, column_config=COL_CFG)
         else:
             st.info("无保的候选")
 
     # 最终 80 志愿
     st.markdown("#### 最终 80 志愿")
-    st.dataframe(
-        pd.DataFrame(final)[COLS],
-        hide_index=True, height=600,
-        column_config=COL_CFG,
-    )
+    if not final:
+        st.warning("未能生成志愿：二轮筛选结果中无有效往年位次数据。")
+        return
+    st.dataframe(_df(final), hide_index=True, height=600, column_config=COL_CFG)
