@@ -82,28 +82,31 @@ def render(province: str = "zhejiang") -> None:
             help="先选的优先级更高",
         )
 
-    st.markdown("**体检结果**（可不填，将来用于体检受限专业的提示）")
+    st.markdown("**体检结果** \* — 色觉用于过滤体检受限专业（国家标准）")
     m1, m2, m3 = st.columns(3)
     with m1:
         height = st.number_input("身高 cm", min_value=0, max_value=250, value=0, step=1)
     with m2:
-        color_vision = st.selectbox("色觉", _COLOR_VISION, index=0)
+        color_vision = st.selectbox("色觉 *", _COLOR_VISION, index=0)
     with m3:
         vision = st.number_input("裸眼视力（较差眼，如 4.8）", min_value=0.0, max_value=5.3,
                                  value=0.0, step=0.1)
 
-    st.markdown("**单科成绩**（可不填，将来用于单科要求校验）")
+    st.markdown("**单科成绩** \* — 用于过滤有单科最低分要求的学校（59所有数据）；填 0 表示不筛该科")
     s1, s2, s3 = st.columns(3)
     with s1:
-        chinese = st.number_input("语文", min_value=0, max_value=150, value=0, step=1)
+        chinese = st.number_input("语文 *", min_value=0, max_value=150, value=0, step=1)
     with s2:
-        math = st.number_input("数学", min_value=0, max_value=150, value=0, step=1)
+        math = st.number_input("数学 *", min_value=0, max_value=150, value=0, step=1)
     with s3:
-        foreign = st.number_input("外语", min_value=0, max_value=150, value=0, step=1)
+        foreign = st.number_input("外语 *", min_value=0, max_value=150, value=0, step=1)
 
     submitted = st.button("保存信息", type="primary", use_container_width=True)
 
     if submitted:
+        if chinese == 0 and math == 0 and foreign == 0:
+            st.error("请填写单科成绩（语文/数学/外语至少填一项，填 0 表示不筛该科目）")
+            return
         try:
             data = StudentInput(
                 rank=int(rank),
@@ -209,8 +212,9 @@ def _render_screening(s: StudentInput) -> None:
 
     st.divider()
     st.subheader("第一步 · 初步筛选（按省份排，浙江最前）")
-    st.caption("已用：选科、学科门类、地域偏好、体检色觉、2025位次≥你的位次。"
-               "未用（缺数据）：学费/学制、单科最低分、调剂规则。")
+    st.caption("已用：选科、学科门类、地域偏好、体检色觉（国家标准）、经济预算（21442条精确到专业）、"
+               "单科成绩（59所学校有最低分要求）、2025位次≥你的位次。"
+               "展示：学制（21583条）、学费、体检/外语要求原文。未用（缺结构化数据）：调剂规则。")
     with st.spinner("筛选中…"):
         rows = screen(s)
     st.session_state["zj_screen_rows"] = rows
@@ -255,10 +259,9 @@ def _render_screening(s: StudentInput) -> None:
     pref_majs = pc3.multiselect("具体专业", majs, key="zj_pref_maj")
 
     moe_warn = st.toggle(
-        "教育部专业预警过滤",
+        "过滤预警专业",
         value=False,
-        disabled=True,
-        help="教育部发布的就业预警专业；暂无公开结构化数据，功能预留",
+        help="2020-2024年全国普通本科撤销布点数量Top30（教育部数据）；开启后剔除这些专业，关闭时仅展示⚠️标记",
     )
     st.session_state["zj_intent_filter"] = {
         "excl_cats": excl_cats, "excl_cls": excl_cls, "excl_majs": excl_majs,
@@ -268,9 +271,10 @@ def _render_screening(s: StudentInput) -> None:
 
     if st.button("开始二轮筛选", type="primary", use_container_width=True):
         filtered = _apply_intent_filter(rows, excl_cats, excl_cls, excl_majs,
-                                        pref_cats, pref_cls, pref_majs)
+                                        pref_cats, pref_cls, pref_majs, moe_warn)
         st.session_state["zj_filtered_rows"] = [
-            {**r, "排序": i, "预警状态": "—"} for i, r in enumerate(filtered, 1)
+            {**r, "排序": i, "预警状态": "⚠️预警" if r.get("预警") else "—"}
+            for i, r in enumerate(filtered, 1)
         ]
 
     filtered_rows: list[dict] = st.session_state.get("zj_filtered_rows", [])
@@ -309,8 +313,9 @@ def _apply_intent_filter(
     rows: list[dict],
     excl_cats: list[str], excl_cls: list[str], excl_majs: list[str],
     pref_cats: list[str], pref_cls: list[str], pref_majs: list[str],
+    moe_warn: bool = False,
 ) -> list[dict]:
-    """非意向剔除 + 专业偏好过滤。每级独立集合，命中任一层即生效。"""
+    """非意向剔除 + 专业偏好过滤 + 预警过滤。每级独立集合，命中任一层即生效。"""
     ec, el, em = set(excl_cats), set(excl_cls), set(excl_majs)
     pc, pl, pm = set(pref_cats), set(pref_cls), set(pref_majs)
 
@@ -325,6 +330,8 @@ def _apply_intent_filter(
                 r.get("专业名称") in pm)
 
     out = [r for r in rows if not is_excluded(r)]
+    if moe_warn:
+        out = [r for r in out if not r.get("预警")]
     if pc or pl or pm:
         out = [r for r in out if is_preferred(r)]
     return out

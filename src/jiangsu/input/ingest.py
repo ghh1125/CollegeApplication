@@ -32,6 +32,7 @@ NATIONAL_TABLES = (
     "major_subject_requirement",
     "school_profile",
     "school_info_section",
+    "admission_charter",
     "major_profile",
     "city_profile",
 )

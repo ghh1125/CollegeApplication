@@ -248,6 +248,28 @@ def _school_profile_block(p: dict) -> str:
     return "学校画像：" + "；".join(parts)
 
 
+def _admission_charter_block(p: dict) -> str:
+    """Build a compact source-grounded admission-charter line."""
+    if not p:
+        return "招生章程：暂无"
+    parts: list[str] = []
+    for label, key in (
+        ("收费", "tuition_text"),
+        ("住宿", "housing_fee_text"),
+        ("录取规则", "admission_rules_text"),
+        ("外语/单科", "language_requirement_text"),
+        ("体检", "physical_requirement_text"),
+    ):
+        value = str(p.get(key) or "").strip()
+        if value:
+            parts.append(f"{label}：{value[:220]}")
+    if p.get("ocr_status") == "needed":
+        parts.append("正文为图片，需OCR后才能完整引用")
+    if p.get("source_url"):
+        parts.append(f"来源：{p['source_url']}")
+    return "招生章程：" + ("；".join(parts) if parts else "暂无结构化字段")
+
+
 def _city_profile_block(city_profile: dict) -> str:
     """Build the city profile line for the prompt, labelled by data quality tier."""
     source = city_profile.get("source_name") or ""
@@ -299,6 +321,7 @@ def explain_volunteer(
     history_str = "  ".join(history_bits)
     warnings = "  ".join(volunteer.get("_warnings") or [])
     school_profile = volunteer.get("school_profile") or {}
+    admission_charter = volunteer.get("admission_charter") or {}
     major_profile = volunteer.get("major_profile") or {}
     city_profile = volunteer.get("city_profile") or {}
     sort_reason = volunteer.get("sort_reason") or ""
@@ -330,6 +353,7 @@ def explain_volunteer(
 
 【本地结构化画像（来自数据库，优先引用，不编造）】
 - {_school_profile_block(school_profile)}
+- {_admission_charter_block(admission_charter)}
 - 专业画像：{major_profile.get("summary") or "暂无"}；学什么：{major_profile.get("learn_what") or "暂无"}；就业/去向：{major_profile.get("career_direction") or "暂无"}；fallback：{major_profile.get("fallback_from") or "无"}；来源：{major_profile.get("source_url") or "暂无"}
 - {_city_profile_block(city_profile)}
 {search_block}

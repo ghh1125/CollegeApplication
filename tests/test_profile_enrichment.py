@@ -93,6 +93,16 @@ class ProfileDatabaseTests(unittest.TestCase):
                 VALUES ('济南', '山东', '济南城市画像', '14210亿元', '961.6万人', 'https://example.gov/jinan')
                 """
             )
+            conn.execute(
+                """
+                INSERT INTO admission_charter (
+                    year, school_name, title, tuition_text, source_url
+                ) VALUES (
+                    2026, '山东大学', '山东大学2026年普通高校招生章程',
+                    '普通类专业学费按山东省有关标准执行。', 'https://example.edu/charter'
+                )
+                """
+            )
 
             enriched = enrich_with_profiles(
                 [
@@ -110,6 +120,7 @@ class ProfileDatabaseTests(unittest.TestCase):
         self.assertEqual(enriched[0]["school_profile"]["summary"], "山东大学学校画像")
         self.assertEqual(enriched[0]["major_profile"]["fallback_from"], "数学与应用数学")
         self.assertEqual(enriched[0]["city_profile"]["gdp"], "14210亿元")
+        self.assertIn("学费", enriched[0]["admission_charter"]["tuition_text"])
 
 
 class ProfileScriptTests(unittest.TestCase):

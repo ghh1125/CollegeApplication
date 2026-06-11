@@ -41,6 +41,7 @@ def _truthy_labels(program: dict) -> str:
 def _school_part(program: dict) -> str:
     name = _clean_text(program.get("school_name")) or "学校"
     profile = program.get("school_profile") or {}
+    charter = program.get("admission_charter") or {}
     details: list[str] = []
 
     match_label = _clean_text(program.get("_school_match_label"))
@@ -73,6 +74,14 @@ def _school_part(program: dict) -> str:
         if doctor:
             degree_bits.append(f"博士点{doctor}个")
         details.append("、".join(degree_bits))
+
+    tuition = _clean_text(charter.get("tuition_text"))
+    if tuition:
+        details.append("章程收费：" + _clip(tuition, 48))
+
+    rules = _clean_text(charter.get("admission_rules_text"))
+    if rules:
+        details.append("章程录取：" + _clip(rules, 48))
 
     if not details:
         details.append("学校画像待补充")
@@ -206,12 +215,21 @@ def _load_city_profiles(conn: Any) -> tuple[dict[tuple[str, str], dict], dict[st
     return by_pair, by_city
 
 
+def _load_admission_charters(conn: Any, year: int = 2026) -> dict[str, dict]:
+    try:
+        rows = _rows_as_dicts(conn, "SELECT * FROM admission_charter WHERE year = ?", (year,))
+    except Exception:
+        return {}
+    return {row["school_name"]: row for row in rows if row.get("school_name")}
+
+
 def enrich_with_profiles(candidates: list[dict], conn: Any) -> list[dict]:
-    """Attach school_profile, major_profile, and city_profile dictionaries."""
+    """Attach school, major, city, and admission-charter dictionaries."""
 
     school_profiles = _load_school_profiles(conn)
     major_profiles = _load_major_profiles(conn)
     city_by_pair, city_by_name = _load_city_profiles(conn)
+    admission_charters = _load_admission_charters(conn)
 
     enriched: list[dict] = []
     for program in candidates:
@@ -223,6 +241,8 @@ def enrich_with_profiles(candidates: list[dict], conn: Any) -> list[dict]:
 
         if school_name in school_profiles:
             item["school_profile"] = school_profiles[school_name]
+        if school_name in admission_charters:
+            item["admission_charter"] = admission_charters[school_name]
         if major_name in major_profiles:
             item["major_profile"] = major_profiles[major_name]
         elif item.get("major_name") in major_profiles:

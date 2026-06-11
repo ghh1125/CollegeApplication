@@ -4,8 +4,8 @@
 **不按位次过滤**——选科/学科匹配的全部列出，冲稳保留到第二步。
 按 省份排序（浙江最前）→ 同省按大学 → 同校按 2025 位次。
 
-参与筛选：选科(7选3) / 学科门类(一级) / 地域偏好 / 体检色觉。
-暂不参与（缺结构化数据）：经济预算(学费) / 单科最低分 / 调剂规则。
+参与筛选：选科(7选3) / 学科门类(一级) / 地域偏好 / 体检色觉(国家标准) / 经济预算(学费) / 单科最低分。
+暂不参与（缺结构化数据）：调剂规则。
 
 输出键（UI 显示名见 ui 层）：
   排序 | 专业名称 | 专业代码 | 二级学科(=专业类) | 学科评估 | 类别(门类) |
@@ -24,15 +24,75 @@ from src.common.reference import SCHOOL_LEVEL_MAP
 from src.common.ranking.rank import _lookup_discipline_code, normalize_major_name
 from src.zhejiang.input.disciplines import CATEGORY_NAMES, MAJOR_CLASS_NAMES
 from src.zhejiang.input.medical_rules import conditions_for, restricted_classes, restricted_majors
+from src.zhejiang.input.student_input import Budget
 
 YEAR = 2025
 REF_YEARS = (2025, 2024, 2023)
+
+# 2020-2024全国普通本科撤销布点数量 Top30（数据来源：教育部）
+# 撤销多 = 就业市场需求萎缩信号；展示预警标记，二轮可选过滤。
+WARN_MAJORS_2020_2024: frozenset[str] = frozenset([
+    "信息管理与信息系统", "公共事业管理", "信息与计算科学", "市场营销",
+    "产品设计", "电子信息科学与技术", "服装与服饰设计", "工业设计",
+    "网络工程", "广告学", "动画", "生物技术", "测控技术与仪器",
+    "社会工作", "电子商务", "教育技术学", "自然地理与资源环境",
+    "旅游管理", "汽车服务工程", "生物工程", "行政管理", "应用化学",
+    "环境科学", "工业工程", "广播电视学", "汉语国际教育",
+    "酒店管理", "应用统计学", "秘书学", "材料化学",
+])
 # 候选位次窗口：只保留 2025位次 落在 [考生位次×reach, 考生位次×safe] 内的专业，
 # 两头太离谱的都砍掉（默认 ±20%，倍率随画像在 persona.py 调）。
 # 选科：用户输入用「政治」，库里用「思想政治」
 _SUBJECT_ALIASES = {"政治": "思想政治", "思政": "思想政治", "生物学": "生物", "信息技术": "技术", "通用技术": "技术"}
 # 专业类名 → 4 位码（大类招生如「计算机类」直接按类名映射）
 _CLASSNAME_TO_CODE = {name: code for code, name in MAJOR_CLASS_NAMES.items()}
+
+
+def _parse_tuition_amounts(text: str) -> list[int]:
+    """Extract all parseable tuition numbers (元/年) from charter text."""
+    if not text:
+        return []
+    # Pattern A: "N元/学年"  "N元/年"  "N元/生/学年"
+    pats = [
+        r'(\d[\d,]*)\s*元\s*[/／]\s*(?:学年|年|生)',
+        # Pattern B: "每学年N元"  "每生每学年N元"  "每年N元"
+        r'每\S{0,4}?(?:学年|年)\s*(\d[\d,]*)\s*元',
+        # Pattern C: "X元（每生每学年）"
+        r'(\d[\d,]*)\s*元[^，。；\n]{0,10}?(?:每生每学年|每学年|每年)',
+    ]
+    result = []
+    for pat in pats:
+        for n in re.findall(pat, text):
+            try:
+                v = int(n.replace(',', ''))
+                if 1000 <= v <= 300000:
+                    result.append(v)
+            except ValueError:
+                pass
+    return list(set(result))
+
+
+def _subject_score_ok(major_name: str, score_req: dict, scores: Any) -> bool:
+    """Check student's single-subject scores against school's charter requirements."""
+    if not score_req:
+        return True
+    has_any = scores.chinese is not None or scores.math is not None or scores.foreign is not None
+    if not has_any:
+        return True
+
+    def _get(subj: str) -> int | None:
+        return {"chinese": scores.chinese, "math": scores.math, "foreign": scores.foreign}.get(subj)
+
+    for subj, min_score in score_req.get("school_wide", {}).items():
+        s = _get(subj)
+        if s is not None and s < min_score:
+            return False
+    for pat in score_req.get("by_pattern", []):
+        if major_name in pat["pattern"] or _norm(major_name) in pat["pattern"]:
+            s = _get(pat["subject"])
+            if s is not None and s < pat["min"]:
+                return False
+    return True
 
 
 def _norm(name: str) -> str:
@@ -114,13 +174,26 @@ def _load_lookups(conn: Any) -> dict:
                   language_requirement_text, admission_rules_text
            FROM admission_charter WHERE year=2026 AND fetch_status='ok'"""
     ):
+        amounts = _parse_tuition_amounts(tuition or "")
         charter[sn] = {
             "tuition_text": tuition or "",
             "physical_text": physical or "",
             "language_text": language or "",
             "rules_text": rules or "",
+            "tuition_amounts": amounts,  # parsed numbers for budget filter
         }
-    return {"name2code": name2code, "hist": hist, "disc": disc, "prov": prov, "city": city, "nature": nature, "ruanke": ruanke, "charter": charter}
+    # school_name → subject_min_scores_json (from school_profile)
+    subj_scores: dict[str, dict] = {}
+    for sn, js in conn.execute(
+        "SELECT school_name, subject_min_scores_json FROM school_profile"
+        " WHERE subject_min_scores_json IS NOT NULL AND subject_min_scores_json != ''"
+    ):
+        try:
+            subj_scores[sn] = json.loads(js)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {"name2code": name2code, "hist": hist, "disc": disc, "prov": prov, "city": city,
+            "nature": nature, "ruanke": ruanke, "charter": charter, "subj_scores": subj_scores}
 
 
 HOME_PROVINCE = "浙江"
@@ -156,6 +229,8 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
 
     name2code, hist, disc = lk["name2code"], lk["hist"], lk["disc"]
     prov, city, nature, ruanke, charter = lk["prov"], lk["city"], lk["nature"], lk["ruanke"], lk["charter"]
+    subj_scores = lk["subj_scores"]
+    budget = student.budget
     out: list[dict] = []
     for sc, sn, mc, mn, req, tuition, duration in rows_raw:
         sc, mc = str(sc), str(mc)
@@ -181,6 +256,24 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             continue
         if nrm in forbid_majors:
             continue
+        # 5. 经济预算：per-major integer (Qianwen, 91%) 优先；fallback 学校级别章程金额
+        if budget != Budget.ANY:
+            if tuition is not None:
+                if budget == Budget.LE_5000 and tuition > 5000:
+                    continue
+                if budget == Budget.GT_5000 and tuition <= 5000:
+                    continue
+            else:
+                amounts = charter.get(sn, {}).get("tuition_amounts", [])
+                if amounts:
+                    if budget == Budget.LE_5000 and min(amounts) > 5000:
+                        continue
+                    if budget == Budget.GT_5000 and max(amounts) <= 5000:
+                        continue
+        # 6. 单科成绩：有要求数据的参与筛选，无数据的通过
+        score_req = subj_scores.get(sn, {})
+        if score_req and not _subject_score_ok(mn, score_req, student.subject_scores):
+            continue
 
         ranks = hist.get((sc, mc), {})
         # 学科评估：本科专业 → 研究生学科码 → 等级
@@ -201,10 +294,11 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             "城市": city.get(sn) or "—",
             "办学类型": nature.get(sn) or "—",
             "学制": duration or "—",
-            "学费/年": ch.get("tuition_text") or tuition or "—",
+            "学费/年": (f"{tuition:,}元/年" if tuition else ch.get("tuition_text")) or "—",
             "体检要求": ch.get("physical_text") or "—",
             "外语要求": ch.get("language_text") or "—",
             "章程": "有" if ch else "—",
+            "预警": any(w in mn for w in WARN_MAJORS_2020_2024),
             "省份": prov.get(sn, ""),
             "_ruanke_rank": ruanke.get(sn),
             "2025最低位次": ranks.get(2025),

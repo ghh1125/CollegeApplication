@@ -18,4 +18,6 @@ dependencies = [
     "pypdf",
     "streamlit>=1.57",
     "ddgs>=0.6",
+    "curl-cffi>=0.15.0",
+    "playwright>=1.60.0",
 ]

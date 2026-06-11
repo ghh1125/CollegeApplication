@@ -187,6 +187,7 @@ class SchemaTests(unittest.TestCase):
             "major_master",
             "admission_rule",
             "major_admission_rule",
+            "admission_charter",
         ):
             self.assertIn(f"CREATE TABLE IF NOT EXISTS {table}", schema)
 
