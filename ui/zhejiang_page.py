@@ -352,7 +352,7 @@ def _render_final(s: StudentInput) -> None:
         return
 
     COLS = [
-        "序号", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估",
+        "序号", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估", "保研率",
         "院校名称", "院校代码", "层次", "学制", "学费/年", "预警",
         "2025最低位次", "2024最低位次", "2023最低位次", "三年平均位次",
     ]
@@ -360,6 +360,7 @@ def _render_final(s: StudentInput) -> None:
         "序号":           st.column_config.NumberColumn(width="small"),
         "冲稳保":         st.column_config.TextColumn(width="small"),
         "学科评估":       st.column_config.TextColumn(width="small"),
+        "保研率":         st.column_config.NumberColumn(format="%.1f%%", width="small"),
         "层次":           st.column_config.TextColumn(width="small"),
         "预警":           st.column_config.TextColumn(width="small"),
         "2025最低位次":   st.column_config.NumberColumn(width="small"),

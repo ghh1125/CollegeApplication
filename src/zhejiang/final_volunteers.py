@@ -21,6 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from db import get_conn
+
 
 @dataclass(frozen=True)
 class _Cfg:
@@ -145,6 +147,18 @@ def split_pools(
     return chong, wen, bao
 
 
+def _load_baoyan() -> dict[str, float | None]:
+    """学校名 → 保研率（%），无数据返回 None。"""
+    with get_conn("zhejiang") as conn:
+        return {
+            row[0]: row[1]
+            for row in conn.execute(
+                "SELECT school_name, recommend_master_rate FROM school_profile"
+                " WHERE recommend_master_rate IS NOT NULL"
+            )
+        }
+
+
 def generate(
     student: Any,
     rows: list[dict],
@@ -156,6 +170,7 @@ def generate(
     """
     rank = int(student.rank)
     cfg = _config(rank)
+    baoyan = _load_baoyan()
 
     chong_pool, wen_pool, bao_pool = split_pools(rows, rank, cfg)
 
@@ -201,6 +216,7 @@ def generate(
                 "专业名称": r["专业名称"], "专业代码": r["专业代码"],
                 "二级学科": r["二级学科"],
                 "学科评估": r["学科评估"],
+                "保研率": baoyan.get(r["院校名称"]),
                 "类别": r["类别"],
                 "院校名称": r["院校名称"], "院校代码": r["院校代码"],
                 "层次": r["层次"],
@@ -237,6 +253,7 @@ def generate(
             "专业名称": r["专业名称"], "专业代码": r["专业代码"],
             "二级学科": r["二级学科"],
             "学科评估": r["学科评估"],
+            "保研率": baoyan.get(r["院校名称"]),
             "类别": r["类别"],
             "院校名称": r["院校名称"], "院校代码": r["院校代码"],
             "层次": r["层次"],
