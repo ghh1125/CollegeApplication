@@ -7,8 +7,6 @@
 
 from __future__ import annotations
 
-from urllib.parse import quote as _url_quote
-
 import streamlit as st
 
 from src.zhejiang.input.disciplines import CATEGORY_NAMES
@@ -38,14 +36,6 @@ _CAT_OPTIONS = list(_CAT_LABEL_TO_CODE.keys())
 _BUDGET_OPTIONS = [b.value for b in Budget]
 _COLOR_VISION = ["正常", "色弱", "色盲"]
 
-
-def _chsi_school_url(name: str) -> str:
-    """阳光高考院校搜索：search--sch_name-{name}.dhtml 格式（chsi.com.cn 标准路由）。"""
-    return f"https://gaokao.chsi.com.cn/sch/search--sch_name-{_url_quote(name)}.dhtml"
-
-
-def _chsi_major_url(_name: str = "") -> str:
-    return "https://gaokao.chsi.com.cn/zyk/"
 
 
 def _reset() -> None:
@@ -233,12 +223,10 @@ def _render_screening(s: StudentInput) -> None:
         st.warning("没有符合条件的学校专业，试着放宽学科门类或地域偏好。")
         return
     st.success(f"共筛出 {len(rows)} 条")
-    st.caption("点击「院校查询」可在[阳光高考院校库](https://gaokao.chsi.com.cn/sch/)核实学校详情。")
-    df = pd.DataFrame(rows)
-    df["院校查询"] = df["院校名称"].apply(_chsi_school_url)
-    df = df[["排序", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称", "院校查询",
-             "院校代码", "层次", "城市", "办学类型", "学制", "学费/年",
-             "2025最低位次", "2024最低位次", "2023最低位次",
+    df = pd.DataFrame(rows)[[
+        "排序", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称",
+        "院校代码", "层次", "城市", "办学类型", "学制", "学费/年",
+        "2025最低位次", "2024最低位次", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
     st.dataframe(
         df, width="stretch", hide_index=True, height=600,
@@ -247,7 +235,6 @@ def _render_screening(s: StudentInput) -> None:
             "学科评估结果": st.column_config.TextColumn(width="small"),
             "院校级别": st.column_config.TextColumn(width="small"),
             "城市": st.column_config.TextColumn(width="small"),
-            "院校查询": st.column_config.LinkColumn("院校查询", display_text="🔗阳光高考", width="small"),
             "2025最低位次": st.column_config.NumberColumn(width="small"),
             "2024最低位次": st.column_config.NumberColumn(width="small"),
             "2023最低位次": st.column_config.NumberColumn(width="small"),
@@ -309,11 +296,10 @@ def _render_screening(s: StudentInput) -> None:
         msg += f"（已过滤 {removed} 条）"
     st.success(msg)
 
-    df2 = pd.DataFrame(filtered_rows)
-    df2["院校查询"] = df2["院校名称"].apply(_chsi_school_url)
-    df2 = df2[["排序", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称", "院校查询",
-               "预警状态", "院校代码", "层次", "城市", "办学类型", "学制", "学费/年",
-               "2025最低位次", "2024最低位次", "2023最低位次",
+    df2 = pd.DataFrame(filtered_rows)[[
+        "排序", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称",
+        "预警状态", "院校代码", "层次", "城市", "办学类型", "学制", "学费/年",
+        "2025最低位次", "2024最低位次", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
     st.dataframe(
         df2, width="stretch", hide_index=True, height=600,
@@ -324,12 +310,29 @@ def _render_screening(s: StudentInput) -> None:
             "预警状态": st.column_config.TextColumn(width="small"),
             "院校级别": st.column_config.TextColumn(width="small"),
             "城市": st.column_config.TextColumn(width="small"),
-            "院校查询": st.column_config.LinkColumn("院校查询", display_text="🔗阳光高考", width="small"),
             "2025最低位次": st.column_config.NumberColumn(width="small"),
             "2024最低位次": st.column_config.NumberColumn(width="small"),
             "2023最低位次": st.column_config.NumberColumn(width="small"),
         },
     )
+
+
+def _to_excel(
+    df_final: "pd.DataFrame",
+    chong_t: list[dict],
+    wen_t: list[dict],
+    bao_t: list[dict],
+    cols: list[str],
+) -> bytes:
+    """生成多 Sheet Excel：最终80志愿 + 冲/稳/保候选池。"""
+    import io
+    import pandas as pd
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df_final.to_excel(writer, sheet_name="最终80志愿", index=False)
+        for label, data in [("冲候选池", chong_t), ("稳候选池", wen_t), ("保候选池", bao_t)]:
+            pd.DataFrame(data).reindex(columns=cols).to_excel(writer, sheet_name=label, index=False)
+    return buf.getvalue()
 
 
 def _render_final(s: StudentInput) -> None:
@@ -356,18 +359,16 @@ def _render_final(s: StudentInput) -> None:
         return
 
     COLS = [
-        "序号", "冲稳保", "专业名称", "专业库", "专业代码", "二级学科", "学科评估", "保研率", "专业发展路径",
-        "院校名称", "院校查询", "院校代码", "层次", "学制", "学费/年", "预警",
+        "序号", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估", "保研率", "专业发展路径",
+        "院校名称", "院校代码", "层次", "学制", "学费/年", "预警",
         "2025最低位次", "2024最低位次", "2023最低位次", "三年平均位次",
     ]
     COL_CFG = {
         "序号":           st.column_config.NumberColumn(width="small"),
         "冲稳保":         st.column_config.TextColumn(width="small"),
-        "专业库":         st.column_config.LinkColumn("专业库", display_text="🔗查专业", width="small"),
         "学科评估":       st.column_config.TextColumn(width="small"),
         "保研率":         st.column_config.NumberColumn(format="%.1f%%", width="small"),
         "专业发展路径":   st.column_config.TextColumn(width="large"),
-        "院校查询":       st.column_config.LinkColumn("院校查询", display_text="🔗查院校", width="small"),
         "层次":           st.column_config.TextColumn(width="small"),
         "预警":           st.column_config.TextColumn(width="small"),
         "2025最低位次":   st.column_config.NumberColumn(width="small"),
@@ -382,10 +383,7 @@ def _render_final(s: StudentInput) -> None:
     )
 
     def _df(rows: list[dict]) -> "pd.DataFrame":
-        d = pd.DataFrame(rows)
-        d["院校查询"] = d["院校名称"].apply(_chsi_school_url)
-        d["专业库"]   = d["专业名称"].apply(_chsi_major_url)
-        return d.reindex(columns=COLS)
+        return pd.DataFrame(rows).reindex(columns=COLS)
 
     # 三档候选表（可折叠）
     with st.expander(f"冲 · 候选池（{len(chong_t)} 条）", expanded=False):
@@ -411,4 +409,27 @@ def _render_final(s: StudentInput) -> None:
     if not final:
         st.warning("未能生成志愿：二轮筛选结果中无有效往年位次数据。")
         return
-    st.dataframe(_df(final), hide_index=True, height=600, column_config=COL_CFG)
+    df_final = _df(final)
+    st.dataframe(df_final, hide_index=True, height=600, column_config=COL_CFG)
+
+    # 导出
+    st.markdown("#### 导出志愿方案")
+    ec1, ec2 = st.columns(2)
+    with ec1:
+        xlsx_buf = _to_excel(df_final, chong_t, wen_t, bao_t, COLS)
+        st.download_button(
+            "⬇️ 下载 Excel（含冲稳保分档）",
+            data=xlsx_buf,
+            file_name="志愿方案.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+    with ec2:
+        csv_buf = df_final.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "⬇️ 下载 CSV（可用 Excel 打开）",
+            data=csv_buf,
+            file_name="志愿方案.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
