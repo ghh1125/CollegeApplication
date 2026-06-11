@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -147,6 +148,37 @@ def split_pools(
     return chong, wen, bao
 
 
+def _norm_major(name: str) -> str:
+    text = re.sub(r"\s+", "", name.strip())
+    text = text.replace("（", "(").replace("）", ")")
+    return re.sub(r"\([^)]*\)", "", text)
+
+
+def _load_career_direction() -> dict[str, str]:
+    """标准专业名 → 发展路径文本。优先 major_profile，兜底 major_description。"""
+    with get_conn("zhejiang") as conn:
+        career: dict[str, str] = {
+            row[0]: row[1]
+            for row in conn.execute(
+                "SELECT major_name, career_direction FROM major_profile"
+                " WHERE career_direction IS NOT NULL"
+            )
+        }
+        for row in conn.execute(
+            "SELECT name, do_what FROM major_description WHERE do_what IS NOT NULL"
+        ):
+            if row[0] not in career:
+                career[row[0]] = row[1]
+    return career
+
+
+def _lookup_career(name: str, career: dict[str, str]) -> str | None:
+    if name in career:
+        return career[name]
+    norm = _norm_major(name)
+    return career.get(norm)
+
+
 def _load_baoyan() -> dict[str, float | None]:
     """学校名 → 保研率（%），无数据返回 None。"""
     with get_conn("zhejiang") as conn:
@@ -171,6 +203,7 @@ def generate(
     rank = int(student.rank)
     cfg = _config(rank)
     baoyan = _load_baoyan()
+    career = _load_career_direction()
 
     chong_pool, wen_pool, bao_pool = split_pools(rows, rank, cfg)
 
@@ -217,6 +250,7 @@ def generate(
                 "二级学科": r["二级学科"],
                 "学科评估": r["学科评估"],
                 "保研率": baoyan.get(r["院校名称"]),
+                "专业发展路径": _lookup_career(r["专业名称"], career),
                 "类别": r["类别"],
                 "院校名称": r["院校名称"], "院校代码": r["院校代码"],
                 "层次": r["层次"],
