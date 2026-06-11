@@ -140,22 +140,9 @@ def render(province: str = "zhejiang") -> None:
     saved: StudentInput | None = st.session_state.get("zj_input")
     if saved:
         _render_summary(saved)
-        _render_persona(saved)
         _render_screening(saved)
         _render_final(saved)
 
-
-def _render_persona(s: StudentInput) -> None:
-    from src.zhejiang.persona import classify, LATEST_FIRST_SEGMENT_RANK
-
-    p = classify(int(s.rank))
-    st.divider()
-    st.markdown(f"**你的画像 · {p.name}**（{p.rank_desc}）")
-    st.caption(f"浙江 2025 普通类一段线对应位次约 {LATEST_FIRST_SEGMENT_RANK:,} 名。")
-    cols = st.columns(3)
-    cols[0].info(f"**核心特征**\n\n{p.feature}")
-    cols[1].warning(f"**典型痛点**\n\n{p.pain}")
-    cols[2].success(f"**策略重点**\n\n{p.value}")
 
 
 def _render_summary(s: StudentInput) -> None:
