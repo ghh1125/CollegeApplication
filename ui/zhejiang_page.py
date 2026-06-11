@@ -100,9 +100,16 @@ def render(province: str = "zhejiang") -> None:
     selected = st.multiselect("选考科目 *（7 选 3）", SUBJECTS_7, max_selections=3,
                               help="政治/历史/地理/物理/化学/生物/技术，选 3 门")
 
+    def _on_cat_change():
+        val = st.session_state.get("zj_cat_select", [])
+        if "全部" in val and len(val) > 1:
+            st.session_state["zj_cat_select"] = ["全部"]
+
     categories = st.multiselect("学科门类（一级，可多选；选「全部」或不选=不限）",
                                 ["全部"] + _CAT_OPTIONS,
-                                help="选整个门类，如 工学，囊括其下所有专业。")
+                                help="选整个门类，如 工学，囊括其下所有专业。",
+                                key="zj_cat_select",
+                                on_change=_on_cat_change)
 
     budget = st.selectbox("经济预算（每年学费）", _BUDGET_OPTIONS, index=0)
 
