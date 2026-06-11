@@ -141,9 +141,9 @@ def split_pools(
             continue
         if cfg.rush_start <= rr < rank:
             chong.append(r)
-        elif rr <= rank + cfg.stable:
+        elif rank <= rr <= rank + cfg.stable:
             wen.append(r)
-        elif rr <= rank + cfg.safety:
+        elif rank + cfg.stable < rr <= rank + cfg.safety:
             bao.append(r)
     return chong, wen, bao
 
