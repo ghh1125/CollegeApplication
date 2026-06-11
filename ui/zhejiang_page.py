@@ -336,7 +336,7 @@ def _to_excel(
 
 
 def _render_final(s: StudentInput) -> None:
-    """从二轮筛选结果生成最终 80 志愿（冲稳保三表 + 合并表）。"""
+    """从二轮筛选结果生成最终 80 志愿（冲稳保三表 + 合并表 + 导出）。"""
     import pandas as pd
     from collections import Counter
     from src.zhejiang.step3_generate import generate
@@ -364,17 +364,17 @@ def _render_final(s: StudentInput) -> None:
         "2025最低位次", "2024最低位次", "2023最低位次", "三年平均位次",
     ]
     COL_CFG = {
-        "序号":           st.column_config.NumberColumn(width="small"),
-        "冲稳保":         st.column_config.TextColumn(width="small"),
-        "学科评估":       st.column_config.TextColumn(width="small"),
-        "保研率":         st.column_config.NumberColumn(format="%.1f%%", width="small"),
-        "专业发展路径":   st.column_config.TextColumn(width="large"),
-        "层次":           st.column_config.TextColumn(width="small"),
-        "预警":           st.column_config.TextColumn(width="small"),
-        "2025最低位次":   st.column_config.NumberColumn(width="small"),
-        "2024最低位次":   st.column_config.NumberColumn(width="small"),
-        "2023最低位次":   st.column_config.NumberColumn(width="small"),
-        "三年平均位次":   st.column_config.NumberColumn(width="small"),
+        "序号":         st.column_config.NumberColumn(width="small"),
+        "冲稳保":       st.column_config.TextColumn(width="small"),
+        "学科评估":     st.column_config.TextColumn(width="small"),
+        "保研率":       st.column_config.NumberColumn(format="%.1f%%", width="small"),
+        "专业发展路径": st.column_config.TextColumn(width="large"),
+        "层次":         st.column_config.TextColumn(width="small"),
+        "预警":         st.column_config.TextColumn(width="small"),
+        "2025最低位次": st.column_config.NumberColumn(width="small"),
+        "2024最低位次": st.column_config.NumberColumn(width="small"),
+        "2023最低位次": st.column_config.NumberColumn(width="small"),
+        "三年平均位次": st.column_config.NumberColumn(width="small"),
     }
 
     cwb = Counter(r["冲稳保"] for r in final)
@@ -385,50 +385,31 @@ def _render_final(s: StudentInput) -> None:
     def _df(rows: list[dict]) -> "pd.DataFrame":
         return pd.DataFrame(rows).reindex(columns=COLS)
 
-    # 三档候选表（可折叠）
     with st.expander(f"冲 · 候选池（{len(chong_t)} 条）", expanded=False):
-        if chong_t:
-            st.dataframe(_df(chong_t), hide_index=True, height=400, column_config=COL_CFG)
-        else:
-            st.info("无冲的候选（往年录取均不优于考生位次）")
-
+        st.dataframe(_df(chong_t), hide_index=True, height=400, column_config=COL_CFG) if chong_t else st.info("无冲的候选")
     with st.expander(f"稳 · 候选池（{len(wen_t)} 条）", expanded=False):
-        if wen_t:
-            st.dataframe(_df(wen_t), hide_index=True, height=400, column_config=COL_CFG)
-        else:
-            st.info("无稳的候选")
-
+        st.dataframe(_df(wen_t), hide_index=True, height=400, column_config=COL_CFG) if wen_t else st.info("无稳的候选")
     with st.expander(f"保 · 候选池（{len(bao_t)} 条）", expanded=False):
-        if bao_t:
-            st.dataframe(_df(bao_t), hide_index=True, height=400, column_config=COL_CFG)
-        else:
-            st.info("无保的候选")
+        st.dataframe(_df(bao_t), hide_index=True, height=400, column_config=COL_CFG) if bao_t else st.info("无保的候选")
 
-    # 最终 80 志愿
     st.markdown("#### 最终 80 志愿")
-    if not final:
-        st.warning("未能生成志愿：二轮筛选结果中无有效往年位次数据。")
-        return
     df_final = _df(final)
     st.dataframe(df_final, hide_index=True, height=600, column_config=COL_CFG)
 
-    # 导出
     st.markdown("#### 导出志愿方案")
     ec1, ec2 = st.columns(2)
     with ec1:
-        xlsx_buf = _to_excel(df_final, chong_t, wen_t, bao_t, COLS)
         st.download_button(
             "⬇️ 下载 Excel（含冲稳保分档）",
-            data=xlsx_buf,
+            data=_to_excel(df_final, chong_t, wen_t, bao_t, COLS),
             file_name="志愿方案.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
         )
     with ec2:
-        csv_buf = df_final.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
             "⬇️ 下载 CSV（可用 Excel 打开）",
-            data=csv_buf,
+            data=df_final.to_csv(index=False).encode("utf-8-sig"),
             file_name="志愿方案.csv",
             mime="text/csv",
             use_container_width=True,
