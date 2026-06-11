@@ -126,18 +126,21 @@ def render(province: str = "zhejiang") -> None:
         vision = st.number_input("裸眼视力（较差眼，如 4.8）", min_value=0.0, max_value=5.3,
                                  value=0.0, step=0.1)
 
-    st.markdown("**单科成绩**（可选）— 用于过滤有单科最低分要求的学校（69所有数据）；填 0 或留空 = 不筛该科")
+    st.markdown("**单科成绩 \*** — 用于过滤有单科最低分要求的学校（69所有数据）")
     s1, s2, s3 = st.columns(3)
     with s1:
-        chinese = st.number_input("语文", min_value=0, max_value=150, value=0, step=1)
+        chinese = st.number_input("语文 *", min_value=0, max_value=150, value=0, step=1)
     with s2:
-        math = st.number_input("数学", min_value=0, max_value=150, value=0, step=1)
+        math = st.number_input("数学 *", min_value=0, max_value=150, value=0, step=1)
     with s3:
-        foreign = st.number_input("外语", min_value=0, max_value=150, value=0, step=1)
+        foreign = st.number_input("外语 *", min_value=0, max_value=150, value=0, step=1)
 
     submitted = st.button("保存信息", type="primary", use_container_width=True)
 
     if submitted:
+        if not chinese or not math or not foreign:
+            st.error("请填写语文、数学、外语单科成绩（必填，不能为 0）")
+            return
         try:
             data = StudentInput(
                 rank=int(rank),
@@ -157,9 +160,9 @@ def render(province: str = "zhejiang") -> None:
                     "naked_eye_vision": vision or None,
                 },
                 subject_scores={
-                    "chinese": chinese or None,
-                    "math": math or None,
-                    "foreign": foreign or None,
+                    "chinese": chinese,
+                    "math": math,
+                    "foreign": foreign,
                 },
             )
         except Exception as e:  # noqa: BLE001
