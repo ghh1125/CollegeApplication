@@ -257,8 +257,11 @@ def _render_screening(s: StudentInput) -> None:
     }
 
     if st.button("开始二轮筛选", type="primary", use_container_width=True):
+        from src.zhejiang.final_volunteers import classify_rows
         filtered = _apply_intent_filter(rows, excl_cats, excl_cls, excl_majs,
                                         pref_cats, pref_cls, pref_majs, moe_warn)
+        # 打上冲/稳/保标签（用于列展示和后续第三步）
+        classify_rows(filtered, int(s.rank))
         st.session_state["zj_filtered_rows"] = [
             {**r, "排序": i, "预警状态": "⚠️预警" if r.get("预警") else "—"}
             for i, r in enumerate(filtered, 1)
@@ -277,7 +280,7 @@ def _render_screening(s: StudentInput) -> None:
     st.success(msg)
 
     df2 = pd.DataFrame(filtered_rows)[[
-        "排序", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称", "预警状态",
+        "排序", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称", "预警状态",
         "院校代码", "层次", "城市", "办学类型", "学制", "学费/年",
         "2025最低位次", "2024最低位次", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
@@ -285,6 +288,7 @@ def _render_screening(s: StudentInput) -> None:
         df2, width="stretch", hide_index=True, height=600,
         column_config={
             "排序": st.column_config.NumberColumn(width="small"),
+            "冲稳保": st.column_config.TextColumn(width="small"),
             "学科评估结果": st.column_config.TextColumn(width="small"),
             "预警状态": st.column_config.TextColumn(width="small"),
             "院校级别": st.column_config.TextColumn(width="small"),
@@ -325,46 +329,76 @@ def _apply_intent_filter(
 
 
 def _render_final(s: StudentInput) -> None:
-    """专业过滤面板 + 生成最终 80 志愿表。"""
+    """从二轮筛选结果生成最终 80 志愿（冲稳保三表 + 合并表）。"""
     import pandas as pd
+    from collections import Counter
     from src.zhejiang.final_volunteers import generate
 
+    filtered_rows = st.session_state.get("zj_filtered_rows", [])
+    if not filtered_rows:
+        return
+
     st.divider()
-    st.subheader("第三步 · 专业过滤 → 生成最终 80 志愿")
-    # 排除专业的选项来自第一步初步筛选结果（去重保序）
-    screen_rows = st.session_state.get("zj_screen_rows", [])
-    exclude_opts = list(dict.fromkeys(r["专业名称"] for r in screen_rows))
-    with st.expander("专业过滤（过滤后再生成）", expanded=True):
-        excluded = st.multiselect("排除专业（从初步筛选结果里选，可多选）", exclude_opts,
-                                  help="选中的专业会从最终志愿里剔除；选项来自上面第一步筛出的专业")
-        c1, c2, c3 = st.columns(3)
-        c1.checkbox("天坑专业过滤", value=False, disabled=True, help="暂无数据，占位")
-        c2.checkbox("教育部预警专业过滤", value=False, disabled=True, help="暂无数据，占位")
-        c3.checkbox("教育部撤销专业过滤", value=False, disabled=True, help="暂无数据，占位")
-        st.caption("学科范围（一级/二级）请在最上方表单调整后重新保存。天坑/预警/撤销暂留空。")
+    st.subheader("第三步 · 生成最终 80 志愿")
 
     if not st.button("生成最终志愿（80个）", type="primary", use_container_width=True):
         return
+
     with st.spinner("生成中…"):
-        rows = generate(s, exclude_keywords=excluded)
-    if not rows:
-        st.warning("过滤后没有候选了，放宽过滤条件试试。")
+        chong_t, wen_t, bao_t, final = generate(s, filtered_rows)
+
+    if not final:
+        st.warning("二轮筛选结果不足，请放宽筛选条件后重新进行二轮筛选。")
         return
-    from collections import Counter
-    cwb = Counter(r["冲稳保"] for r in rows)
-    st.success(f"共 {len(rows)} 个志愿 · 冲 {cwb['冲']} / 稳 {cwb['稳']} / 保 {cwb['保']}")
-    df = pd.DataFrame(rows)[[
+
+    COLS = [
         "序号", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估",
-        "考研路径", "专业发展路径", "类别", "院校名称", "院校代码", "层次",
+        "院校名称", "院校代码", "层次", "学制", "学费/年", "预警",
         "2025最低位次", "2024最低位次", "2023最低位次", "三年平均位次",
-    ]]
+    ]
+    COL_CFG = {
+        "序号":           st.column_config.NumberColumn(width="small"),
+        "冲稳保":         st.column_config.TextColumn(width="small"),
+        "学科评估":       st.column_config.TextColumn(width="small"),
+        "层次":           st.column_config.TextColumn(width="small"),
+        "预警":           st.column_config.TextColumn(width="small"),
+        "2025最低位次":   st.column_config.NumberColumn(width="small"),
+        "2024最低位次":   st.column_config.NumberColumn(width="small"),
+        "2023最低位次":   st.column_config.NumberColumn(width="small"),
+        "三年平均位次":   st.column_config.NumberColumn(width="small"),
+    }
+
+    cwb = Counter(r["冲稳保"] for r in final)
+    st.success(
+        f"共 {len(final)} 个志愿 · 冲 {cwb.get('冲',0)} / 稳 {cwb.get('稳',0)} / 保 {cwb.get('保',0)}"
+    )
+
+    # 三档候选表（可折叠）
+    with st.expander(f"冲 · 候选池（{len(chong_t)} 条）", expanded=False):
+        if chong_t:
+            st.dataframe(pd.DataFrame(chong_t)[COLS], hide_index=True, height=400,
+                         column_config=COL_CFG)
+        else:
+            st.info("无冲的候选（往年录取均不优于考生位次）")
+
+    with st.expander(f"稳 · 候选池（{len(wen_t)} 条）", expanded=False):
+        if wen_t:
+            st.dataframe(pd.DataFrame(wen_t)[COLS], hide_index=True, height=400,
+                         column_config=COL_CFG)
+        else:
+            st.info("无稳的候选")
+
+    with st.expander(f"保 · 候选池（{len(bao_t)} 条）", expanded=False):
+        if bao_t:
+            st.dataframe(pd.DataFrame(bao_t)[COLS], hide_index=True, height=400,
+                         column_config=COL_CFG)
+        else:
+            st.info("无保的候选")
+
+    # 最终 80 志愿
+    st.markdown("#### 最终 80 志愿")
     st.dataframe(
-        df, width="stretch", hide_index=True, height=600,
-        column_config={
-            "序号": st.column_config.NumberColumn(width="small"),
-            "冲稳保": st.column_config.TextColumn(width="small"),
-            "学科评估": st.column_config.TextColumn(width="small"),
-            "专业发展路径": st.column_config.TextColumn(width="medium"),
-            "层次": st.column_config.TextColumn(width="small"),
-        },
+        pd.DataFrame(final)[COLS],
+        hide_index=True, height=600,
+        column_config=COL_CFG,
     )
