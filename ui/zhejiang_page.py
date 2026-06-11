@@ -138,9 +138,6 @@ def render(province: str = "zhejiang") -> None:
     submitted = st.button("保存信息", type="primary", use_container_width=True)
 
     if submitted:
-        if not chinese or not math or not foreign:
-            st.error("请填写语文、数学、外语单科成绩（必填，不能为 0）")
-            return
         try:
             data = StudentInput(
                 rank=int(rank),
