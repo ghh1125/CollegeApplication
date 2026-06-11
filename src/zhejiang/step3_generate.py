@@ -219,21 +219,6 @@ def generate(
 
     picked = sel_c + sel_w + sel_b
 
-    # 不足 80 时从全部二轮结果里按「离考生位次最近」补（有位次数据的优先）
-    if len(picked) < 80:
-        picked_ids = {id(x) for x in picked}
-        rest = sorted(
-            [r for r in rows if id(r) not in picked_ids and _ref_rank(r) is not None],
-            key=lambda r: abs(_ref_rank(r) - rank),  # type: ignore[operator]
-        )
-        for r in rest:
-            r["_cwb"] = _label(r, rank, cfg) or "稳"
-            picked.append(r)
-            picked_ids.add(id(r))
-            if len(picked) >= 80:
-                break
-    picked = picked[:80]
-
     # 最终排序：冲按 ref_rank 升序（难→易），稳/保按 ref_rank 升序
     picked.sort(key=lambda r: (_ref_rank(r) or 999999))
 

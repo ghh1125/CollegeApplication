@@ -430,9 +430,15 @@ def _render_final(s: StudentInput) -> None:
 
     final = st.session_state["zj_step3_final"]
     cwb = Counter(r["冲稳保"] for r in final)
-    st.success(
-        f"共 {len(final)} 个志愿 · 冲 {cwb.get('冲',0)} / 稳 {cwb.get('稳',0)} / 保 {cwb.get('保',0)}"
-    )
+    if len(final) < 80:
+        st.warning(
+            f"当前只有 **{len(final)}** 个志愿（冲 {cwb.get('冲',0)} / 稳 {cwb.get('稳',0)} / 保 {cwb.get('保',0)}），"
+            "不足 80 个。建议返回放宽筛选条件（减少排除项、扩大地域/专业范围）后重新生成。"
+        )
+    else:
+        st.success(
+            f"共 {len(final)} 个志愿 · 冲 {cwb.get('冲',0)} / 稳 {cwb.get('稳',0)} / 保 {cwb.get('保',0)}"
+        )
 
     st.markdown("#### 参考 80 志愿")
     st.info(
