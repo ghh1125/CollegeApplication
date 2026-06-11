@@ -40,11 +40,12 @@ _COLOR_VISION = ["正常", "色弱", "色盲"]
 
 
 def _chsi_school_url(name: str) -> str:
-    return f"https://gaokao.chsi.com.cn/sch/search--sch_name={_url_quote(name)}.dhtml"
+    """阳光高考院校搜索：search--sch_name-{name}.dhtml 格式（chsi.com.cn 标准路由）。"""
+    return f"https://gaokao.chsi.com.cn/sch/search--sch_name-{_url_quote(name)}.dhtml"
 
 
-def _chsi_major_url(name: str) -> str:
-    return f"https://gaokao.chsi.com.cn/zyk/zybk/listAction.action?zydm=&zymc={_url_quote(name)}"
+def _chsi_major_url(_name: str = "") -> str:
+    return "https://gaokao.chsi.com.cn/zyk/"
 
 
 def _reset() -> None:
@@ -71,7 +72,7 @@ def render(province: str = "zhejiang") -> None:
             "| 位次分段表 / 选考科目要求 | [浙江省教育考试院](https://www.zjzs.net) |\n"
             "| 本科专业目录（2026版） | [教育部普通高等学校本科专业目录](https://www.moe.gov.cn) |\n"
             "| 教育部学科评估（A+/A/B…） | [全国第四轮学科评估结果](https://www.moe.gov.cn/srcsite/A22/s7065/202112/t20211231_579326.html) |\n"
-            "| 大学排名 | [软科中国大学排名](https://www.shanghairanking.cn/rankings/bcur) |\n\n"
+            "| 大学排名 | [软科中国大学排名](https://www.shanghairanking.cn/rankings/bcur/202611) |\n\n"
             "> 最终填报请以[浙江省教育考试院](https://www.zjzs.net)官方公布数据为准，本工具结果仅供参考。"
         )
 
@@ -224,8 +225,8 @@ def _render_screening(s: StudentInput) -> None:
 
     st.divider()
     st.subheader("第一步 · 初步筛选（按省份排，浙江最前）")
-    st.caption("已用：选科、学科门类、地域偏好、体检色觉（国家标准）、经济预算（23441条精确到专业）、"
-               "单科成绩（69所学校有最低分要求）、2025位次≥你的位次。"
+    st.caption("已用：选科要求、学科门类、地域偏好、体检色觉（国家标准）、经济预算（23441条精确到专业）、"
+               "单科成绩（69所学校有最低分要求）。不按位次过滤——冲稳保在第三步生成时处理。"
                "展示：学制（23456条）、学费、体检/外语要求原文。")
     with st.spinner("筛选中…"):
         rows = screen(s)

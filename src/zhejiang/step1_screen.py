@@ -255,20 +255,15 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             continue
         if nrm in forbid_majors:
             continue
-        # 5. 经济预算：per-major integer (浙江招录数据, 91%) 优先；fallback 学校级别章程金额
-        if budget != Budget.ANY:
+        # 5. 经济预算：≤8000 时剔除高学费；>8000 表示不差钱（含所有学费），不做过滤
+        if budget == Budget.LE_8000:
             if tuition is not None:
-                if budget == Budget.LE_8000 and tuition > 8000:
-                    continue
-                if budget == Budget.GT_8000 and tuition <= 8000:
+                if tuition > 8000:
                     continue
             else:
                 amounts = charter.get(sn, {}).get("tuition_amounts", [])
-                if amounts:
-                    if budget == Budget.LE_8000 and min(amounts) > 8000:
-                        continue
-                    if budget == Budget.GT_8000 and max(amounts) <= 8000:
-                        continue
+                if amounts and min(amounts) > 8000:
+                    continue
         # 6. 单科成绩：有要求数据的参与筛选，无数据的通过
         score_req = subj_scores.get(sn, {})
         if score_req and not _subject_score_ok(mn, score_req, student.subject_scores):
