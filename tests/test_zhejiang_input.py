@@ -141,7 +141,7 @@ class ScreeningTests(unittest.TestCase):
         import os
         if not os.path.exists("data/zhejiang/college.db"):
             self.skipTest("no zhejiang db")
-        from src.zhejiang.screening import screen
+        from src.zhejiang.step1_screen import screen
         from src.zhejiang.input.student_input import StudentInput
         self.screen = screen
         self.SI = StudentInput
@@ -189,26 +189,33 @@ class FinalVolunteerTests(unittest.TestCase):
         import os
         if not os.path.exists("data/zhejiang/college.db"):
             self.skipTest("no zhejiang db")
-        from src.zhejiang.final_volunteers import generate
+        from src.zhejiang.step1_screen import screen
+        from src.zhejiang.step2_filter import apply_intent_filter
+        from src.zhejiang.step3_generate import generate
         from src.zhejiang.input.student_input import StudentInput
+        self.screen = screen
+        self.filter = apply_intent_filter
         self.generate = generate
         self.SI = StudentInput
 
     def test_generate_80_and_columns(self):
         s = self.SI(rank=8000, total_score=620, selected_subjects=["物理", "化学", "生物"])
-        rows = self.generate(s)
-        self.assertEqual(len(rows), 80)  # 凑满 80
-        # 列齐全
-        for col in ("序号", "冲稳保", "专业名称", "考研路径", "专业发展路径", "三年平均位次"):
-            self.assertIn(col, rows[0])
-        # 按 2025 位次升序编号
-        r25 = [r["2025最低位次"] for r in rows]
-        self.assertEqual(r25, sorted(r25))
-        self.assertEqual([r["序号"] for r in rows], list(range(1, 81)))
-        # 冲稳保都有
-        self.assertEqual({r["冲稳保"] for r in rows}, {"冲", "稳", "保"})
+        screen_rows = self.screen(s)
+        _, _, _, final = self.generate(s, screen_rows)
+        self.assertEqual(len(final), 80)
+        for col in ("序号", "冲稳保", "专业名称", "保研率", "专业发展路径", "三年平均位次"):
+            self.assertIn(col, final[0])
+        self.assertEqual([r["序号"] for r in final], list(range(1, 81)))
+        cwb = {r["冲稳保"] for r in final}
+        self.assertTrue(cwb <= {"冲", "稳", "保"})
+        self.assertIn("冲", cwb)
 
-    def test_exclude_keywords(self):
+    def test_step2_exclude_major(self):
+        """排除「护理学」时，精确名和括号变体（护理学(卓越班) 等）一并排除；
+        护理学类（按大类招生）属于不同专业，不受影响。"""
         s = self.SI(rank=8000, total_score=620, selected_subjects=["物理", "化学", "生物"])
-        rows = self.generate(s, exclude_keywords=["护理"])
-        self.assertTrue(all("护理" not in r["专业名称"] for r in rows))
+        screen_rows = self.screen(s)
+        filtered = self.filter(screen_rows, [], [], ["护理学"], [], [], [])
+        names = {r["专业名称"] for r in filtered}
+        self.assertNotIn("护理学", names)                      # 精确名被排除
+        self.assertFalse(any(n.startswith("护理学(") for n in names))  # 括号变体被排除

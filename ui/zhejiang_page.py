@@ -195,7 +195,7 @@ def _build_filter_opts_by_level(rows: list[dict]) -> tuple[list[str], list[str],
 
 def _render_screening(s: StudentInput) -> None:
     import pandas as pd
-    from src.zhejiang.screening import screen
+    from src.zhejiang.step1_screen import screen
 
     st.divider()
     st.subheader("第一步 · 初步筛选（按省份排，浙江最前）")
@@ -205,6 +205,7 @@ def _render_screening(s: StudentInput) -> None:
     with st.spinner("筛选中…"):
         rows = screen(s)
     st.session_state["zj_screen_rows"] = rows
+
     if not rows:
         st.warning("没有符合条件的学校专业，试着放宽学科门类或地域偏好。")
         return
@@ -257,9 +258,10 @@ def _render_screening(s: StudentInput) -> None:
     }
 
     if st.button("开始二轮筛选", type="primary", use_container_width=True):
-        from src.zhejiang.final_volunteers import classify_rows
-        filtered = _apply_intent_filter(rows, excl_cats, excl_cls, excl_majs,
-                                        pref_cats, pref_cls, pref_majs, moe_warn)
+        from src.zhejiang.step2_filter import apply_intent_filter
+        from src.zhejiang.step3_generate import classify_rows
+        filtered = apply_intent_filter(rows, excl_cats, excl_cls, excl_majs,
+                                       pref_cats, pref_cls, pref_majs, moe_warn)
         # 打上冲/稳/保标签（用于列展示和后续第三步）
         classify_rows(filtered, int(s.rank))
         st.session_state["zj_filtered_rows"] = [
@@ -300,39 +302,11 @@ def _render_screening(s: StudentInput) -> None:
     )
 
 
-def _apply_intent_filter(
-    rows: list[dict],
-    excl_cats: list[str], excl_cls: list[str], excl_majs: list[str],
-    pref_cats: list[str], pref_cls: list[str], pref_majs: list[str],
-    moe_warn: bool = False,
-) -> list[dict]:
-    """非意向剔除 + 专业偏好过滤 + 预警过滤。每级独立集合，命中任一层即生效。"""
-    ec, el, em = set(excl_cats), set(excl_cls), set(excl_majs)
-    pc, pl, pm = set(pref_cats), set(pref_cls), set(pref_majs)
-
-    def is_excluded(r: dict) -> bool:
-        return (r.get("类别") in ec or
-                r.get("二级学科") in el or
-                r.get("专业名称") in em)
-
-    def is_preferred(r: dict) -> bool:
-        return (r.get("类别") in pc or
-                r.get("二级学科") in pl or
-                r.get("专业名称") in pm)
-
-    out = [r for r in rows if not is_excluded(r)]
-    if moe_warn:
-        out = [r for r in out if not r.get("预警")]
-    if pc or pl or pm:
-        out = [r for r in out if is_preferred(r)]
-    return out
-
-
 def _render_final(s: StudentInput) -> None:
     """从二轮筛选结果生成最终 80 志愿（冲稳保三表 + 合并表）。"""
     import pandas as pd
     from collections import Counter
-    from src.zhejiang.final_volunteers import generate
+    from src.zhejiang.step3_generate import generate
 
     filtered_rows = st.session_state.get("zj_filtered_rows", [])
     if not filtered_rows:
