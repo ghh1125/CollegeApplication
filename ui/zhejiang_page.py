@@ -441,6 +441,13 @@ def _render_final(s: StudentInput) -> None:
     )
 
     st.markdown("#### 参考 80 志愿")
+    st.info(
+        "💡 **仅供参考，最终志愿请自行斟酌决定。**\n\n"
+        "高考填志愿是人生中的重要决策，本工具基于历年位次数据和你填写的偏好进行系统性筛选与排序，"
+        "旨在帮你快速缩小范围、发现可能忽略的选项。但每个人的情况不同，"
+        "建议结合学校官方招生章程、专业培养方案、个人兴趣与职业规划综合考量，"
+        "必要时咨询老师、家长或专业人士。**志愿最终由你自己填报，结果由你自己负责。**"
+    )
     df_final = _df(final)
     st.dataframe(df_final, hide_index=True, height=600, column_config=COL_CFG)
 
