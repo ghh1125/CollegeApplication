@@ -256,7 +256,7 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             continue
         if nrm in forbid_majors:
             continue
-        # 5. 经济预算：per-major integer (Qianwen, 91%) 优先；fallback 学校级别章程金额
+        # 5. 经济预算：per-major integer (浙江招录数据, 91%) 优先；fallback 学校级别章程金额
         if budget != Budget.ANY:
             if tuition is not None:
                 if budget == Budget.LE_5000 and tuition > 5000:

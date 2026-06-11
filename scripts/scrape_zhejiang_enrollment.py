@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Scrape Qianwen/Quark enrollment-plan rows into standalone files.
+"""抓取浙江招录计划（学费/学制）数据，存为 JSONL/CSV。
 
-This script intentionally does not write SQLite tables. It reads school names
-from the local Zhejiang admission plan DB, fetches Qianwen's SSR HTML page, and
-extracts the embedded `enrollmentList` JSON.
+不直接写 SQLite。从浙江 college.db 读取学校名，抓取 SSR 页面，
+提取嵌入的 enrollmentList JSON。
 """
 
 from __future__ import annotations
@@ -26,9 +25,9 @@ import requests
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = PROJECT_ROOT / "data" / "zhejiang" / "college.db"
 RAW_DIR = PROJECT_ROOT / "data" / "zhejiang" / "raw"
-DEFAULT_JSONL = RAW_DIR / "qianwen_enrollment_2025_zhejiang_undergrad.jsonl"
-DEFAULT_CSV = RAW_DIR / "qianwen_enrollment_2025_zhejiang_undergrad.csv"
-DEFAULT_STATUS = RAW_DIR / "qianwen_enrollment_2025_zhejiang_undergrad.status.jsonl"
+DEFAULT_JSONL = RAW_DIR / "zhejiang_enrollment_2025_undergrad.jsonl"
+DEFAULT_CSV = RAW_DIR / "zhejiang_enrollment_2025_undergrad.csv"
+DEFAULT_STATUS = RAW_DIR / "zhejiang_enrollment_2025_undergrad.status.jsonl"
 
 BASE_URL = "https://p.qianwen.com/university/tab"
 HEADERS = {
@@ -75,7 +74,7 @@ def parse_enrollment_page(html: str) -> tuple[list[dict[str, Any]], dict[str, An
     return [row for row in rows if isinstance(row, dict)], enrollment_meta
 
 
-def qianwen_url(school_name: str, province: str, year: int, batch: str, genre: str) -> str:
+def enrollment_url(school_name: str, province: str, year: int, batch: str, genre: str) -> str:
     params_payload = {
         "province": province,
         "year": str(year),
@@ -136,7 +135,7 @@ def fetch_school(
     timeout: float,
     retries: int,
 ) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
-    url = qianwen_url(school_name, province, year, batch, genre)
+    url = enrollment_url(school_name, province, year, batch, genre)
     last_error: Exception | None = None
     for attempt in range(1, retries + 1):
         try:
@@ -161,7 +160,7 @@ def normalize_row(
     source_url: str,
 ) -> dict[str, Any]:
     return {
-        "source": "qianwen",
+        "source": "浙江招录",
         "source_url": source_url,
         "school_name": school_name,
         "province": province,
