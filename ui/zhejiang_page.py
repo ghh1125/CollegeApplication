@@ -126,7 +126,7 @@ def render(province: str = "zhejiang") -> None:
         vision = st.number_input("裸眼视力（较差眼，如 4.8）", min_value=0.0, max_value=5.3,
                                  value=0.0, step=0.1)
 
-    st.markdown("**单科成绩 \*** — 用于过滤有单科最低分要求的学校（69所有数据）")
+    st.markdown("**单科成绩 \*** — 用于过滤有单科最低分要求的学校")
     s1, s2, s3 = st.columns(3)
     with s1:
         chinese = st.number_input("语文 *", min_value=0, max_value=150, value=0, step=1)
@@ -234,7 +234,7 @@ def _render_screening(s: StudentInput) -> None:
     st.divider()
     st.subheader("第一步 · 初步筛选（按省份排，浙江最前）")
     st.caption("已用：选科要求、学科门类、地域偏好、体检色觉（国家标准）、经济预算（23441条精确到专业）、"
-               "单科成绩（69所学校有最低分要求）。不按位次过滤——冲稳保在第三步生成时处理。"
+               "单科成绩（有要求的学校参与过滤）。不按位次过滤——冲稳保在第三步生成时处理。"
                "展示：学制（23456条）、学费、体检/外语要求原文。")
     with st.spinner("筛选中…"):
         rows = screen(s)
@@ -295,11 +295,8 @@ def _render_screening(s: StudentInput) -> None:
 
     if st.button("开始二轮筛选", type="primary", use_container_width=True):
         from src.zhejiang.step2_filter import apply_intent_filter
-        from src.zhejiang.step3_generate import classify_rows
         filtered = apply_intent_filter(rows, excl_cats, excl_cls, excl_majs,
                                        pref_cats, pref_cls, pref_majs, moe_warn)
-        # 打上冲/稳/保标签（用于列展示和后续第三步）
-        classify_rows(filtered, int(s.rank))
         st.session_state["zj_filtered_rows"] = [
             {**r, "排序": i, "预警状态": "⚠️预警" if r.get("预警") else "—"}
             for i, r in enumerate(filtered, 1)
@@ -318,7 +315,7 @@ def _render_screening(s: StudentInput) -> None:
     st.success(msg)
 
     df2 = pd.DataFrame(filtered_rows)[[
-        "排序", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称",
+        "排序", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称",
         "预警状态", "院校代码", "层次", "城市", "办学类型", "学制", "学费/年",
         "2025最低位次", "2024最低位次", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
@@ -326,7 +323,6 @@ def _render_screening(s: StudentInput) -> None:
         df2, width="stretch", hide_index=True, height=600,
         column_config={
             "排序": st.column_config.NumberColumn(width="small"),
-            "冲稳保": st.column_config.TextColumn(width="small"),
             "学科评估结果": st.column_config.TextColumn(width="small"),
             "预警状态": st.column_config.TextColumn(width="small"),
             "院校级别": st.column_config.TextColumn(width="small"),
