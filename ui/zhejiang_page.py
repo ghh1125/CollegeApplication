@@ -357,7 +357,7 @@ def _to_excel(
 
 
 def _render_final(s: StudentInput) -> None:
-    """从二轮筛选结果生成最终 80 志愿（冲稳保三表 + 合并表 + 导出）。"""
+    """第三步：两步走——先展示冲/稳/保候选池，确认后生成最终 80 志愿。"""
     import pandas as pd
     from collections import Counter
     from src.zhejiang.step3_generate import generate
@@ -366,18 +366,15 @@ def _render_final(s: StudentInput) -> None:
     if not filtered_rows:
         return
 
+    # 若二轮筛选结果变化，清除第三步缓存
+    rows_key = len(filtered_rows)
+    if st.session_state.get("zj_step3_rows_key") != rows_key:
+        st.session_state.pop("zj_step3_pools", None)
+        st.session_state.pop("zj_step3_final", None)
+        st.session_state["zj_step3_rows_key"] = rows_key
+
     st.divider()
-    st.subheader("第三步 · 生成最终 80 志愿")
-
-    if not st.button("生成最终志愿（80个）", type="primary", use_container_width=True):
-        return
-
-    with st.spinner("生成中…"):
-        chong_t, wen_t, bao_t, final = generate(s, filtered_rows)
-
-    if not final:
-        st.warning("二轮筛选结果不足，请放宽筛选条件后重新进行二轮筛选。")
-        return
+    st.subheader("第三步 · 生成参考 80 志愿")
 
     COLS = [
         "序号", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估", "保研率", "专业发展路径",
@@ -398,22 +395,52 @@ def _render_final(s: StudentInput) -> None:
         "三年平均位次": st.column_config.NumberColumn(width="small"),
     }
 
+    def _df(rows: list[dict]) -> "pd.DataFrame":
+        return pd.DataFrame(rows).reindex(columns=COLS)
+
+    # ── 阶段一：生成并展示冲/稳/保候选池 ──────────────────────────────────
+    if "zj_step3_pools" not in st.session_state:
+        if st.button("生成参考候选池（冲/稳/保三档）", type="primary", use_container_width=True):
+            with st.spinner("计算候选池…"):
+                chong_t, wen_t, bao_t, final = generate(s, filtered_rows)
+            st.session_state["zj_step3_pools"] = (chong_t, wen_t, bao_t)
+            st.session_state["zj_step3_final"] = final   # 一并缓存，避免重复计算
+            st.rerun()
+        return
+
+    chong_t, wen_t, bao_t = st.session_state["zj_step3_pools"]
+
+    st.info(
+        f"候选池已生成：冲 {len(chong_t)} 条 / 稳 {len(wen_t)} 条 / 保 {len(bao_t)} 条。"
+        "查看下方三档后，点击「确认生成最终 80 志愿」。"
+    )
+    with st.expander(f"冲 · 候选池（{len(chong_t)} 条）", expanded=True):
+        st.dataframe(_df(chong_t), hide_index=True, height=400, column_config=COL_CFG) if chong_t else st.info("无冲的候选")
+    with st.expander(f"稳 · 候选池（{len(wen_t)} 条）", expanded=True):
+        st.dataframe(_df(wen_t), hide_index=True, height=400, column_config=COL_CFG) if wen_t else st.info("无稳的候选")
+    with st.expander(f"保 · 候选池（{len(bao_t)} 条）", expanded=True):
+        st.dataframe(_df(bao_t), hide_index=True, height=400, column_config=COL_CFG) if bao_t else st.info("无保的候选")
+
+    # ── 阶段二：确认后展示最终 80 志愿 ────────────────────────────────────
+    if "zj_step3_final" not in st.session_state or not st.session_state["zj_step3_final"]:
+        st.warning("二轮筛选结果不足，请放宽筛选条件后重新进行二轮筛选。")
+        return
+
+    st.divider()
+    if st.button("确认，生成参考 80 志愿 ✓", type="primary", use_container_width=True,
+                 key="btn_confirm_final"):
+        st.session_state["zj_step3_show_final"] = True
+
+    if not st.session_state.get("zj_step3_show_final"):
+        return
+
+    final = st.session_state["zj_step3_final"]
     cwb = Counter(r["冲稳保"] for r in final)
     st.success(
         f"共 {len(final)} 个志愿 · 冲 {cwb.get('冲',0)} / 稳 {cwb.get('稳',0)} / 保 {cwb.get('保',0)}"
     )
 
-    def _df(rows: list[dict]) -> "pd.DataFrame":
-        return pd.DataFrame(rows).reindex(columns=COLS)
-
-    with st.expander(f"冲 · 候选池（{len(chong_t)} 条）", expanded=False):
-        st.dataframe(_df(chong_t), hide_index=True, height=400, column_config=COL_CFG) if chong_t else st.info("无冲的候选")
-    with st.expander(f"稳 · 候选池（{len(wen_t)} 条）", expanded=False):
-        st.dataframe(_df(wen_t), hide_index=True, height=400, column_config=COL_CFG) if wen_t else st.info("无稳的候选")
-    with st.expander(f"保 · 候选池（{len(bao_t)} 条）", expanded=False):
-        st.dataframe(_df(bao_t), hide_index=True, height=400, column_config=COL_CFG) if bao_t else st.info("无保的候选")
-
-    st.markdown("#### 最终 80 志愿")
+    st.markdown("#### 参考 80 志愿")
     df_final = _df(final)
     st.dataframe(df_final, hide_index=True, height=600, column_config=COL_CFG)
 
