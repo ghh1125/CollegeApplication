@@ -24,22 +24,37 @@ from typing import Any
 
 @dataclass(frozen=True)
 class _Cfg:
-    interval: int
-    stable:   int   # 稳的最大后延
-    safety:   int   # 保的最大后延
-    n_chong:  int
-    n_wen:    int
-    n_bao:    int
+    interval:    int
+    stable:      int   # 稳的后延上限
+    safety:      int   # 保的后延上限（从 rank 算起，保从 stable 末尾接续）
+    n_chong:     int
+    n_wen:       int
+    n_bao:       int
+    rush_start:  int   # 冲区间左端 = max(1, rank - interval * n_chong)
 
 
 def _config(rank: int) -> _Cfg:
+    """
+    三段连续区间（以考生位次 R 为基准）：
+      冲：[rush_start, R)         rush_start = max(1, R - interval * 20)
+      稳：[R, R + stable]
+      保：(R + stable, R + safety]
+    """
     if rank <= 5000:
-        return _Cfg(50,        1_000,  5_000,  20, 40, 20)
+        iv = 50
+        return _Cfg(iv, 1_000, 5_000, 20, 40, 20,
+                    max(1, rank - iv * 20))
     if rank <= 10000:
-        return _Cfg(rank // 70, 2_000, 10_000,  20, 40, 20)
+        iv = max(1, rank // 70)
+        return _Cfg(iv, 2_000, 10_000, 20, 40, 20,
+                    max(1, rank - iv * 20))
     if rank <= 50000:
-        return _Cfg(rank // 100, 3_000, 15_000, 20, 30, 30)
-    return _Cfg(500,           3_000, 15_000,  20, 30, 30)
+        iv = max(1, rank // 100)
+        return _Cfg(iv, 3_000, 15_000, 20, 30, 30,
+                    max(1, rank - iv * 20))
+    iv = 500
+    return _Cfg(iv, 3_000, 15_000, 20, 30, 30,
+                max(1, rank - iv * 20))
 
 
 def _ref_rank(r: dict) -> int | None:
@@ -55,11 +70,11 @@ def _label(r: dict, rank: int, cfg: _Cfg) -> str:
     rr = _ref_rank(r)
     if rr is None:
         return "—"
-    if rr < rank:
+    if cfg.rush_start <= rr < rank:
         return "冲"
-    if rr <= rank + cfg.stable:
+    if rank <= rr <= rank + cfg.stable:
         return "稳"
-    if rr <= rank + cfg.safety:
+    if rank + cfg.stable < rr <= rank + cfg.safety:
         return "保"
     return "—"
 
@@ -111,13 +126,17 @@ def _select_front(pool: list[dict], count: int) -> list[dict]:
 def split_pools(
     rows: list[dict], rank: int, cfg: _Cfg
 ) -> tuple[list[dict], list[dict], list[dict]]:
-    """将候选行按冲/稳/保分成三个池（无有效位次的行丢弃）。"""
+    """将候选行按冲/稳/保分成三个连续区间（无有效位次的行丢弃）：
+      冲：[rush_start, rank)
+      稳：[rank, rank + stable]
+      保：(rank + stable, rank + safety]
+    """
     chong, wen, bao = [], [], []
     for r in rows:
         rr = _ref_rank(r)
         if rr is None:
             continue
-        if rr < rank:
+        if cfg.rush_start <= rr < rank:
             chong.append(r)
         elif rr <= rank + cfg.stable:
             wen.append(r)

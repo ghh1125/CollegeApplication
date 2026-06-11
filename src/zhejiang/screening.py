@@ -317,13 +317,11 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
 
 
 def screen(student: Any, year: int = YEAR) -> list[dict]:
-    """第一步初步筛选（显示用）：在全量池基础上**只保留考生能上的**——
-    即 2025最低位次 ≥ 考生位次（位次比你大=录取门槛比你低=你能上）。
-    无 2025 位次的（缺数据）不参与，不显示。按 省份(浙江最前)→大学→位次 排序并编号。
+    """第一步初步筛选：选科 / 学科门类 / 地域 / 体检 / 预算 / 单科成绩。
+    不做位次过滤——冲/稳/保分档在第三步生成志愿时处理。
+    按 省份(浙江最前) → 软科排名 → 2025位次 排序并编号。
     """
-    rank = int(student.rank)
-    out = [r for r in _full_pool(student, year)
-           if r["2025最低位次"] is not None and r["2025最低位次"] >= rank]
+    out = list(_full_pool(student, year))
     for i, r in enumerate(out, 1):
         r["排序"] = i
     return out
