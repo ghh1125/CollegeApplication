@@ -1,2 +1,0 @@
-"""Excel export module."""
-

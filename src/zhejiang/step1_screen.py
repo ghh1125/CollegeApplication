@@ -19,8 +19,8 @@ import re
 from typing import Any
 
 from db import get_conn
-from src.common.reference import SCHOOL_LEVEL_MAP
-from src.common.ranking.rank import _lookup_discipline_code, normalize_major_name
+from src.zhejiang.reference import SCHOOL_LEVEL_MAP
+from src.zhejiang.rank_utils import _lookup_discipline_code, normalize_major_name
 from src.zhejiang.input.disciplines import CATEGORY_NAMES, MAJOR_CLASS_NAMES
 from src.zhejiang.input.medical_rules import conditions_for, restricted_classes, restricted_majors
 from src.zhejiang.input.student_input import Budget
