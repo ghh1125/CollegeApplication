@@ -121,46 +121,39 @@ def _subject_ok(req_json: str | None, selected: set[str]) -> bool:
     return True
 
 
-_TIER_RANK = {"985": 0, "211": 1, "双一流": 2, "其他": 3}
-
-
 def _level_label(school_name: str) -> str:
     import re as _re
 
     def _norm(s: str) -> str:
         return s.replace("（", "(").replace("）", ")")
 
-    # 归一化 map，985 > 211 > 双一流（setdefault 保留最高级）
-    _norm_map: dict[str, str] = {}
-    for tier in ("985", "211", "双一流"):
-        for name in SCHOOL_LEVEL_MAP[tier]:
-            _norm_map.setdefault(_norm(name), tier)
+    n985 = {_norm(x) for x in SCHOOL_LEVEL_MAP["985"]}
+    n211 = {_norm(x) for x in SCHOOL_LEVEL_MAP["211"]}
+    n双  = {_norm(x) for x in SCHOOL_LEVEL_MAP["双一流"]}
 
-    def _lookup(name: str) -> str | None:
-        return _norm_map.get(_norm(name))
+    def _candidates(name: str) -> list[str]:
+        """返回该校所有需要查表的候选名（自身 + 主校）。"""
+        result = [_norm(name)]
+        stripped = _re.sub(r"[（(][^）)]*[）)]$", "", name).strip()
+        if stripped != name:
+            result.append(_norm(stripped))
+        m = _re.match(r"^(.+?大学).+(分校|校区)$", name)
+        if m:
+            result.append(_norm(m.group(1)))
+        return result
 
-    def _best(*tiers: str | None) -> str:
-        """返回优先级最高的非 None tier。"""
-        best = "其他"
-        for t in tiers:
-            if t and _TIER_RANK.get(t, 3) < _TIER_RANK[best]:
-                best = t
-        return best
+    cands = _candidates(school_name)
+    is985 = any(c in n985 for c in cands)
+    is211 = any(c in n211 for c in cands)
+    is双  = any(c in n双  for c in cands)
 
-    # 查当前名称本身
-    own = _lookup(school_name)
-
-    # 去尾部括号 → 主校名
-    stripped = _re.sub(r"[（(][^）)]*[）)]$", "", school_name).strip()
-    parent = _lookup(stripped) if stripped != school_name else None
-
-    # 无括号分校名（如「山东大学威海分校」）→ 主校
-    campus_parent = None
-    m = _re.match(r"^(.+?大学).+(分校|校区)$", school_name)
-    if m:
-        campus_parent = _lookup(m.group(1))
-
-    return _best(own, parent, campus_parent)
+    if is985:
+        return "985"
+    if is211:
+        return "211/双一流"   # 数据验证：所有211都在双一流
+    if is双:
+        return "双一流"
+    return "其他"
 
 
 def _load_lookups(conn: Any) -> dict:
