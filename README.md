@@ -70,8 +70,8 @@
 | `admission_plan` | 23,531 | `school_name` `major_name` `major_code` `subject_requirement` `tuition` `duration` `year` | 2023–2025 浙江招生计划，含选科要求、学费、学制 |
 | `historical_cutoff` | 66,563 | `school_name` `major_name` `min_rank` `min_score` `year` | 历年最低录取位次/分数，第一步筛选和冲稳保判断的核心数据 |
 | `major_description` | 1,355 | `national_code` `name` `is_what` `learn_what` `do_what` | 教育部本科专业目录（2026 版），883 个三级专业 + 部分专业画像 |
-| `major_profile` | 3,139 | `major_name` `career_direction` `summary` `fallback_from` | 专业画像（发展路径、学什么、做什么）；含千问全量 845 个标准专业 + 1,796 个浙江招生别名映射，浙江覆盖率 82% |
-| `qianwen_major_profile` | 845 | `major_name` `career_direction` `fresh_salary` `top_position` `top_industry` | 千问原始专业画像（标准本科专业，含薪资/岗位/行业分布） |
+| `major_profile` | 3,139 | `major_name` `career_direction` `summary` `fallback_from` | 专业画像（发展路径、学什么、做什么）；含 845 个标准专业 + 1,796 个浙江招生别名映射，浙江覆盖率 82% |
+| `ai_major_profile` | 845 | `major_name` `career_direction` `fresh_salary` `top_position` `top_industry` | AI 接口原始专业画像（标准本科专业，含薪资/岗位/行业分布） |
 | `school_profile` | 3,144 | `school_name` `ruanke_rank` `recommend_master_rate` | 学校画像（保研率、软科排名） |
 | `school_master` | 3,285 | `school_name` `school_code` `province` `school_level` `ruanke_rank` | 学校基础信息（985/211/双一流标记、省份、排名） |
 | `discipline_evaluation` | 5,112 | `school_name` `discipline_code` `discipline_name` `grade` | 教育部第四轮学科评估全量（96 个一级学科，460 所学校，A+/A/A-/B+…） |
@@ -123,7 +123,7 @@ streamlit run main.py
 | 历史录取位次 / 招生计划 | [阳光高考 chsi.com.cn](https://gaokao.chsi.com.cn)（教育部主管的官方平台） |
 | 位次分段表 / 选考科目要求 | [浙江省教育考试院 zjzs.net](https://www.zjzs.net) |
 | 学校基本信息 / 专业介绍 | [阳光高考 static-data.gaokao.cn](https://static-data.gaokao.cn) |
-| 专业画像（发展路径/薪资/岗位） | 阿里云千问（845 个标准本科专业） |
+| 专业画像（发展路径/薪资/岗位） | AI 接口（845 个标准本科专业） |
 | 第四轮学科评估 | [教育部学位中心 kaoyan.eol.cn](https://kaoyan.eol.cn)（官方 2017 年公布数据） |
 | 大学排名 | [软科 shanghairanking.cn](https://www.shanghairanking.cn) |
 | 学费 / 学制 | 浙江招录平台（公开招生计划页） |
