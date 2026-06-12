@@ -372,49 +372,6 @@ def insert_admission_plan_from_cutoff(
     }
 
 
-def run_ingestion(
-    raw_dir: Path = RAW_DIR,
-    ingest_module: Any | None = None,
-    conn: Any | None = None,
-) -> dict[str, Any]:
-    """Load cutoff CSVs and derive the 2025 admission plan into SQLite."""
-
-    if ingest_module is None:
-        from src.zhejiang.input import ingest as ingest_module
-
-    plan_base_path = raw_csv_path("historical_cutoff", ADMISSION_PLAN_YEAR, raw_dir)
-    if not plan_base_path.exists():
-        raise FileNotFoundError(f"missing 2025 cutoff CSV: {plan_base_path}")
-
-    subject_index = load_subject_requirement_index(raw_dir)
-    if not subject_index:
-        print(
-            "警告：未找到可解析的 subject_requirement.xlsx，"
-            "选考科目默认写入 {\"type\": \"NONE\", \"subjects\": []}"
-        )
-
-    stats: dict[str, Any] = {"historical_cutoff_rows": {}}
-    with connection_scope(conn) as active_conn:
-        stats.update(
-            insert_admission_plan_from_cutoff(
-                plan_base_path,
-                ADMISSION_PLAN_YEAR,
-                subject_index,
-                active_conn,
-            )
-        )
-        for year in HISTORICAL_CUTOFF_YEARS:
-            cutoff_path = raw_csv_path("historical_cutoff", year, raw_dir)
-            if not cutoff_path.exists():
-                raise FileNotFoundError(f"missing historical cutoff CSV: {cutoff_path}")
-            stats["historical_cutoff_rows"][year] = ingest_module.ingest_historical_cutoff(
-                str(cutoff_path),
-                year=year,
-                conn=active_conn,
-            )
-        ingest_module.build_program_mapping(year=ADMISSION_PLAN_YEAR, conn=active_conn)
-    return stats
-
 
 def load_validation_summary(conn: Any) -> str:
     """Run verification SQL queries and format their output."""
@@ -466,12 +423,8 @@ def print_validation_summary() -> None:
 
 
 def main() -> None:
-    """Create tables, ingest raw CSVs, and print verification counts."""
+    """Print database verification counts."""
 
-    from scripts.init_db import initialize_database
-
-    initialize_database()
-    run_ingestion(RAW_DIR)
     print_validation_summary()
 
 

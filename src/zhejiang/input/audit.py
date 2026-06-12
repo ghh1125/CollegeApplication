@@ -1,2 +1,0 @@
-"""Application list audit stage."""
-

@@ -74,7 +74,6 @@ class SplitScriptTests(unittest.TestCase):
     def test_load_data_imports_without_requests(self) -> None:
         module = importlib.import_module("scripts.load_data")
 
-        self.assertTrue(hasattr(module, "run_ingestion"))
         self.assertTrue(hasattr(module, "load_validation_summary"))
 
     def test_fetch_data_prints_file_row_counts(self) -> None:
