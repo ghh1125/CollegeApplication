@@ -174,9 +174,9 @@ def render(province: str = "zhejiang") -> None:
                     "naked_eye_vision": vision or None,
                 },
                 subject_scores={
-                    "chinese": chinese,
-                    "math": math,
-                    "foreign": foreign,
+                    "chinese": chinese or None,
+                    "math": math or None,
+                    "foreign": foreign or None,
                 },
             )
         except Exception as e:  # noqa: BLE001
