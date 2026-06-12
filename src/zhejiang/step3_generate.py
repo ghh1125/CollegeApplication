@@ -234,6 +234,18 @@ def _load_baoyan() -> tuple[dict[str, float | None], set[str]]:
             fallback_schools.add(sn)
             continue
 
+        # 步骤4：无括号的分校名（如「山东大学威海分校」）→ 去掉尾部分校/校区词后匹配主校
+        stripped2 = re.sub(r"(分校|校区|学院)$", "", sn)
+        stripped2 = re.sub(r"[^一-龥a-zA-Z0-9]", "", stripped2[-6:]) if len(stripped2) < len(sn) else ""
+        # 直接用常见后缀词切割：「XX大学YY分校」→「XX大学」
+        m = re.match(r"^(.+?大学).+(分校|校区)$", sn)
+        if m:
+            parent = m.group(1)
+            if parent in base and (base[parent] or 0) > 0:
+                result[sn] = base[parent]
+                fallback_schools.add(sn)
+                continue
+
         # 无法匹配
         if sn in base:
             result[sn] = base[sn]  # 保留原值（含0.0）

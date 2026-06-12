@@ -122,12 +122,39 @@ def _subject_ok(req_json: str | None, selected: set[str]) -> bool:
 
 
 def _level_label(school_name: str) -> str:
-    if school_name in SCHOOL_LEVEL_MAP["985"]:
-        return "985"
-    if school_name in SCHOOL_LEVEL_MAP["211"]:
-        return "211"
-    if school_name in SCHOOL_LEVEL_MAP["双一流"]:
-        return "双一流"
+    import re as _re
+
+    def _norm(s: str) -> str:
+        return s.replace("（", "(").replace("）", ")")
+
+    # 归一化后的 map，key 统一为半角括号
+    _norm_map: dict[str, str] = {}
+    for tier in ("985", "211", "双一流"):
+        for name in SCHOOL_LEVEL_MAP[tier]:
+            _norm_map.setdefault(_norm(name), tier)
+
+    def _lookup(name: str) -> str | None:
+        return _norm_map.get(_norm(name))
+
+    # 1. 精确 / 括号形式互换
+    t = _lookup(school_name)
+    if t:
+        return t
+
+    # 2. 去尾部括号 → 主校
+    stripped = _re.sub(r"[（(][^）)]*[）)]$", "", school_name).strip()
+    if stripped != school_name:
+        t = _lookup(stripped)
+        if t:
+            return t
+
+    # 3. 无括号分校名（如「山东大学威海分校」）→ 主校
+    m = _re.match(r"^(.+?大学).+(分校|校区)$", school_name)
+    if m:
+        t = _lookup(m.group(1))
+        if t:
+            return t
+
     return "其他"
 
 
