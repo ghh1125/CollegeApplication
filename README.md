@@ -35,15 +35,15 @@
 
 ```
 .
-├── main.py                      # 网页应用入口
+├── main.py                      # 网页应用入口（落地页 + 省份路由）
 ├── db.py                        # 数据库连接
-├── config.py                    # 配置（API Key 等）
 │
 ├── src/zhejiang/
 │   ├── step1_screen.py          # 第一步：按选科/学科/预算/地域/体检/单科初筛，铺出候选池
 │   ├── step2_filter.py          # 第二步：意向过滤（排除/偏好门类·专业类·具体专业 + 预警过滤）
 │   ├── step3_generate.py        # 第三步：冲稳保梯度采样，生成最终 80 个志愿
-│   ├── persona.py               # 用户分档（顶尖/高分/中坚/一段线下）
+│   ├── reference.py             # 985 / 211 / 双一流学校名单
+│   ├── rank_utils.py            # 专业名归一化 + 学科评估代码映射
 │   └── input/
 │       ├── student_input.py     # StudentInput 数据模型（位次/选科/预算/地域/体检/单科）
 │       ├── disciplines.py       # 学科门类·专业类代码常量（对齐教育部 2026 版目录）
@@ -59,6 +59,14 @@
 │       └── raw/                 # 历史位次 CSV、选科要求、专业目录 PDF、招录原始数据
 │
 └── scripts/                     # 数据处理脚本（建库、抓取、解析）
+    ├── init_db.py               # 建表 / schema 初始化
+    ├── load_data.py             # 导入数据
+    ├── fetch_zhejiang_plans.py  # 抓取浙江招生计划
+    ├── fetch_baoyan_rate.py     # 抓取保研率
+    ├── fetch_tuition_duration.py# 抓取学费/学制
+    ├── scrape_chsi_*.py         # 阳光高考章程抓取
+    ├── parse_charter_requirements.py  # 解析章程选科/单科要求
+    └── build_school_master.py   # 构建学校主表
 ```
 
 ---
@@ -95,16 +103,6 @@ git clone https://github.com/ghh1125/CollegeApplication.git
 cd CollegeApplication
 uv sync          # 或 pip install -r requirements.txt
 ```
-
-### 配置
-
-创建 `.env` 文件：
-
-```
-DASHSCOPE_API_KEY=your_key_here
-```
-
-AI 对话功能需要阿里云百炼的 API Key，志愿生成本身不需要。
 
 ### 运行
 
