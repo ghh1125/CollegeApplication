@@ -134,12 +134,18 @@ def _level_label(school_name: str) -> str:
     def _candidates(name: str) -> list[str]:
         """返回该校所有需要查表的候选名（自身 + 主校）。"""
         result = [_norm(name)]
+        # 去尾部括号（校区/城市限定）
         stripped = _re.sub(r"[（(][^）)]*[）)]$", "", name).strip()
         if stripped != name:
             result.append(_norm(stripped))
+        # 无括号分校/校区：「XX大学YY分校/校区」→「XX大学」
         m = _re.match(r"^(.+?大学).+(分校|校区)$", name)
         if m:
             result.append(_norm(m.group(1)))
+        # 医学院/医学部：「XX大学医学院/部」→「XX大学」
+        m2 = _re.match(r"^(.+?大学)医学[院部]$", name)
+        if m2:
+            result.append(_norm(m2.group(1)))
         return result
 
     cands = _candidates(school_name)
