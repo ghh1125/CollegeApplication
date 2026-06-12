@@ -44,6 +44,16 @@ def _reset() -> None:
             del st.session_state[k]
 
 
+def _collect_form() -> dict:
+    return {
+        "rank": st.session_state.get("zj_rank", 8000),
+        "selected_subjects": st.session_state.get("zj_subjects", []),
+        "main_priority": st.session_state.get("zj_priority", "请选择…"),
+        "preferred_majors": [s.strip() for s in st.session_state.get("zj_majors", "").split(",") if s.strip()],
+        "preferred_cities": [c.strip() for c in st.session_state.get("zj_cities", "").split(",") if c.strip()],
+    }
+
+
 def render(province: str = "zhejiang") -> None:
     st.title("高考志愿推荐系统 · 浙江")
     if st.button("← 切换省份", key="zj_back"):
@@ -123,7 +133,7 @@ def render(province: str = "zhejiang") -> None:
             help="先选的优先级更高",
         )
 
-    st.markdown("**体检结果** \* — 色觉用于过滤体检受限专业（国家标准）")
+    st.markdown(r"**体检结果** \* — 色觉用于过滤体检受限专业（国家标准）")
     m1, m2, m3 = st.columns(3)
     with m1:
         height = st.number_input("身高 cm", min_value=0, max_value=250, value=0, step=1)
@@ -133,7 +143,7 @@ def render(province: str = "zhejiang") -> None:
         vision = st.number_input("裸眼视力（较差眼，如 4.8）", min_value=0.0, max_value=5.3,
                                  value=0.0, step=0.1)
 
-    st.markdown("**单科成绩 \*** — 用于过滤有单科最低分要求的学校")
+    st.markdown(r"**单科成绩 \*** — 用于过滤有单科最低分要求的学校")
     s1, s2, s3 = st.columns(3)
     with s1:
         chinese = st.number_input("语文 *", min_value=0, max_value=150, value=0, step=1)
@@ -419,6 +429,13 @@ def _render_final(s: StudentInput) -> None:
     with st.expander(f"保 · 候选池（{len(bao_t)} 条）", expanded=True):
         st.dataframe(_df(bao_t), hide_index=True, height=400, column_config=COL_CFG) if bao_t else st.info("无保的候选")
 
+    all_pool = chong_t + wen_t + bao_t
+    if any(r.get("_baoyan_fallback") for r in all_pool):
+        st.caption(
+            "ℹ️ 保研率说明：异地校区（如「哈工大(威海)」「北航杭州国际校园」）"
+            "无独立统计数据，以主校保研率作为参考，实际校区可能偏低，请自行核实。"
+        )
+
     # ── 3b：从三轮候选池按数量规则选出参考 80 志愿 ────────────────────────
     st.divider()
     st.subheader("最终 · 参考 80 志愿")
@@ -457,6 +474,12 @@ def _render_final(s: StudentInput) -> None:
     )
     df_final = _df(final)
     st.dataframe(df_final, hide_index=True, height=600, column_config=COL_CFG)
+
+    if any(r.get("_baoyan_fallback") for r in final):
+        st.caption(
+            "ℹ️ 保研率说明：异地校区（如「哈工大(威海)」「北航杭州国际校园」）"
+            "无独立统计数据，以主校保研率作为参考，实际校区可能偏低，请自行核实。"
+        )
 
     st.markdown("#### 导出志愿方案")
     ec1, ec2 = st.columns(2)

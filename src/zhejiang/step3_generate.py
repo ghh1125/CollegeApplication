@@ -179,16 +179,66 @@ def _lookup_career(name: str, career: dict[str, str]) -> str | None:
     return career.get(norm)
 
 
-def _load_baoyan() -> dict[str, float | None]:
-    """学校名 → 保研率（%），无数据返回 None。"""
+def _load_baoyan() -> tuple[dict[str, float | None], set[str]]:
+    """学校名 → 保研率（%），无数据返回 None。同时返回「使用主校数据」的学校名集合。
+
+    匹配顺序：
+    1. 精确命中（DB 值 > 0 视为有效数据）
+    2. 括号全角↔半角互换后命中同校区记录（DB 值 > 0）
+    3. 去掉尾部括号后回落到主校名（校区专属记录不存在或值为 0）
+    """
+    import re
+
+    def _normalize_brackets(s: str) -> str:
+        return s.replace("（", "(").replace("）", ")")
+
+    def _is_campus(name: str) -> bool:
+        return bool(re.search(r"[（(][^）)]+[）)]$", name))
+
     with get_conn("zhejiang") as conn:
-        return {
-            row[0]: row[1]
-            for row in conn.execute(
-                "SELECT school_name, recommend_master_rate FROM school_profile"
-                " WHERE recommend_master_rate IS NOT NULL"
-            )
-        }
+        raw = list(conn.execute(
+            "SELECT school_name, recommend_master_rate FROM school_profile"
+            " WHERE recommend_master_rate IS NOT NULL"
+        ))
+
+    base: dict[str, float | None] = {row[0]: row[1] for row in raw}
+    norm_base: dict[str, float | None] = {_normalize_brackets(k): v for k, v in base.items()}
+
+    result: dict[str, float | None] = {}
+    fallback_schools: set[str] = set()
+
+    with get_conn("zhejiang") as conn:
+        cutoff_names = [row[0] for row in conn.execute("SELECT DISTINCT school_name FROM historical_cutoff")]
+
+    all_names = set(base) | set(cutoff_names)
+
+    for sn in all_names:
+        # 步骤1：精确命中且有效（>0）
+        if sn in base and (base[sn] or 0) > 0:
+            result[sn] = base[sn]
+            continue
+
+        # 步骤2：括号形式互换后命中且有效
+        normed = _normalize_brackets(sn)
+        if normed in norm_base and (norm_base[normed] or 0) > 0:
+            result[sn] = norm_base[normed]
+            # 若原名与归一化后不同，说明只是括号形式差异，不算"参考主校"
+            if normed != sn:
+                continue
+            continue
+
+        # 步骤3：校区变体回落主校（括号内是校区信息，且主校有数据）
+        stripped = re.sub(r"[（(][^）)]*[）)]$", "", sn).strip()
+        if stripped != sn and stripped in base and (base[stripped] or 0) > 0:
+            result[sn] = base[stripped]
+            fallback_schools.add(sn)
+            continue
+
+        # 无法匹配
+        if sn in base:
+            result[sn] = base[sn]  # 保留原值（含0.0）
+
+    return result, fallback_schools
 
 
 def generate(
@@ -202,7 +252,7 @@ def generate(
     """
     rank = int(student.rank)
     cfg = _config(rank)
-    baoyan = _load_baoyan()
+    baoyan, baoyan_fallback = _load_baoyan()
     career = _load_career_direction()
 
     chong_pool, wen_pool, bao_pool = split_pools(rows, rank, cfg)
@@ -228,16 +278,18 @@ def generate(
             yrs = [r.get(f"{y}最低位次") for y in (2025, 2024, 2023)]
             have = [y for y in yrs if y]
             avg = round(sum(have) / len(have)) if have else None
+            sn = r["院校名称"]
             out.append({
                 "序号": i,
                 "冲稳保": label,
                 "专业名称": r["专业名称"], "专业代码": r["专业代码"],
                 "二级学科": r["二级学科"],
                 "学科评估": r["学科评估"],
-                "保研率": baoyan.get(r["院校名称"]),
+                "保研率": baoyan.get(sn),
+                "_baoyan_fallback": sn in baoyan_fallback,
                 "专业发展路径": _lookup_career(r["专业名称"], career),
                 "类别": r["类别"],
-                "院校名称": r["院校名称"], "院校代码": r["院校代码"],
+                "院校名称": sn, "院校代码": r["院校代码"],
                 "层次": r["层次"],
                 "学制": r.get("学制", "—"),
                 "学费/年": r.get("学费/年", "—"),
@@ -266,16 +318,18 @@ def generate(
         yrs = [r.get(f"{y}最低位次") for y in (2025, 2024, 2023)]
         have = [y for y in yrs if y]
         avg = round(sum(have) / len(have)) if have else None
+        sn = r["院校名称"]
         final.append({
             "序号": i,
             "冲稳保": r.get("_cwb", "稳"),
             "专业名称": r["专业名称"], "专业代码": r["专业代码"],
             "二级学科": r["二级学科"],
             "学科评估": r["学科评估"],
-            "保研率": baoyan.get(r["院校名称"]),
+            "保研率": baoyan.get(sn),
+            "_baoyan_fallback": sn in baoyan_fallback,
             "专业发展路径": _lookup_career(r["专业名称"], career),
             "类别": r["类别"],
-            "院校名称": r["院校名称"], "院校代码": r["院校代码"],
+            "院校名称": sn, "院校代码": r["院校代码"],
             "层次": r["层次"],
             "学制": r.get("学制", "—"),
             "学费/年": r.get("学费/年", "—"),
