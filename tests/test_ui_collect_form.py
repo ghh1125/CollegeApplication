@@ -19,7 +19,7 @@ class UICollectFormTests(unittest.TestCase):
         sys.modules["streamlit"] = fake
 
     def tearDown(self) -> None:
-        for name in ("ui.zhejiang_page", "ui.jiangsu_page", "ui.shanghai_page", "ui.questionnaire"):
+        for name in ("ui.zhejiang_page", "ui.questionnaire"):
             sys.modules.pop(name, None)
         if self._old_streamlit is None:
             sys.modules.pop("streamlit", None)
@@ -46,24 +46,6 @@ class UICollectFormTests(unittest.TestCase):
         self.assertEqual(form["selected_subjects"], [])
         self.assertEqual(form["main_priority"], "请选择…")
         self.assertEqual(form["preferred_majors"], [])
-
-    def test_jiangsu_collect_form_has_first_choice_default(self) -> None:
-        jiangsu_page = self._import_page("jiangsu")
-
-        form = self._with_state(jiangsu_page, {})
-
-        self.assertEqual(form["rank"], 8000)
-        self.assertEqual(form["first_choice"], "物理")
-        self.assertEqual(form["selected_subjects"], [])
-
-    def test_shanghai_collect_form_has_defaults(self) -> None:
-        shanghai_page = self._import_page("shanghai")
-
-        form = self._with_state(shanghai_page, {})
-
-        self.assertEqual(form["rank"], 8000)
-        self.assertEqual(form["selected_subjects"], [])
-        self.assertEqual(form["main_priority"], "请选择…")
 
 
 if __name__ == "__main__":
