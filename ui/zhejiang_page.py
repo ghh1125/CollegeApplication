@@ -327,15 +327,26 @@ def _render_screening(s: StudentInput) -> None:
     # ── 专业意向过滤（出现在第一表格下方，影响第二步志愿生成）──────────────────
     st.divider()
     st.subheader("专业意向过滤")
-    st.caption("三列联级：点门类 → 点专业类 → 选具体专业（「全部」按钮 = 该专业类所有专业）。")
+    st.caption("剔除和偏好互斥：选一种模式即可。")
+
+    filter_mode = st.radio(
+        "过滤模式",
+        ["不过滤", "剔除不想要的专业", "只保留偏好专业"],
+        horizontal=True,
+        key="zj_filter_mode",
+        label_visibility="collapsed",
+    )
 
     hierarchy = _build_hierarchy(rows)
+    excl_majs: list[str] = []
+    pref_majs: list[str] = []
 
-    st.markdown("**非意向专业剔除**（命中 → 剔除）")
-    excl_majs = _cascading_filter_ui("excl", hierarchy)
-
-    st.markdown("**专业偏好**（若有选择，只保留命中行；无选择 = 不限）")
-    pref_majs = _cascading_filter_ui("pref", hierarchy)
+    if filter_mode == "剔除不想要的专业":
+        st.caption("命中的专业从候选池中删除")
+        excl_majs = _cascading_filter_ui("excl", hierarchy)
+    elif filter_mode == "只保留偏好专业":
+        st.caption("只保留命中的专业，其余全部删除")
+        pref_majs = _cascading_filter_ui("pref", hierarchy)
 
     moe_warn = st.toggle(
         "过滤预警专业",
