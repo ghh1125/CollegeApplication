@@ -261,30 +261,25 @@ def _cascading_filter_ui(
     with col_cls:
         st.caption(f"{cur_cat}")
         for cls_name, majors in hierarchy.get(cur_cat, {}).items():
-            all_key = f"zj_{prefix}_all_{cls_name}"
             maj_key = f"zj_{prefix}_maj_{cls_name}"
-            c1, c2 = st.columns([2, 5])
-            all_checked = c1.checkbox(f"**{cls_name}**　全部", key=all_key)
-            if all_checked:
-                c2.caption("全部已选中")
-            else:
-                c2.multiselect(
-                    cls_name, majors, key=maj_key,
-                    label_visibility="collapsed",
-                    placeholder="选具体专业（不选 = 不限）",
-                )
+            st.multiselect(
+                f"**{cls_name}**",
+                ["全部"] + majors,
+                key=maj_key,
+                placeholder="选具体专业（不选 = 不限）",
+            )
 
     # 从所有门类的 session_state 中收集（切换门类后 widget 不渲染，但 state 保留）
     sel_cls: list[str] = []
     sel_majs: list[str] = []
     for cat in cat_names:
         for cls_name in hierarchy.get(cat, {}):
-            all_key = f"zj_{prefix}_all_{cls_name}"
             maj_key = f"zj_{prefix}_maj_{cls_name}"
-            if st.session_state.get(all_key, False):
-                sel_cls.append(cls_name)
+            chosen = st.session_state.get(maj_key, [])
+            if "全部" in chosen:
+                sel_cls.append(cls_name)  # 专业类整体命中，效率更高
             else:
-                sel_majs.extend(st.session_state.get(maj_key, []))
+                sel_majs.extend(chosen)
 
     return sel_cls, sel_majs
 
