@@ -239,49 +239,54 @@ def _cascading_filter_ui(
     prefix: str,
     hierarchy: dict[str, dict[str, list[str]]],
 ) -> tuple[list[str], list[str]]:
-    """真正的级联选择器：左列 radio 选门类 → 右列显示该门类的专业类 + 具体专业。
-    选过的专业类/专业存在 session_state，切换门类不会丢失。
-    返回 (sel_cls, sel_majs)，直接对应 apply_intent_filter 的 excl_cls/pref_cls 和 excl_majs/pref_majs。
+    """三列真联级：门类 radio → 专业类 radio → 具体专业 multiselect（含「全部」按钮）。
+    选择结果全部落在 具体专业 层，返回 ([], sel_majs)。
     """
     cat_names = list(hierarchy.keys())
     if not cat_names:
         return [], []
 
-    col_cat, col_cls = st.columns([2, 5])
+    col_cat, col_cls, col_maj = st.columns([2, 3, 4])
 
     with col_cat:
         st.caption("学科门类")
         cur_cat = st.radio(
-            "门类",
-            cat_names,
+            "门类", cat_names,
             key=f"zj_{prefix}_nav_cat",
             label_visibility="collapsed",
         )
 
+    cls_names = list(hierarchy.get(cur_cat, {}).keys())
+
     with col_cls:
-        st.caption(f"{cur_cat}")
-        for cls_name, majors in hierarchy.get(cur_cat, {}).items():
-            maj_key = f"zj_{prefix}_maj_{cls_name}"
+        st.caption(cur_cat)
+        cur_cls = st.radio(
+            "专业类", cls_names,
+            key=f"zj_{prefix}_nav_cls_{cur_cat}",
+            label_visibility="collapsed",
+        ) if cls_names else None
+
+    majors = hierarchy.get(cur_cat, {}).get(cur_cls, []) if cur_cls else []
+    maj_key = f"zj_{prefix}_maj_{cur_cls}" if cur_cls else None
+
+    with col_maj:
+        if cur_cls and majors and maj_key:
+            st.caption(cur_cls)
+            if st.button("全部", key=f"zj_{prefix}_allbtn_{cur_cls}"):
+                st.session_state[maj_key] = list(majors)
             st.multiselect(
-                f"**{cls_name}**",
-                ["全部"] + majors,
-                key=maj_key,
+                cur_cls, majors, key=maj_key,
+                label_visibility="collapsed",
                 placeholder="选具体专业（不选 = 不限）",
             )
 
-    # 从所有门类的 session_state 中收集（切换门类后 widget 不渲染，但 state 保留）
-    sel_cls: list[str] = []
+    # 从所有专业类的 session_state 中收集（切换不会丢失）
     sel_majs: list[str] = []
     for cat in cat_names:
         for cls_name in hierarchy.get(cat, {}):
-            maj_key = f"zj_{prefix}_maj_{cls_name}"
-            chosen = st.session_state.get(maj_key, [])
-            if "全部" in chosen:
-                sel_cls.append(cls_name)  # 专业类整体命中，效率更高
-            else:
-                sel_majs.extend(chosen)
+            sel_majs.extend(st.session_state.get(f"zj_{prefix}_maj_{cls_name}", []))
 
-    return sel_cls, sel_majs
+    return [], sel_majs
 
 
 def _render_screening(s: StudentInput) -> None:
