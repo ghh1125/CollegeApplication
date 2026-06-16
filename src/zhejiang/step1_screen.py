@@ -222,8 +222,15 @@ def _load_lookups(conn: Any) -> dict:
             subj_scores[sn] = json.loads(js)
         except (json.JSONDecodeError, TypeError):
             pass
+    # (school_name, major_name) → {ranking, grade}（软科专业排名 2026）
+    ruanke_major: dict[tuple[str, str], dict] = {}
+    for sn, mn, rk, gd in conn.execute(
+        "SELECT school_name, major_name, ranking, grade FROM ruanke_major_rank WHERE year=2026"
+    ):
+        ruanke_major[(sn, mn)] = {"ranking": rk or "—", "grade": gd or "—"}
     return {"name2code": name2code, "hist": hist, "disc": disc, "prov": prov, "city": city,
-            "nature": nature, "ruanke": ruanke, "charter": charter, "subj_scores": subj_scores}
+            "nature": nature, "ruanke": ruanke, "charter": charter, "subj_scores": subj_scores,
+            "ruanke_major": ruanke_major}
 
 
 HOME_PROVINCE = "浙江"
@@ -309,10 +316,13 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
         if is_zhuanke:
             continue
         ch = charter.get(sn, {})
+        rmj = lk["ruanke_major"].get((sn, mn), {})
         out.append({
             "专业名称": mn, "专业代码": mc,
             "二级学科": MAJOR_CLASS_NAMES.get(class4, "—"),
             "学科评估": grade or "—",
+            "软科专业排名": rmj.get("ranking", "—"),
+            "软科专业评级": rmj.get("grade", "—"),
             "类别": CATEGORY_NAMES.get(men2, "—"),
             "院校名称": sn, "院校代码": sc,
             "层次": _level_label(sn),

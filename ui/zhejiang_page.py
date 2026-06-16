@@ -307,7 +307,7 @@ def _render_screening(s: StudentInput) -> None:
         return
     st.success(f"共筛出 {len(rows)} 条")
     df = pd.DataFrame(rows)[[
-        "排序", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称",
+        "排序", "专业名称", "专业代码", "二级学科", "学科评估", "软科专业排名", "软科专业评级", "院校名称",
         "院校代码", "层次", "城市", "办学类型", "学制", "学费/年",
         "2025最低位次", "2024最低位次", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
@@ -316,6 +316,8 @@ def _render_screening(s: StudentInput) -> None:
         column_config={
             "排序": st.column_config.NumberColumn(width="small"),
             "学科评估结果": st.column_config.TextColumn(width="small"),
+            "软科专业排名": st.column_config.TextColumn(width="small"),
+            "软科专业评级": st.column_config.TextColumn(width="small"),
             "院校级别": st.column_config.TextColumn(width="small"),
             "城市": st.column_config.TextColumn(width="small"),
             "2025最低位次": st.column_config.NumberColumn(width="small"),
@@ -381,7 +383,7 @@ def _render_screening(s: StudentInput) -> None:
     st.success(msg)
 
     df2 = pd.DataFrame(filtered_rows)[[
-        "排序", "专业名称", "专业代码", "二级学科", "学科评估", "院校名称",
+        "排序", "专业名称", "专业代码", "二级学科", "学科评估", "软科专业排名", "软科专业评级", "院校名称",
         "预警状态", "院校代码", "层次", "城市", "办学类型", "学制", "学费/年",
         "2025最低位次", "2024最低位次", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
@@ -390,6 +392,8 @@ def _render_screening(s: StudentInput) -> None:
         column_config={
             "排序": st.column_config.NumberColumn(width="small"),
             "学科评估结果": st.column_config.TextColumn(width="small"),
+            "软科专业排名": st.column_config.TextColumn(width="small"),
+            "软科专业评级": st.column_config.TextColumn(width="small"),
             "预警状态": st.column_config.TextColumn(width="small"),
             "院校级别": st.column_config.TextColumn(width="small"),
             "城市": st.column_config.TextColumn(width="small"),
@@ -440,7 +444,8 @@ def _render_final(s: StudentInput) -> None:
     st.caption("从二轮候选池中按历年最低位次分档，生成冲/稳/保三个候选池；最终参考 80 志愿从这三个池中按比例选出。")
 
     COLS = [
-        "序号", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估", "保研率", "专业发展路径",
+        "序号", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估", "软科专业排名", "软科专业评级",
+        "保研率", "专业发展路径",
         "院校名称", "院校代码", "层次", "学制", "学费/年", "预警",
         "2025最低位次", "2024最低位次", "2023最低位次", "三年平均位次",
     ]
@@ -448,6 +453,8 @@ def _render_final(s: StudentInput) -> None:
         "序号":         st.column_config.NumberColumn(width="small"),
         "冲稳保":       st.column_config.TextColumn(width="small"),
         "学科评估":     st.column_config.TextColumn(width="small"),
+        "软科专业排名": st.column_config.TextColumn(width="small"),
+        "软科专业评级": st.column_config.TextColumn(width="small"),
         "保研率":       st.column_config.NumberColumn(format="%.1f%%", width="small"),
         "专业发展路径": st.column_config.TextColumn(width="large"),
         "层次":         st.column_config.TextColumn(width="small"),
