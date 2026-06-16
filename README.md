@@ -17,7 +17,7 @@
 **三步生成流程：**
 
 1. **初步筛选**：选考科目 / 学科门类 / 地域偏好 / 体检限制 / 经济预算 / 单科成绩（必填）
-2. **二轮意向过滤**：可排除/偏好指定门类·专业类·具体专业，可开启预警专业过滤（2020–2024 撤销布点 Top30）
+2. **二轮意向过滤**：三选一过滤模式（不过滤 / 剔除不想要的专业 / 只保留偏好专业），通过级联选择器（学科门类 → 专业类 → 具体专业）选取目标专业；可开启预警专业过滤（2020–2024 撤销布点 Top30）
 3. **三轮分档 → 参考 80 志愿**：先按位次将二轮候选池分入冲/稳/保三档（无数量限制），确认后再按比例从三档中选出 80 个参考志愿
 
 **冲稳保分档规则（以考生位次 R 为基准）：**
@@ -66,7 +66,8 @@
     ├── fetch_tuition_duration.py# 抓取学费/学制
     ├── scrape_chsi_*.py         # 阳光高考章程抓取
     ├── parse_charter_requirements.py  # 解析章程选科/单科要求
-    └── build_school_master.py   # 构建学校主表
+    ├── build_school_master.py   # 构建学校主表
+    └── fetch_ruanke_major_rank.py  # 抓取软科中国大学专业排名（2026，838 专业 × 1136 所学校）
 ```
 
 ---
@@ -83,6 +84,7 @@
 | `school_profile` | 3,144 | `school_name` `ruanke_rank` `recommend_master_rate` | 学校画像（保研率、软科排名） |
 | `school_master` | 3,285 | `school_name` `school_code` `province` `school_level` `ruanke_rank` | 学校基础信息（985/211/双一流标记、省份、排名） |
 | `discipline_evaluation` | 5,112 | `school_name` `discipline_code` `discipline_name` `grade` | 教育部第四轮学科评估全量（96 个一级学科，460 所学校，A+/A/A-/B+…） |
+| `ruanke_major_rank` | 31,043 | `major_code` `school_name` `major_name` `ranking` `grade` `score` `year` | 软科中国大学专业排名（2026 版），838 个专业 × 1,136 所学校，含排名名次、A+/A/B+等评级、综合评分 |
 | `admission_charter` | 2,860 | `school_name` `year` `content` `tuition_text` `physical_requirement_text` | 各高校招生章程（2026 版），覆盖浙江招生学校 99% |
 | `major_subject_requirement` | 2,611 | `normalized_major_name` `requirement_type` `requirement_subjects` | 专业单科成绩最低要求汇总 |
 | `city_profile` | 326 | `city_name` `province` `city_tier` `is_capital` | 城市画像（城市等级、是否省会） |
@@ -123,7 +125,7 @@ streamlit run main.py
 | 学校基本信息 / 专业介绍 | [阳光高考 static-data.gaokao.cn](https://static-data.gaokao.cn) |
 | 本科专业介绍（发展路径/薪资/岗位） | 公开专业介绍数据（845 个标准本科专业） |
 | 第四轮学科评估 | [教育部学位中心 kaoyan.eol.cn](https://kaoyan.eol.cn)（官方 2017 年公布数据） |
-| 大学排名 | [软科 shanghairanking.cn](https://www.shanghairanking.cn) |
+| 大学排名 / 专业排名 | [软科 shanghairanking.cn](https://www.shanghairanking.cn)（学校综合排名 + 2026 年中国大学专业排名，838 专业） |
 | 学费 / 学制 | 浙江招录平台（公开招生计划页） |
 | 单科成绩要求 | 全国高校单科成绩要求汇总（公开整理） |
 | 本科专业目录 | 2026 版教育部本科专业目录 |
