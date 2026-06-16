@@ -239,28 +239,53 @@ def _cascading_filter_ui(
     prefix: str,
     hierarchy: dict[str, dict[str, list[str]]],
 ) -> tuple[list[str], list[str]]:
-    """级联选择器：门类 expander → 专业类（全部 or 具体专业）。
+    """真正的级联选择器：左列 radio 选门类 → 右列显示该门类的专业类 + 具体专业。
+    选过的专业类/专业存在 session_state，切换门类不会丢失。
     返回 (sel_cls, sel_majs)，直接对应 apply_intent_filter 的 excl_cls/pref_cls 和 excl_majs/pref_majs。
     """
+    cat_names = list(hierarchy.keys())
+    if not cat_names:
+        return [], []
+
+    col_cat, col_cls = st.columns([2, 5])
+
+    with col_cat:
+        st.caption("学科门类")
+        cur_cat = st.radio(
+            "门类",
+            cat_names,
+            key=f"zj_{prefix}_nav_cat",
+            label_visibility="collapsed",
+        )
+
+    with col_cls:
+        st.caption(f"{cur_cat}")
+        for cls_name, majors in hierarchy.get(cur_cat, {}).items():
+            all_key = f"zj_{prefix}_all_{cls_name}"
+            maj_key = f"zj_{prefix}_maj_{cls_name}"
+            c1, c2 = st.columns([2, 5])
+            all_checked = c1.checkbox(f"**{cls_name}**　全部", key=all_key)
+            if all_checked:
+                c2.caption("全部已选中")
+            else:
+                c2.multiselect(
+                    cls_name, majors, key=maj_key,
+                    label_visibility="collapsed",
+                    placeholder="选具体专业（不选 = 不限）",
+                )
+
+    # 从所有门类的 session_state 中收集（切换门类后 widget 不渲染，但 state 保留）
     sel_cls: list[str] = []
     sel_majs: list[str] = []
-    for cat_name, classes in hierarchy.items():
-        with st.expander(cat_name):
-            for cls_name, majors in classes.items():
-                c1, c2 = st.columns([2, 5])
-                all_key = f"zj_{prefix}_all_{cls_name}"
-                maj_key = f"zj_{prefix}_maj_{cls_name}"
-                all_checked = c1.checkbox(f"**{cls_name}**　全部", key=all_key)
-                if all_checked:
-                    sel_cls.append(cls_name)
-                    c2.caption("全部已选中")
-                else:
-                    chosen = c2.multiselect(
-                        cls_name, majors, key=maj_key,
-                        label_visibility="collapsed",
-                        placeholder="选具体专业（不选 = 跳过此专业类）",
-                    )
-                    sel_majs.extend(chosen)
+    for cat in cat_names:
+        for cls_name in hierarchy.get(cat, {}):
+            all_key = f"zj_{prefix}_all_{cls_name}"
+            maj_key = f"zj_{prefix}_maj_{cls_name}"
+            if st.session_state.get(all_key, False):
+                sel_cls.append(cls_name)
+            else:
+                sel_majs.extend(st.session_state.get(maj_key, []))
+
     return sel_cls, sel_majs
 
 
