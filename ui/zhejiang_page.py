@@ -214,31 +214,54 @@ def _render_summary(s: StudentInput) -> None:
         st.write(f"- **{label}**：{val}")
 
 
-def _build_filter_opts_by_level(rows: list[dict]) -> tuple[list[str], list[str], list[str]]:
-    """从第一步筛选结果提取三级独立选项，顺序与表格一致（去重）。
-    返回 (门类列表, 专业大类列表, 具体专业列表)。
-    """
+def _build_hierarchy(rows: list[dict]) -> dict[str, dict[str, list[str]]]:
+    """Build {门类名: {专业类名: [专业名]}} from step1 rows, preserving order."""
     _SKIP = {"—", "专科(高职)", "专科", ""}
-    cat_seen: set[str] = set()
-    cls_seen: set[str] = set()
-    maj_seen: set[str] = set()
-    cats: list[str] = []
-    clss: list[str] = []
-    majs: list[str] = []
+    h: dict[str, dict[str, list[str]]] = {}
+    seen: dict[str, dict[str, set[str]]] = {}
     for r in rows:
         cat = r.get("类别") or ""
         cls = r.get("二级学科") or ""
         maj = r.get("专业名称") or ""
-        if cat and cat not in _SKIP and cat not in cat_seen:
-            cat_seen.add(cat)
-            cats.append(cat)
-        if cls and cls not in _SKIP and cls not in cls_seen:
-            cls_seen.add(cls)
-            clss.append(cls)
-        if maj and maj not in maj_seen:
-            maj_seen.add(maj)
-            majs.append(maj)
-    return cats, clss, majs
+        if cat in _SKIP or cls in _SKIP:
+            continue
+        h.setdefault(cat, {})
+        seen.setdefault(cat, {})
+        h[cat].setdefault(cls, [])
+        seen[cat].setdefault(cls, set())
+        if maj and maj not in seen[cat][cls]:
+            seen[cat][cls].add(maj)
+            h[cat][cls].append(maj)
+    return h
+
+
+def _cascading_filter_ui(
+    prefix: str,
+    hierarchy: dict[str, dict[str, list[str]]],
+) -> tuple[list[str], list[str]]:
+    """级联选择器：门类 expander → 专业类（全部 or 具体专业）。
+    返回 (sel_cls, sel_majs)，直接对应 apply_intent_filter 的 excl_cls/pref_cls 和 excl_majs/pref_majs。
+    """
+    sel_cls: list[str] = []
+    sel_majs: list[str] = []
+    for cat_name, classes in hierarchy.items():
+        with st.expander(cat_name):
+            for cls_name, majors in classes.items():
+                c1, c2 = st.columns([2, 5])
+                all_key = f"zj_{prefix}_all_{cls_name}"
+                maj_key = f"zj_{prefix}_maj_{cls_name}"
+                all_checked = c1.checkbox(f"**{cls_name}**　全部", key=all_key)
+                if all_checked:
+                    sel_cls.append(cls_name)
+                    c2.caption("全部已选中")
+                else:
+                    chosen = c2.multiselect(
+                        cls_name, majors, key=maj_key,
+                        label_visibility="collapsed",
+                        placeholder="选具体专业（不选 = 跳过此专业类）",
+                    )
+                    sel_majs.extend(chosen)
+    return sel_cls, sel_majs
 
 
 def _render_screening(s: StudentInput) -> None:
@@ -279,21 +302,15 @@ def _render_screening(s: StudentInput) -> None:
     # ── 专业意向过滤（出现在第一表格下方，影响第二步志愿生成）──────────────────
     st.divider()
     st.subheader("专业意向过滤")
-    st.caption("选项来源于上方初步筛选结果；三列分别对应三个粒度：学科门类 / 专业大类 / 具体专业。改选后过滤结果实时刷新。")
+    st.caption("展开门类 → 选专业类（全部 or 具体专业）；选到哪一级就在那一级生效。")
 
-    cats, clss, majs = _build_filter_opts_by_level(rows)
+    hierarchy = _build_hierarchy(rows)
 
-    st.markdown("**非意向专业剔除**（命中任一层 → 剔除）")
-    ec1, ec2, ec3 = st.columns(3)
-    excl_cats = ec1.multiselect("学科门类", cats, key="zj_excl_cat")
-    excl_cls  = ec2.multiselect("专业大类", clss, key="zj_excl_cls")
-    excl_majs = ec3.multiselect("具体专业", majs, key="zj_excl_maj")
+    st.markdown("**非意向专业剔除**（命中 → 剔除）")
+    excl_cls, excl_majs = _cascading_filter_ui("excl", hierarchy)
 
     st.markdown("**专业偏好**（若有选择，只保留命中行；无选择 = 不限）")
-    pc1, pc2, pc3 = st.columns(3)
-    pref_cats = pc1.multiselect("学科门类", cats, key="zj_pref_cat")
-    pref_cls  = pc2.multiselect("专业大类", clss, key="zj_pref_cls")
-    pref_majs = pc3.multiselect("具体专业", majs, key="zj_pref_maj")
+    pref_cls, pref_majs = _cascading_filter_ui("pref", hierarchy)
 
     moe_warn = st.toggle(
         "过滤预警专业",
@@ -302,15 +319,15 @@ def _render_screening(s: StudentInput) -> None:
              "数据来源：教育部 moe.gov.cn 历年普通高等学校本科专业备案和审批结果。",
     )
     st.session_state["zj_intent_filter"] = {
-        "excl_cats": excl_cats, "excl_cls": excl_cls, "excl_majs": excl_majs,
-        "pref_cats": pref_cats, "pref_cls": pref_cls, "pref_majs": pref_majs,
+        "excl_cls": excl_cls, "excl_majs": excl_majs,
+        "pref_cls": pref_cls, "pref_majs": pref_majs,
         "moe_warn": moe_warn,
     }
 
     if st.button("开始二轮筛选", type="primary", use_container_width=True):
         from src.zhejiang.step2_filter import apply_intent_filter
-        filtered = apply_intent_filter(rows, excl_cats, excl_cls, excl_majs,
-                                       pref_cats, pref_cls, pref_majs, moe_warn)
+        filtered = apply_intent_filter(rows, [], excl_cls, excl_majs,
+                                       [], pref_cls, pref_majs, moe_warn)
         st.session_state["zj_filtered_rows"] = [
             {**r, "排序": i, "预警状态": "⚠️预警" if r.get("预警") else "—"}
             for i, r in enumerate(filtered, 1)
