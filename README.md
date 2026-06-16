@@ -125,7 +125,8 @@ streamlit run main.py
 | 学校基本信息 / 专业介绍 | [阳光高考 static-data.gaokao.cn](https://static-data.gaokao.cn) |
 | 本科专业介绍（发展路径/薪资/岗位） | 公开专业介绍数据（845 个标准本科专业） |
 | 第四轮学科评估 | [教育部学位中心 kaoyan.eol.cn](https://kaoyan.eol.cn)（官方 2017 年公布数据） |
-| 大学排名 / 专业排名 | [软科 shanghairanking.cn](https://www.shanghairanking.cn)（学校综合排名 + 2026 年中国大学专业排名，838 专业） |
+| 大学综合排名 | [软科 shanghairanking.cn](https://www.shanghairanking.cn) |
+| 软科专业排名 | [软科中国大学专业排名 2026](https://www.shanghairanking.cn/rankings/bcmr/2026)（838 专业） |
 | 学费 / 学制 | 浙江招录平台（公开招生计划页） |
 | 单科成绩要求 | 全国高校单科成绩要求汇总（公开整理） |
 | 本科专业目录 | 2026 版教育部本科专业目录 |
