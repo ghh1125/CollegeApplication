@@ -238,13 +238,13 @@ def _build_hierarchy(rows: list[dict]) -> dict[str, dict[str, list[str]]]:
 def _cascading_filter_ui(
     prefix: str,
     hierarchy: dict[str, dict[str, list[str]]],
-) -> tuple[list[str], list[str]]:
+) -> list[str]:
     """三列真联级：门类 radio → 专业类 radio → 具体专业 multiselect（含「全部」按钮）。
-    选择结果全部落在 具体专业 层，返回 ([], sel_majs)。
+    选择结果全部落在具体专业层，返回 sel_majs。
     """
     cat_names = list(hierarchy.keys())
     if not cat_names:
-        return [], []
+        return []
 
     col_cat, col_cls, col_maj = st.columns([2, 3, 4])
 
@@ -286,7 +286,7 @@ def _cascading_filter_ui(
         for cls_name in hierarchy.get(cat, {}):
             sel_majs.extend(st.session_state.get(f"zj_{prefix}_maj_{cls_name}", []))
 
-    return [], sel_majs
+    return sel_majs
 
 
 def _render_screening(s: StudentInput) -> None:
@@ -327,15 +327,15 @@ def _render_screening(s: StudentInput) -> None:
     # ── 专业意向过滤（出现在第一表格下方，影响第二步志愿生成）──────────────────
     st.divider()
     st.subheader("专业意向过滤")
-    st.caption("展开门类 → 选专业类（全部 or 具体专业）；选到哪一级就在那一级生效。")
+    st.caption("三列联级：点门类 → 点专业类 → 选具体专业（「全部」按钮 = 该专业类所有专业）。")
 
     hierarchy = _build_hierarchy(rows)
 
     st.markdown("**非意向专业剔除**（命中 → 剔除）")
-    excl_cls, excl_majs = _cascading_filter_ui("excl", hierarchy)
+    excl_majs = _cascading_filter_ui("excl", hierarchy)
 
     st.markdown("**专业偏好**（若有选择，只保留命中行；无选择 = 不限）")
-    pref_cls, pref_majs = _cascading_filter_ui("pref", hierarchy)
+    pref_majs = _cascading_filter_ui("pref", hierarchy)
 
     moe_warn = st.toggle(
         "过滤预警专业",
@@ -344,15 +344,14 @@ def _render_screening(s: StudentInput) -> None:
              "数据来源：教育部 moe.gov.cn 历年普通高等学校本科专业备案和审批结果。",
     )
     st.session_state["zj_intent_filter"] = {
-        "excl_cls": excl_cls, "excl_majs": excl_majs,
-        "pref_cls": pref_cls, "pref_majs": pref_majs,
+        "excl_majs": excl_majs,
+        "pref_majs": pref_majs,
         "moe_warn": moe_warn,
     }
 
     if st.button("开始二轮筛选", type="primary", use_container_width=True):
         from src.zhejiang.step2_filter import apply_intent_filter
-        filtered = apply_intent_filter(rows, [], excl_cls, excl_majs,
-                                       [], pref_cls, pref_majs, moe_warn)
+        filtered = apply_intent_filter(rows, excl_majs, pref_majs, moe_warn)
         st.session_state["zj_filtered_rows"] = [
             {**r, "排序": i, "预警状态": "⚠️预警" if r.get("预警") else "—"}
             for i, r in enumerate(filtered, 1)
