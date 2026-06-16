@@ -312,7 +312,7 @@ def _render_screening(s: StudentInput) -> None:
         "2025最低位次", "2024最低位次", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
     st.dataframe(
-        df, width="stretch", hide_index=True, height=600,
+        df, use_container_width=True, hide_index=True, height=600,
         column_config={
             "排序": st.column_config.NumberColumn(width="small"),
             "学科评估结果": st.column_config.TextColumn(width="small"),
@@ -375,7 +375,7 @@ def _render_screening(s: StudentInput) -> None:
         "2025最低位次", "2024最低位次", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
     st.dataframe(
-        df2, width="stretch", hide_index=True, height=600,
+        df2, use_container_width=True, hide_index=True, height=600,
         column_config={
             "排序": st.column_config.NumberColumn(width="small"),
             "学科评估结果": st.column_config.TextColumn(width="small"),
