@@ -205,7 +205,7 @@ class FinalVolunteerTests(unittest.TestCase):
         护理学类（按大类招生）属于不同专业，不受影响。"""
         s = self.SI(rank=8000, total_score=620, selected_subjects=["物理", "化学", "生物"])
         screen_rows = self.screen(s)
-        filtered = self.filter(screen_rows, [], [], ["护理学"], [], [], [])
+        filtered = self.filter(screen_rows, ["护理学"], [])
         names = {r["专业名称"] for r in filtered}
         self.assertNotIn("护理学", names)                      # 精确名被排除
         self.assertFalse(any(n.startswith("护理学(") for n in names))  # 括号变体被排除
