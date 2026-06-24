@@ -35,6 +35,31 @@ _CAT_OPTIONS = list(_CAT_LABEL_TO_CODE.keys())
 
 _BUDGET_OPTIONS = [b.value for b in Budget]
 _COLOR_VISION = ["正常", "色弱", "色盲"]
+_SCHOOL_LINK_MARKER = "__school_name__="
+_SCHOOL_LINK_DISPLAY_RE = r".*__school_name__=([^&]+)$"
+
+
+def _school_name_link(url: str | None, school_name: str) -> str:
+    """Return a URL that Streamlit can display as the school name."""
+
+    clean_url = (url or "").strip()
+    if not clean_url:
+        return school_name
+    separator = "&" if "#" in clean_url else "#"
+    return f"{clean_url}{separator}{_SCHOOL_LINK_MARKER}{school_name}"
+
+
+def _with_linked_school_names(df):
+    """Make the school-name column clickable while keeping the source URL column."""
+
+    if "院校名称" not in df.columns or "招生官网" not in df.columns:
+        return df
+    linked = df.copy()
+    linked["院校名称"] = [
+        _school_name_link(row.get("招生官网"), str(row.get("院校名称") or ""))
+        for _, row in linked.iterrows()
+    ]
+    return linked
 
 
 
@@ -312,13 +337,16 @@ def _render_screening(s: StudentInput) -> None:
         "2025最低位次", "2024最低位次", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
     st.dataframe(
-        df, use_container_width=True, hide_index=True, height=600,
+        _with_linked_school_names(df), use_container_width=True, hide_index=True, height=600,
         column_config={
             "排序": st.column_config.NumberColumn(width="small"),
+            "院校名称": st.column_config.LinkColumn(
+                "院校名称", display_text=_SCHOOL_LINK_DISPLAY_RE, width="medium"
+            ),
             "学科评估结果": st.column_config.TextColumn(width="small"),
             "软科专业排名": st.column_config.TextColumn(width="small"),
             "软科专业评级": st.column_config.TextColumn(width="small"),
-            "招生官网": st.column_config.LinkColumn("招生官网", display_text="打开", width="small"),
+            "招生官网": None,
             "院校级别": st.column_config.TextColumn(width="small"),
             "城市": st.column_config.TextColumn(width="small"),
             "2025最低位次": st.column_config.NumberColumn(width="small"),
@@ -389,14 +417,17 @@ def _render_screening(s: StudentInput) -> None:
         "2025最低位次", "2024最低位次", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
     st.dataframe(
-        df2, use_container_width=True, hide_index=True, height=600,
+        _with_linked_school_names(df2), use_container_width=True, hide_index=True, height=600,
         column_config={
             "排序": st.column_config.NumberColumn(width="small"),
+            "院校名称": st.column_config.LinkColumn(
+                "院校名称", display_text=_SCHOOL_LINK_DISPLAY_RE, width="medium"
+            ),
             "学科评估结果": st.column_config.TextColumn(width="small"),
             "软科专业排名": st.column_config.TextColumn(width="small"),
             "软科专业评级": st.column_config.TextColumn(width="small"),
             "预警状态": st.column_config.TextColumn(width="small"),
-            "招生官网": st.column_config.LinkColumn("招生官网", display_text="打开", width="small"),
+            "招生官网": None,
             "院校级别": st.column_config.TextColumn(width="small"),
             "城市": st.column_config.TextColumn(width="small"),
             "2025最低位次": st.column_config.NumberColumn(width="small"),
@@ -459,7 +490,10 @@ def _render_final(s: StudentInput) -> None:
         "软科专业评级": st.column_config.TextColumn(width="small"),
         "保研率":       st.column_config.NumberColumn(format="%.1f%%", width="small"),
         "专业发展路径": st.column_config.TextColumn(width="large"),
-        "招生官网":     st.column_config.LinkColumn("招生官网", display_text="打开", width="small"),
+        "院校名称":     st.column_config.LinkColumn(
+            "院校名称", display_text=_SCHOOL_LINK_DISPLAY_RE, width="medium"
+        ),
+        "招生官网":     None,
         "层次":         st.column_config.TextColumn(width="small"),
         "预警":         st.column_config.TextColumn(width="small"),
         "2025最低位次": st.column_config.NumberColumn(width="small"),
@@ -485,11 +519,11 @@ def _render_final(s: StudentInput) -> None:
 
     st.success(f"三轮分档完成：冲 {len(chong_t)} 条 / 稳 {len(wen_t)} 条 / 保 {len(bao_t)} 条（以下为各档全部候选，无数量限制）")
     with st.expander(f"冲 · 候选池（{len(chong_t)} 条）", expanded=True):
-        st.dataframe(_df(chong_t), hide_index=True, height=400, column_config=COL_CFG) if chong_t else st.info("无冲的候选")
+        st.dataframe(_with_linked_school_names(_df(chong_t)), hide_index=True, height=400, column_config=COL_CFG) if chong_t else st.info("无冲的候选")
     with st.expander(f"稳 · 候选池（{len(wen_t)} 条）", expanded=True):
-        st.dataframe(_df(wen_t), hide_index=True, height=400, column_config=COL_CFG) if wen_t else st.info("无稳的候选")
+        st.dataframe(_with_linked_school_names(_df(wen_t)), hide_index=True, height=400, column_config=COL_CFG) if wen_t else st.info("无稳的候选")
     with st.expander(f"保 · 候选池（{len(bao_t)} 条）", expanded=True):
-        st.dataframe(_df(bao_t), hide_index=True, height=400, column_config=COL_CFG) if bao_t else st.info("无保的候选")
+        st.dataframe(_with_linked_school_names(_df(bao_t)), hide_index=True, height=400, column_config=COL_CFG) if bao_t else st.info("无保的候选")
 
     all_pool = chong_t + wen_t + bao_t
     if any(r.get("_baoyan_fallback") for r in all_pool):
@@ -535,7 +569,7 @@ def _render_final(s: StudentInput) -> None:
         "必要时咨询老师、家长或专业人士。**志愿最终由你自己填报，结果由你自己负责。**"
     )
     df_final = _df(final)
-    st.dataframe(df_final, hide_index=True, height=600, column_config=COL_CFG)
+    st.dataframe(_with_linked_school_names(df_final), hide_index=True, height=600, column_config=COL_CFG)
 
     if any(r.get("_baoyan_fallback") for r in final):
         st.caption(

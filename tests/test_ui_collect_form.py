@@ -47,6 +47,14 @@ class UICollectFormTests(unittest.TestCase):
         self.assertEqual(form["main_priority"], "请选择…")
         self.assertEqual(form["preferred_majors"], [])
 
+    def test_zhejiang_school_name_link_attaches_admission_url(self) -> None:
+        zhejiang_page = self._import_page("zhejiang")
+
+        linked = zhejiang_page._school_name_link("https://bkzs.pku.edu.cn/", "北京大学")
+
+        self.assertTrue(linked.startswith("https://bkzs.pku.edu.cn/"))
+        self.assertIn("__school_name__=北京大学", linked)
+
 
 if __name__ == "__main__":
     unittest.main()
