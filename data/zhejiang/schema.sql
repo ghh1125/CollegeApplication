@@ -171,6 +171,8 @@ CREATE TABLE IF NOT EXISTS school_profile (
     doctor_count INTEGER,
     academician_count INTEGER,
     ruanke_rank INTEGER,
+    undergraduate_admission_url TEXT,
+    official_website_url TEXT,
     source_name TEXT DEFAULT '阳光高考',
     source_url TEXT,
     fetched_at TEXT DEFAULT (datetime('now')),

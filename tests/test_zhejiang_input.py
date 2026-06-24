@@ -149,8 +149,9 @@ class ScreeningTests(unittest.TestCase):
         self.assertTrue(not any(is_home[first_non_home:]))
         # 列齐全（含新列）
         for col in ("排序", "专业名称", "学科评估", "类别", "院校名称", "层次",
-                    "城市", "办学类型", "学制", "学费/年", "省份"):
+                    "城市", "办学类型", "学制", "学费/年", "省份", "招生官网"):
             self.assertIn(col, rows[0])
+        self.assertTrue(all(r["招生官网"] for r in rows[:50]))
 
     def test_filter_by_category_includes_all_classes(self):
         # 选一级学科「工学(08)」应包含其下多个专业类（计算机类0809 等）
@@ -191,8 +192,9 @@ class FinalVolunteerTests(unittest.TestCase):
         screen_rows = self.screen(s)
         _, _, _, final = self.generate(s, screen_rows)
         self.assertEqual(len(final), 80)
-        for col in ("序号", "冲稳保", "专业名称", "保研率", "专业发展路径", "三年平均位次"):
+        for col in ("序号", "冲稳保", "专业名称", "保研率", "专业发展路径", "招生官网", "三年平均位次"):
             self.assertIn(col, final[0])
+        self.assertTrue(all("招生官网" in r for r in final))
         self.assertEqual([r["序号"] for r in final], list(range(1, 81)))
         cwb = {r["冲稳保"] for r in final}
         self.assertTrue(cwb <= {"冲", "稳", "保"})

@@ -1,0 +1,87 @@
+﻿school_name,undergraduate_admission_url,status,http_code,curl_error
+云南城市建设职业学院,https://www.yncjxy.com/zhaoshengchu/,bad_404,404,
+南宁理工学院,https://www.bwgl.cn/bkzsw/,bad_404,404,
+吉林职业技术学院,https://www.jlhtedu.com/zsjy/,bad_404,404,
+和田职业技术学院,https://www.htpt.edu.cn/zsjy/zszc.htm,bad_404,404,
+安徽商贸职业技术学院,https://www.abc.edu.cn/zhaoshengxx,bad_404,404,"curl: (92) Invalid HTTP header field was received: frame type: 1, stream: 1, name: [upgrade], value: [h2c,h2]"
+山西晋中理工学院,https://www.sxjzit.edu.cn/zsw,bad_404,404,
+广西培贤国际职业学院,https://www.peixianedu.cn/ZSB.html,bad_404,404,
+广西艺术学院,https://www.gxau.edu.cn/zsjy/zs,bad_404,404,
+江西科技学院,https://zjc.jxut.edu.cn/ygzsw.htm,bad_404,404,
+河北工程大学科信学院,https://zhaosheng.hebeu.edu.cn/kxxyzs.htm,bad_404,404,
+海南东方新丝路职业学院,https://www.hinsrc.edu.cn/h-col-216.html,bad_404,404,
+海南比勒费尔德应用科学大学,https://www.hainan-biuh.edu.cn/招生/,bad_404,404,
+贵州民族大学,https://zjc.gzmu.edu.cn/zsxxw.htm,bad_404,404,
+郑州医药健康职业学院,https://www.zzyyzy.edu.cn/zsjy.aspx?id=5,bad_404,404,
+重庆工信职业学院,https://www.cqiivc.com/lists/178.html,bad_404,404,
+金山职业技术学院,https://www.jscu.cn/bmindex.php?cid=3&lid=27&bmid=27,bad_404,404,
+防灾科技学院,https://zjb.cidp.edu.cn/zswsy.htm,bad_404,404,
+南京传媒学院,https://zsb.cucn.edu.cn/,bad_network_or_ssl,000,curl: (35) LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to zsb.cucn.edu.cn:443
+南昌影视传播职业学院,https://www.ncyscb.com/html/zsw/,bad_network_or_ssl,000,curl: (35) LibreSSL/3.3.6: error:1404B438:SSL routines:ST_CONNECT:tlsv1 alert internal error
+哈尔滨职业技术大学,http://a.hzjxy.org.cn:809/,bad_network_or_ssl,000,curl: (52) Empty reply from server
+宁波大学科学技术学院,https://zs.ndky.edu.cn/,bad_network_or_ssl,000,curl: (28) Operation timed out after 8006 milliseconds with 0 bytes received
+宿迁泽达职业技术学院,http://www.zdct.cn/jzzy/,bad_network_or_ssl,000,curl: (52) Empty reply from server
+广东培正学院,https://zb.peizheng.edu.cn/,bad_network_or_ssl,000,curl: (35) LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to zb.peizheng.edu.cn:443
+成都信息工程大学,https://zjc.cuit.edu.cn/,bad_network_or_ssl,000,curl: (35) LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to zjc.cuit.edu.cn:443
+攀枝花攀西职业学院,http://www.pzhpxzyxy.com/zsw/,bad_network_or_ssl,000,curl: (52) Empty reply from server
+武汉光谷职业学院,https://zs.whggvc.net/,bad_network_or_ssl,000,curl: (35) LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to zs.whggvc.net:443
+河南地矿职业学院,https://zs.hagmc.edu.cn/,bad_network_or_ssl,000,curl: (92) HTTP/2 stream 1 was not closed cleanly: INTERNAL_ERROR (err 2)
+湖北三峡职业技术学院,https://zs.tgc.edu.cn/,bad_network_or_ssl,000,curl: (35) LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to zs.tgc.edu.cn:443
+福州理工学院,http://admissions.fit.edu.cn/,bad_network_or_ssl,000,curl: (28) Operation timed out after 8006 milliseconds with 0 bytes received
+长沙医学院,https://zs.csmu.edu.cn/,bad_network_or_ssl,000,curl: (28) Operation timed out after 8006 milliseconds with 0 bytes received
+丽江文化旅游学院,https://zs.lywhxy.com/,bad_server_error,503,
+厦门华天涉外职业技术学院,https://www.xmht.com/list.asp?class=98,bad_server_error,500,
+安徽卫生健康职业学院,http://zs.ahwsjkxy.edu.cn/,bad_server_error,503,
+郴州思科职业学院,http://zs.skzyxy.com/,bad_server_error,500,
+齐鲁医药学院,https://zhaosheng.qlmu.edu.cn/,bad_server_error,502,
+上海建设管理职业技术学院,https://www.shcmc.edu.cn/zs,manual_check_blocked_or_waf,458,
+中国计量大学,https://zs.cjlu.edu.cn,manual_check_blocked_or_waf,412,
+中国计量大学现代科技学院,https://zs.cjlu.edu.cn/zgjldxxdkjxy/zsxx.htm,manual_check_blocked_or_waf,412,
+云南民族大学,https://web.ymu.edu.cn/zsjyc/,manual_check_blocked_or_waf,403,
+井冈山大学,https://zs.jgsu.edu.cn,manual_check_blocked_or_waf,403,
+兰州交通大学,https://zsb.lzjtu.edu.cn/,manual_check_blocked_or_waf,412,
+兰州城市学院,https://zhaosheng.lzcu.edu.cn/,manual_check_blocked_or_waf,412,
+北京工业大学耿丹学院,http://zs.gengdan.cn/,manual_check_blocked_or_waf,403,
+北京电影学院,https://zs.bfa.edu.cn/,manual_check_blocked_or_waf,412,
+北京邮电大学,https://zsb.bupt.edu.cn/#1307,manual_check_blocked_or_waf,412,
+南京工程学院,https://zsb.njit.edu.cn,manual_check_blocked_or_waf,412,
+南通理工学院,https://zs.ntit.edu.cn/,manual_check_blocked_or_waf,412,
+四川大学,https://zs.scu.edu.cn,manual_check_blocked_or_waf,412,
+天津天狮学院,https://www.tianshi.edu.cn/zsw.htm,manual_check_blocked_or_waf,403,
+安徽大学,https://zsb.ahu.edu.cn,manual_check_blocked_or_waf,412,
+安徽财经大学,https://zsjy.aufe.edu.cn/,manual_check_blocked_or_waf,403,
+宿州航空职业学院,https://www.szhkxy.edu.cn/Page_1739.html,manual_check_blocked_or_waf,403,
+山东商业职业技术学院,https://www.sict.edu.cn/jg_zsxx/,manual_check_blocked_or_waf,412,
+成都工业学院,https://zs.cdtu.edu.cn/,manual_check_blocked_or_waf,412,
+成都师范学院,https://www.cdnu.edu.cn/zjc/zsgz.htm,manual_check_blocked_or_waf,412,
+成都理工大学,https://www.zs.cdut.edu.cn,manual_check_blocked_or_waf,412,
+扬州大学,https://zhaoban.yzu.edu.cn/,manual_check_blocked_or_waf,412,
+扬州大学广陵学院,http://glxy.yzu.edu.cn/zsw,manual_check_blocked_or_waf,412,
+江苏农牧科技职业学院,https://www.jsahvc.edu.cn/zsxx/main.htm,manual_check_blocked_or_waf,412,
+江苏经贸职业技术学院,https://zb.jvic.edu.cn/,manual_check_blocked_or_waf,412,
+浙江商业职业技术学院,https://www.zjbc.edu.cn/zs/,manual_check_blocked_or_waf,412,
+浙江邮电职业技术学院,https://zs.zptc.edu.cn/,manual_check_blocked_or_waf,412,
+湖北生态工程职业技术学院,https://www.hb-green.com/izs-index/,manual_check_blocked_or_waf,468,
+滨州科技职业学院,https://zs.sdbky.cn/index.htm,manual_check_blocked_or_waf,403,
+西北工业大学,https://zsb.nwpu.edu.cn,manual_check_blocked_or_waf,412,
+西北师范大学,https://zsb.nwnu.edu.cn/,manual_check_blocked_or_waf,412,
+西南政法大学,https://zs.swupl.edu.cn/,manual_check_blocked_or_waf,412,
+西南民族大学,https://zs.swun.edu.cn,manual_check_blocked_or_waf,412,
+西南石油大学,https://zsb.swpu.edu.cn/,manual_check_blocked_or_waf,412,
+西安外事学院,https://zsw.xaiu.edu.cn/,manual_check_blocked_or_waf,412,
+西安科技大学高新学院,https://www.gxxyzs.com,manual_check_blocked_or_waf,403,
+重庆能源职业学院,https://www.cqny.edu.cn/zsxxw/,manual_check_blocked_or_waf,468,
+重庆邮电大学,https://zs.cqupt.edu.cn/,manual_check_blocked_or_waf,412,
+长春人文学院,https://zsb.ccrw.edu.cn/,manual_check_blocked_or_waf,412,
+长春工业大学人文信息学院,https://zs.ccutchi.edu.cn/,manual_check_blocked_or_waf,403,
+陕西科技大学,https://bkzs.sust.edu.cn/,manual_check_blocked_or_waf,403,
+北京外国语大学,https://joinus.bfsu.edu.cn,manual_check_other,200,curl: (92) HTTP/2 stream 1 was not closed cleanly: INTERNAL_ERROR (err 2)
+四川电子机械职业技术学院,https://www.scemvtc.com/subweb/zs/,manual_check_other,301,curl: (28) Operation timed out after 8006 milliseconds with 0 bytes received
+江西樟树中医药职业学院,http://jxzsxy.com/html/zsc/,manual_check_other,301,curl: (3) The redirect target URL could not be parsed: Bad hostname
+浙江机电职业技术大学,https://zs.zime.edu.cn/,manual_check_other,200,"curl: (92) Invalid HTTP header field was received: frame type: 1, stream: 1, name: [upgrade], value: [h2,h2c]"
+邢台新能源职业学院,https://www.xtxny.edu.cn/zs,manual_check_other,200,curl: (28) Operation timed out after 8005 milliseconds with 157983 out of 631956 bytes received
+陕西理工大学,https://zsjyw.snut.edu.cn/zsw/index.htm,manual_check_other,302,curl: (47) Maximum (50) redirects followed
+云南经贸外事职业学院,,missing,,招生官网为空
+天津城市职业学院,,missing,,招生官网为空
+广西质量工程职业技术学院,,missing,,招生官网为空
+衡阳理工职业学院,,missing,,招生官网为空

@@ -191,12 +191,16 @@ def _load_lookups(conn: Any) -> dict:
     for sn, p, ct in conn.execute("SELECT school_name, province, city FROM school_master"):
         prov[sn] = p or ""
         city[sn] = ct or ""
-    # school_name → 办学类型（school_profile.school_nature）; 软科排名
+    # school_name → 办学类型（school_profile.school_nature）; 软科排名；招生官网
     ruanke: dict[str, int | None] = {}
     nature: dict[str, str] = {}
-    for sn, nat, rk in conn.execute("SELECT school_name, school_nature, ruanke_rank FROM school_profile"):
+    admission_url: dict[str, str] = {}
+    for sn, nat, rk, url in conn.execute(
+        "SELECT school_name, school_nature, ruanke_rank, undergraduate_admission_url FROM school_profile"
+    ):
         nature[sn] = nat or ""
         ruanke[sn] = rk  # None if unranked
+        admission_url[sn] = url or ""
     # school_name → charter fields (2026)
     charter: dict[str, dict] = {}
     for sn, tuition, physical, language, rules in conn.execute(
@@ -230,7 +234,7 @@ def _load_lookups(conn: Any) -> dict:
         ruanke_major[(sn, mn)] = {"ranking": rk or "—", "grade": gd or "—"}
     return {"name2code": name2code, "hist": hist, "disc": disc, "prov": prov, "city": city,
             "nature": nature, "ruanke": ruanke, "charter": charter, "subj_scores": subj_scores,
-            "ruanke_major": ruanke_major}
+            "ruanke_major": ruanke_major, "admission_url": admission_url}
 
 
 HOME_PROVINCE = "浙江"
@@ -266,6 +270,7 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
 
     name2code, hist, disc = lk["name2code"], lk["hist"], lk["disc"]
     prov, city, nature, ruanke, charter = lk["prov"], lk["city"], lk["nature"], lk["ruanke"], lk["charter"]
+    admission_url = lk["admission_url"]
     subj_scores = lk["subj_scores"]
     budget = student.budget
     out: list[dict] = []
@@ -325,6 +330,7 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             "软科专业评级": rmj.get("grade", "—"),
             "类别": CATEGORY_NAMES.get(men2, "—"),
             "院校名称": sn, "院校代码": sc,
+            "招生官网": admission_url.get(sn, ""),
             "层次": _level_label(sn),
             "城市": city.get(sn) or "—",
             "办学类型": nature.get(sn) or "—",
