@@ -209,3 +209,44 @@ class FinalVolunteerTests(unittest.TestCase):
         names = {r["专业名称"] for r in filtered}
         self.assertNotIn("护理学", names)                      # 精确名被排除
         self.assertFalse(any(n.startswith("护理学(") for n in names))  # 括号变体被排除
+
+    def test_build_new_major_table_lists_rows_without_2025_rank(self):
+        from src.zhejiang.step3_generate import build_new_major_table
+
+        rows = [
+            {
+                "专业名称": "未来技术",
+                "专业代码": "ENR2026-a",
+                "二级学科": "计算机类",
+                "学科评估": "A",
+                "软科专业排名": "—",
+                "软科专业评级": "—",
+                "院校名称": "测试大学",
+                "招生官网": "https://example.test",
+                "院校代码": "0001",
+                "层次": "其他",
+                "学制": "4年",
+                "学费/年": "6000元/年",
+                "2025最低位次": None,
+                "2024最低位次": None,
+                "2023最低位次": None,
+                "预警": False,
+            },
+            {
+                "专业名称": "计算机科学与技术",
+                "专业代码": "001",
+                "二级学科": "计算机类",
+                "学科评估": "A",
+                "院校名称": "测试大学",
+                "院校代码": "0001",
+                "层次": "其他",
+                "2025最低位次": 8000,
+            },
+        ]
+
+        new_major_rows = build_new_major_table(rows)
+
+        self.assertEqual(len(new_major_rows), 1)
+        self.assertEqual(new_major_rows[0]["序号"], 1)
+        self.assertEqual(new_major_rows[0]["专业名称"], "未来技术")
+        self.assertEqual(new_major_rows[0]["备注"], "2026新专业/新招生方向（无2025位次）")

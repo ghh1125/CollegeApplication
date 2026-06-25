@@ -55,6 +55,30 @@ class UICollectFormTests(unittest.TestCase):
         self.assertTrue(linked.startswith("https://bkzs.pku.edu.cn/"))
         self.assertIn("__school_name__=北京大学", linked)
 
+    def test_zhejiang_excel_export_includes_risk_pools_and_new_major_sheet(self) -> None:
+        import io
+
+        import pandas as pd
+        from openpyxl import load_workbook
+
+        zhejiang_page = self._import_page("zhejiang")
+        data = zhejiang_page._to_excel(
+            pd.DataFrame([{"序号": 1, "专业名称": "计算机科学与技术"}]),
+            [{"序号": 1, "冲稳保": "冲"}],
+            [{"序号": 1, "冲稳保": "稳"}],
+            [{"序号": 1, "冲稳保": "保"}],
+            [{"序号": 1, "专业名称": "未来技术"}],
+            ["序号", "专业名称"],
+            ["序号", "专业名称"],
+        )
+
+        workbook = load_workbook(io.BytesIO(data), read_only=True)
+
+        self.assertEqual(
+            workbook.sheetnames,
+            ["推荐80志愿", "冲候选池", "稳候选池", "保候选池", "2026新专业"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

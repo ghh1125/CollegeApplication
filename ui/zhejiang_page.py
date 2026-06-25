@@ -442,24 +442,29 @@ def _to_excel(
     chong_t: list[dict],
     wen_t: list[dict],
     bao_t: list[dict],
+    new_major_t: list[dict],
     cols: list[str],
+    new_major_cols: list[str],
 ) -> bytes:
-    """生成多 Sheet Excel：最终80志愿 + 冲/稳/保候选池。"""
+    """生成多 Sheet Excel：推荐80志愿 + 冲/稳/保候选池 + 2026新专业。"""
     import io
     import pandas as pd
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        df_final.to_excel(writer, sheet_name="最终80志愿", index=False)
+        df_final.reindex(columns=cols).to_excel(writer, sheet_name="推荐80志愿", index=False)
         for label, data in [("冲候选池", chong_t), ("稳候选池", wen_t), ("保候选池", bao_t)]:
             pd.DataFrame(data).reindex(columns=cols).to_excel(writer, sheet_name=label, index=False)
+        pd.DataFrame(new_major_t).reindex(columns=new_major_cols).to_excel(
+            writer, sheet_name="2026新专业", index=False
+        )
     return buf.getvalue()
 
 
 def _render_final(s: StudentInput) -> None:
-    """第三步：两步走——先展示冲/稳/保候选池，确认后生成最终 80 志愿。"""
+    """第三步：展示冲/稳/保候选池、推荐 80 志愿和无 2025 位次的新专业表。"""
     import pandas as pd
     from collections import Counter
-    from src.zhejiang.step3_generate import generate
+    from src.zhejiang.step3_generate import build_new_major_table, generate
 
     filtered_rows = st.session_state.get("zj_filtered_rows", [])
     if not filtered_rows:
@@ -470,11 +475,14 @@ def _render_final(s: StudentInput) -> None:
     if st.session_state.get("zj_step3_rows_key") != rows_key:
         st.session_state.pop("zj_step3_pools", None)
         st.session_state.pop("zj_step3_final", None)
+        st.session_state.pop("zj_step3_new_majors", None)
         st.session_state["zj_step3_rows_key"] = rows_key
 
     st.divider()
-    st.subheader("第三步 · 三轮分档（冲 / 稳 / 保）")
-    st.caption("从二轮候选池中按历年最低位次分档，生成冲/稳/保三个候选池；最终参考 80 志愿从这三个池中按比例选出。")
+    st.subheader("第三步 · 三轮分档与推荐结果")
+    st.caption(
+        "先展示冲/稳/保三个候选池，再给出推荐80志愿；最后单独列出无2025位次的2026新专业/新招生方向。"
+    )
 
     COLS = [
         "序号", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估", "软科专业排名", "软科专业评级",
@@ -501,23 +509,35 @@ def _render_final(s: StudentInput) -> None:
         "2023最低位次": st.column_config.NumberColumn(width="small"),
         "三年平均位次": st.column_config.NumberColumn(width="small"),
     }
+    NEW_MAJOR_COLS = [
+        "序号", "备注", "专业名称", "专业代码", "二级学科", "学科评估", "软科专业排名", "软科专业评级",
+        "院校名称", "招生官网", "院校代码", "层次", "学制", "学费/年", "预警",
+        "2025最低位次", "2024最低位次", "2023最低位次",
+    ]
+    NEW_MAJOR_COL_CFG = {
+        **COL_CFG,
+        "备注": st.column_config.TextColumn(width="medium"),
+    }
 
     def _df(rows: list[dict]) -> "pd.DataFrame":
         return pd.DataFrame(rows).reindex(columns=COLS)
 
-    # ── 3a：按位次范围分档，展示三个完整候选池（无数量限制）──────────────
     if "zj_step3_pools" not in st.session_state:
-        if st.button("开始三轮分档", type="primary", use_container_width=True):
-            with st.spinner("按位次分档中…"):
+        if st.button("开始三轮分档并生成推荐结果", type="primary", use_container_width=True):
+            with st.spinner("按位次分档并生成推荐结果中…"):
                 chong_t, wen_t, bao_t, final = generate(s, filtered_rows)
+                new_major_t = build_new_major_table(filtered_rows)
             st.session_state["zj_step3_pools"] = (chong_t, wen_t, bao_t)
             st.session_state["zj_step3_final"] = final
+            st.session_state["zj_step3_new_majors"] = new_major_t
             st.rerun()
         return
 
     chong_t, wen_t, bao_t = st.session_state["zj_step3_pools"]
+    final = st.session_state["zj_step3_final"]
+    new_major_t: list[dict] = st.session_state.get("zj_step3_new_majors", [])
 
-    st.success(f"三轮分档完成：冲 {len(chong_t)} 条 / 稳 {len(wen_t)} 条 / 保 {len(bao_t)} 条（以下为各档全部候选，无数量限制）")
+    st.success(f"三轮分档完成：冲 {len(chong_t)} 条 / 稳 {len(wen_t)} 条 / 保 {len(bao_t)} 条")
     with st.expander(f"冲 · 候选池（{len(chong_t)} 条）", expanded=True):
         st.dataframe(_with_linked_school_names(_df(chong_t)), hide_index=True, height=400, column_config=COL_CFG) if chong_t else st.info("无冲的候选")
     with st.expander(f"稳 · 候选池（{len(wen_t)} 条）", expanded=True):
@@ -532,57 +552,60 @@ def _render_final(s: StudentInput) -> None:
             "无独立统计数据，以主校保研率作为参考，实际校区可能偏低，请自行核实。"
         )
 
-    # ── 3b：从三轮候选池按数量规则选出参考 80 志愿 ────────────────────────
     st.divider()
-    st.subheader("最终 · 参考 80 志愿")
-    st.caption("从三轮冲/稳/保候选池中按数量规则（位次段决定冲/稳/保比例）选出 80 个志愿。")
-
-    if "zj_step3_final" not in st.session_state or not st.session_state["zj_step3_final"]:
+    if not final:
         st.warning("三轮候选池数量不足，请放宽筛选条件后重新进行二轮筛选。")
-        return
+    else:
+        cwb = Counter(r["冲稳保"] for r in final)
+        if len(final) < 80:
+            st.warning(
+                f"当前只有 **{len(final)}** 个志愿（冲 {cwb.get('冲',0)} / 稳 {cwb.get('稳',0)} / 保 {cwb.get('保',0)}），"
+                "不足 80 个。建议返回放宽筛选条件（减少排除项、扩大地域/专业范围）后重新生成。"
+            )
+        else:
+            st.success(
+                f"共 {len(final)} 个志愿 · 冲 {cwb.get('冲',0)} / 稳 {cwb.get('稳',0)} / 保 {cwb.get('保',0)}"
+            )
 
-    if st.button("从三轮候选池生成参考 80 志愿", type="primary", use_container_width=True,
-                 key="btn_confirm_final"):
-        st.session_state["zj_step3_show_final"] = True
+        st.markdown("#### 推荐 80 志愿")
+        st.info(
+            "💡 **仅供参考，最终志愿请自行斟酌决定。**\n\n"
+            "高考填志愿是人生中的重要决策，本工具基于历年位次数据和你填写的偏好进行系统性筛选与排序，"
+            "旨在帮你快速缩小范围、发现可能忽略的选项。但每个人的情况不同，"
+            "建议结合学校官方招生章程、专业培养方案、个人兴趣与职业规划综合考量，"
+            "必要时咨询老师、家长或专业人士。**志愿最终由你自己填报，结果由你自己负责。**"
+        )
+        df_final = _df(final)
+        st.dataframe(_with_linked_school_names(df_final), hide_index=True, height=600, column_config=COL_CFG)
 
-    if not st.session_state.get("zj_step3_show_final"):
-        return
+        if any(r.get("_baoyan_fallback") for r in final):
+            st.caption(
+                "ℹ️ 保研率说明：异地校区（如「哈工大(威海)」「北航杭州国际校园」）"
+                "无独立统计数据，以主校保研率作为参考，实际校区可能偏低，请自行核实。"
+            )
 
-    final = st.session_state["zj_step3_final"]
-    cwb = Counter(r["冲稳保"] for r in final)
-    if len(final) < 80:
-        st.warning(
-            f"当前只有 **{len(final)}** 个志愿（冲 {cwb.get('冲',0)} / 稳 {cwb.get('稳',0)} / 保 {cwb.get('保',0)}），"
-            "不足 80 个。建议返回放宽筛选条件（减少排除项、扩大地域/专业范围）后重新生成。"
+    st.markdown("#### 2026 新专业 / 新招生方向（无 2025 位次）")
+    st.caption(
+        "这些专业来自 2026 招生计划，但没有匹配到 2025 最低位次，"
+        "不参与冲稳保分档。可能是新增专业、招生方向变化或名称调整，建议单独人工核实。"
+    )
+    if new_major_t:
+        st.dataframe(
+            _with_linked_school_names(pd.DataFrame(new_major_t).reindex(columns=NEW_MAJOR_COLS)),
+            hide_index=True,
+            height=400,
+            column_config=NEW_MAJOR_COL_CFG,
         )
     else:
-        st.success(
-            f"共 {len(final)} 个志愿 · 冲 {cwb.get('冲',0)} / 稳 {cwb.get('稳',0)} / 保 {cwb.get('保',0)}"
-        )
-
-    st.markdown("#### 参考 80 志愿")
-    st.info(
-        "💡 **仅供参考，最终志愿请自行斟酌决定。**\n\n"
-        "高考填志愿是人生中的重要决策，本工具基于历年位次数据和你填写的偏好进行系统性筛选与排序，"
-        "旨在帮你快速缩小范围、发现可能忽略的选项。但每个人的情况不同，"
-        "建议结合学校官方招生章程、专业培养方案、个人兴趣与职业规划综合考量，"
-        "必要时咨询老师、家长或专业人士。**志愿最终由你自己填报，结果由你自己负责。**"
-    )
-    df_final = _df(final)
-    st.dataframe(_with_linked_school_names(df_final), hide_index=True, height=600, column_config=COL_CFG)
-
-    if any(r.get("_baoyan_fallback") for r in final):
-        st.caption(
-            "ℹ️ 保研率说明：异地校区（如「哈工大(威海)」「北航杭州国际校园」）"
-            "无独立统计数据，以主校保研率作为参考，实际校区可能偏低，请自行核实。"
-        )
+        st.info("当前二轮筛选结果里没有缺少 2025 位次的 2026 新专业/新招生方向。")
 
     st.markdown("#### 导出志愿方案")
+    df_final = _df(final)
     ec1, ec2 = st.columns(2)
     with ec1:
         st.download_button(
-            "⬇️ 下载 Excel（含冲稳保分档）",
-            data=_to_excel(df_final, chong_t, wen_t, bao_t, COLS),
+            "⬇️ 下载 Excel（含冲稳保分档 + 新专业）",
+            data=_to_excel(df_final, chong_t, wen_t, bao_t, new_major_t, COLS, NEW_MAJOR_COLS),
             file_name="志愿方案.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,

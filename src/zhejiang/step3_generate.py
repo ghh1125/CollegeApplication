@@ -253,6 +253,36 @@ def _load_baoyan() -> tuple[dict[str, float | None], set[str]]:
     return result, fallback_schools
 
 
+def build_new_major_table(rows: list[dict]) -> list[dict]:
+    """List 2026 candidates that have no matched 2025 admission rank."""
+
+    out: list[dict] = []
+    for r in rows:
+        if r.get("2025最低位次"):
+            continue
+        out.append({
+            "序号": len(out) + 1,
+            "备注": "2026新专业/新招生方向（无2025位次）",
+            "专业名称": r.get("专业名称"),
+            "专业代码": r.get("专业代码"),
+            "二级学科": r.get("二级学科"),
+            "学科评估": r.get("学科评估"),
+            "软科专业排名": r.get("软科专业排名", "—"),
+            "软科专业评级": r.get("软科专业评级", "—"),
+            "院校名称": r.get("院校名称"),
+            "招生官网": r.get("招生官网", ""),
+            "院校代码": r.get("院校代码"),
+            "层次": r.get("层次"),
+            "学制": r.get("学制", "—"),
+            "学费/年": r.get("学费/年", "—"),
+            "2025最低位次": r.get("2025最低位次"),
+            "2024最低位次": r.get("2024最低位次"),
+            "2023最低位次": r.get("2023最低位次"),
+            "预警": "⚠️" if r.get("预警") else "",
+        })
+    return out
+
+
 def generate(
     student: Any,
     rows: list[dict],
