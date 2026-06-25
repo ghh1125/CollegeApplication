@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS {TARGET_TABLE} (
     subject_requirement_json TEXT,
     school_location TEXT,
     tuition INTEGER,
+    tuition_text TEXT,
     duration TEXT,
     source_url TEXT,
     source_file TEXT,
@@ -72,6 +73,12 @@ REQUIRED_COLUMNS = {
     "source_major_subtitle": "TEXT",
     "subject_req_source": "TEXT",
     "need_review": "INTEGER DEFAULT 0",
+    "tuition_text": "TEXT",
+    "single_subject_requirement_text": "TEXT",
+    "single_subject_requirement_json": "TEXT",
+    "foreign_min_score": "INTEGER",
+    "math_min_score": "INTEGER",
+    "chinese_min_score": "INTEGER",
 }
 
 
@@ -86,6 +93,24 @@ def parse_int(value: Any) -> int | None:
         return None
     match = re.search(r"-?\d+", text.replace(",", ""))
     return int(match.group(0)) if match else None
+
+
+def parse_tuition_amount(value: Any) -> int | None:
+    """Return the highest annual tuition-like amount for filtering.
+
+    The raw 2026 source may contain special formats such as "104750港元" or
+    "第一、二学年5040元/学年，第三、四学年13360元/学年". For budget filtering,
+    the conservative value is the maximum amount mentioned.
+    """
+
+    text = clean_text(value).replace(",", "")
+    if not text or text in {"-", "--", "—"}:
+        return None
+    if "免学费" in text or text == "免费":
+        return 0
+    nums = [int(x) for x in re.findall(r"\d{1,6}", text)]
+    nums = [n for n in nums if 0 <= n <= 300000]
+    return max(nums) if nums else None
 
 
 def normalize_subject_text(text: str | None) -> str:
@@ -260,6 +285,7 @@ INSERT INTO {TARGET_TABLE} (
     subject_requirement_json,
     school_location,
     tuition,
+    tuition_text,
     duration,
     source_url,
     source_file,
@@ -267,7 +293,7 @@ INSERT INTO {TARGET_TABLE} (
     source_major_subtitle,
     subject_req_source,
     need_review
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (year, province, batch, school_code, major_code)
 DO UPDATE SET
     school_name = EXCLUDED.school_name,
@@ -278,6 +304,7 @@ DO UPDATE SET
     subject_requirement_text = EXCLUDED.subject_requirement_text,
     subject_requirement_json = EXCLUDED.subject_requirement_json,
     tuition = EXCLUDED.tuition,
+    tuition_text = EXCLUDED.tuition_text,
     duration = EXCLUDED.duration,
     source_url = EXCLUDED.source_url,
     source_file = EXCLUDED.source_file,
@@ -321,7 +348,8 @@ def row_to_values(row: dict[str, Any], school_codes: dict[str, str], source_file
         requirement_text,
         subject_requirement_json_from_text(requirement_text),
         None,
-        parse_int(row.get("tuition")),
+        parse_tuition_amount(row.get("tuition")),
+        clean_text(row.get("tuition")) or None,
         duration_from_raw(row.get("major_length")),
         clean_text(row.get("source_url")),
         source_file_label(source_file),

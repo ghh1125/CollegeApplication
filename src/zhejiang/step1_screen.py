@@ -9,7 +9,7 @@
 输出键（UI 显示名见 ui 层）：
   排序 | 专业名称 | 专业代码 | 二级学科(=专业类) | 学科评估 | 类别(门类) |
   院校名称 | 院校代码 | 层次(=院校级别) | 城市 | 办学类型 | 学制 | 学费/年 |
-  2026计划数 | 选科要求 |
+  2026计划数 | 选科要求 | 单科要求 |
   培养安排备注(校区/外语门槛，从专业名称拆出，避免污染历史位次匹配) |
   省份 | 2025/2024/2023最低分 | 2025/2024/2023最低位次
 """
@@ -89,10 +89,28 @@ def _subject_score_ok(major_name: str, score_req: dict, scores: Any) -> bool:
         if s is not None and s < min_score:
             return False
     for pat in score_req.get("by_pattern", []):
-        if major_name in pat["pattern"] or _norm(major_name) in pat["pattern"]:
+        # pattern 是专业名关键词(如"中外合作")，需要检查它是否出现在(完整)专业名里，
+        # 不是反过来检查专业名是否是这个短关键词的子串(那样几乎永远不成立)。
+        if pat["pattern"] in major_name or pat["pattern"] in _norm(major_name):
             s = _get(pat["subject"])
             if s is not None and s < pat["min"]:
                 return False
+    return True
+
+
+def _direct_subject_score_ok(score_req: dict, scores: Any) -> bool:
+    """Check row-level single-subject score requirements."""
+
+    if not score_req:
+        return True
+    has_any = scores.chinese is not None or scores.math is not None or scores.foreign is not None
+    if not has_any:
+        return True
+    values = {"chinese": scores.chinese, "math": scores.math, "foreign": scores.foreign}
+    for subject, min_score in score_req.items():
+        score = values.get(subject)
+        if score is not None and min_score is not None and score < int(min_score):
+            return False
     return True
 
 
@@ -121,6 +139,27 @@ def _subject_ok(req_json: str | None, selected: set[str]) -> bool:
     if t == "CUSTOM":
         return all(s in selected for s in subs)
     return True
+
+
+def _load_json_dict(value: str | None) -> dict:
+    if not value:
+        return {}
+    try:
+        loaded = json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _tuition_display(tuition: Any, tuition_text: str | None, fallback_text: str | None = None) -> str:
+    text = str(tuition_text or "").strip()
+    if text and not re.fullmatch(r"\d+", text):
+        return text
+    if tuition is not None:
+        return f"{int(tuition):,}元/年"
+    if text:
+        return f"{int(text):,}元/年"
+    return fallback_text or "—"
 
 
 def _table_has_rows(conn: Any, table: str, year: int) -> bool:
@@ -394,6 +433,17 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             else "''"
         )
         note_expr = "training_note" if "training_note" in plan_columns else "''"
+        tuition_text_expr = "tuition_text" if "tuition_text" in plan_columns else "''"
+        single_subject_text_expr = (
+            "single_subject_requirement_text"
+            if "single_subject_requirement_text" in plan_columns
+            else "''"
+        )
+        single_subject_json_expr = (
+            "single_subject_requirement_json"
+            if "single_subject_requirement_json" in plan_columns
+            else "''"
+        )
         history_exprs = []
         for hist_year in REF_YEARS:
             for suffix in ("score", "rank"):
@@ -401,7 +451,9 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
                 history_exprs.append(column if column in plan_columns else "NULL")
         rows_raw = conn.execute(
             f"""SELECT school_code, school_name, major_code, {province_code_expr}, major_name,
-                       subject_requirement_json, tuition, duration, {plan_count_expr}, {subject_text_expr}, {note_expr},
+                       subject_requirement_json, tuition, {tuition_text_expr}, duration,
+                       {plan_count_expr}, {subject_text_expr}, {note_expr},
+                       {single_subject_text_expr}, {single_subject_json_expr},
                        {", ".join(history_exprs)}
                 FROM {plan_table} WHERE year=?""", (plan_year,)
         ).fetchall()
@@ -415,7 +467,8 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
     out: list[dict] = []
     for row in rows_raw:
         (
-            sc, sn, mc, province_mc, mn, req, tuition, duration, plan_count, subject_text, training_note,
+            sc, sn, mc, province_mc, mn, req, tuition, tuition_text, duration,
+            plan_count, subject_text, training_note, single_subject_text, single_subject_json,
             h2025_score, h2025_rank, h2024_score, h2024_rank, h2023_score, h2023_rank,
         ) = row
         sc, mc = str(sc), str(mc)
@@ -451,9 +504,14 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
                 if amounts and min(amounts) > 8000:
                     continue
         # 6. 单科成绩：有要求数据的参与筛选，无数据的通过
-        score_req = subj_scores.get(sn, {})
-        if score_req and not _subject_score_ok(mn, score_req, student.subject_scores):
-            continue
+        row_score_req = _load_json_dict(single_subject_json)
+        if row_score_req:
+            if not _direct_subject_score_ok(row_score_req, student.subject_scores):
+                continue
+        else:
+            score_req = subj_scores.get(sn, {})
+            if score_req and not _subject_score_ok(mn, score_req, student.subject_scores):
+                continue
 
         ranks = _history_for_program(sc, mc, sn, mn, hist, hist_name, hist_name_loose)
         table_scores = {
@@ -495,9 +553,10 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             "城市": city.get(sn) or "—",
             "办学类型": nature.get(sn) or "—",
             "学制": duration or "—",
-            "学费/年": (f"{tuition:,}元/年" if tuition else ch.get("tuition_text")) or "—",
+            "学费/年": _tuition_display(tuition, tuition_text, ch.get("tuition_text")),
             "2026计划数": plan_count,
             "选科要求": subject_text or "—",
+            "单科要求": single_subject_text or "—",
             "体检要求": ch.get("physical_text") or "—",
             "外语要求": ch.get("language_text") or "—",
             "培养安排备注": training_note or "—",
