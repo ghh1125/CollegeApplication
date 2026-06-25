@@ -370,8 +370,11 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             continue
         ch = charter.get(sn, {})
         rmj = lk["ruanke_major"].get((sn, mn), {})
+        # 2026招生计划用的是抓取脚本生成的占位代码（ENR2026-xxx），不是真实教育部专业码；
+        # 能从专业名解析出标准代码(code6)时优先用标准代码，解析不出时才保留占位代码。
+        display_code = code6 if (mc.startswith("ENR2026") and code6) else mc
         out.append({
-            "专业名称": mn, "专业代码": mc,
+            "专业名称": mn, "专业代码": display_code,
             "二级学科": MAJOR_CLASS_NAMES.get(class4, "—"),
             "学科评估": grade or "—",
             "软科专业排名": rmj.get("ranking", "—"),
