@@ -16,6 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 SCHEMA_PATH = PROJECT_ROOT / "data" / "zhejiang" / "schema.sql"
 TABLE_NAMES = (
     "admission_plan",
+    "admission_plan_2026",
     "historical_cutoff",
     "program_mapping",
     "school_master",
@@ -33,6 +34,14 @@ SQLITE_REQUIRED_COLUMNS = {
     "admission_plan": {
         "subject_requirement_text": "TEXT",
         "subject_requirement_json": "TEXT",
+        "subject_req_source": "TEXT",
+        "need_review": "INTEGER DEFAULT 0",
+    },
+    "admission_plan_2026": {
+        "source_url": "TEXT",
+        "source_file": "TEXT",
+        "source_major": "TEXT",
+        "source_major_subtitle": "TEXT",
         "subject_req_source": "TEXT",
         "need_review": "INTEGER DEFAULT 0",
     },

@@ -25,9 +25,7 @@ import requests
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = PROJECT_ROOT / "data" / "zhejiang" / "college.db"
 RAW_DIR = PROJECT_ROOT / "data" / "zhejiang" / "raw"
-DEFAULT_JSONL = RAW_DIR / "zhejiang_enrollment_2025_undergrad.jsonl"
-DEFAULT_CSV = RAW_DIR / "zhejiang_enrollment_2025_undergrad.csv"
-DEFAULT_STATUS = RAW_DIR / "zhejiang_enrollment_2025_undergrad.status.jsonl"
+DEFAULT_YEAR = 2025
 
 BASE_URL = "https://p.qianwen.com/university/tab"
 HEADERS = {
@@ -92,18 +90,52 @@ def enrollment_url(school_name: str, province: str, year: int, batch: str, genre
     return f"{BASE_URL}?{urlencode(query)}"
 
 
-def load_school_names(db_path: Path, year: int, province: str) -> list[str]:
+def default_output_paths(year: int) -> tuple[Path, Path, Path]:
+    stem = f"enrollment_{year}_zhejiang_undergrad"
+    return (
+        RAW_DIR / f"{stem}.jsonl",
+        RAW_DIR / f"{stem}.csv",
+        RAW_DIR / f"{stem}.status.jsonl",
+    )
+
+
+def resolve_default_paths(args: argparse.Namespace) -> argparse.Namespace:
+    jsonl_path, csv_path, status_path = default_output_paths(args.year)
+    if args.output_jsonl is None:
+        args.output_jsonl = jsonl_path
+    if args.output_csv is None:
+        args.output_csv = csv_path
+    if args.status_jsonl is None:
+        args.status_jsonl = status_path
+    if args.school_source_year is None:
+        args.school_source_year = 2025 if args.year != 2025 else args.year
+    return args
+
+
+def load_school_names(
+    db_path: Path,
+    year: int,
+    province: str,
+    source_year: int | None = None,
+) -> list[str]:
     conn = sqlite3.connect(db_path)
     try:
-        rows = conn.execute(
-            """
-            SELECT DISTINCT school_name
-            FROM admission_plan
-            WHERE year = ? AND province = ?
-            ORDER BY school_name
-            """,
-            (year, province),
-        ).fetchall()
+        years = [source_year if source_year is not None else year]
+        if source_year is None and year != 2025:
+            years.append(2025)
+        rows: list[tuple[Any, ...]] = []
+        for lookup_year in years:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT school_name
+                FROM admission_plan
+                WHERE year = ? AND province = ?
+                ORDER BY school_name
+                """,
+                (lookup_year, province),
+            ).fetchall()
+            if rows:
+                break
     finally:
         conn.close()
     return [str(row[0]) for row in rows if row and row[0]]
@@ -229,12 +261,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", type=Path, default=DB_PATH)
     parser.add_argument("--province", default="浙江")
-    parser.add_argument("--year", type=int, default=2025)
+    parser.add_argument("--year", type=int, default=DEFAULT_YEAR)
     parser.add_argument("--batch", default="本科批")
     parser.add_argument("--genre", default="综合")
-    parser.add_argument("--output-jsonl", type=Path, default=DEFAULT_JSONL)
-    parser.add_argument("--output-csv", type=Path, default=DEFAULT_CSV)
-    parser.add_argument("--status-jsonl", type=Path, default=DEFAULT_STATUS)
+    parser.add_argument("--output-jsonl", type=Path, default=None)
+    parser.add_argument("--output-csv", type=Path, default=None)
+    parser.add_argument("--status-jsonl", type=Path, default=None)
+    parser.add_argument(
+        "--school-source-year",
+        type=int,
+        default=None,
+        help="Year in admission_plan used only to list schools. Defaults to 2025 for 2026 crawls.",
+    )
     parser.add_argument("--school", action="append", help="Only scrape this school; can repeat.")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--offset", type=int, default=0)
@@ -252,12 +290,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_arg_parser().parse_args(argv)
+    args = resolve_default_paths(build_arg_parser().parse_args(argv))
 
     if args.school:
         school_names = args.school
     else:
-        school_names = load_school_names(args.db, args.year, args.province)
+        school_names = load_school_names(
+            args.db,
+            args.year,
+            args.province,
+            source_year=args.school_source_year,
+        )
 
     if args.offset:
         school_names = school_names[args.offset :]

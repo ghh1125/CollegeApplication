@@ -50,6 +50,39 @@ CREATE TABLE IF NOT EXISTS admission_plan (
     )
 );
 
+CREATE TABLE IF NOT EXISTS admission_plan_2026 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    year INTEGER NOT NULL DEFAULT 2026,
+    province TEXT NOT NULL DEFAULT '浙江',
+    batch TEXT NOT NULL,
+    recruit_type TEXT DEFAULT 'MAJOR' CHECK (recruit_type IN ('MAJOR', 'CATEGORY')),
+    school_code TEXT NOT NULL,
+    school_name TEXT NOT NULL,
+    major_code TEXT NOT NULL,
+    major_name TEXT NOT NULL,
+    plan_count INTEGER,
+    subject_requirement TEXT,
+    subject_requirement_text TEXT,
+    subject_requirement_json TEXT,
+    school_location TEXT,
+    tuition INTEGER,
+    duration TEXT,
+    source_url TEXT,
+    source_file TEXT,
+    source_major TEXT,
+    source_major_subtitle TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    subject_req_source TEXT,
+    need_review INTEGER DEFAULT 0,
+    CONSTRAINT admission_plan_2026_unique UNIQUE (
+        year,
+        province,
+        batch,
+        school_code,
+        major_code
+    )
+);
+
 CREATE TABLE IF NOT EXISTS historical_cutoff (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     year INTEGER NOT NULL,

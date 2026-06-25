@@ -25,7 +25,7 @@ from src.zhejiang.input.disciplines import CATEGORY_NAMES, MAJOR_CLASS_NAMES
 from src.zhejiang.input.medical_rules import conditions_for, restricted_classes, restricted_majors
 from src.zhejiang.input.student_input import Budget
 
-YEAR = 2025
+YEAR = 2026
 REF_YEARS = (2025, 2024, 2023)
 
 # 2020-2024全国普通本科撤销布点数量 Top30（数据来源：教育部）
@@ -121,6 +121,45 @@ def _subject_ok(req_json: str | None, selected: set[str]) -> bool:
     return True
 
 
+def _table_has_rows(conn: Any, table: str, year: int) -> bool:
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table,),
+    ).fetchone()
+    if not exists:
+        return False
+    row = conn.execute(f"SELECT 1 FROM {table} WHERE year=? LIMIT 1", (year,)).fetchone()
+    return row is not None
+
+
+def _plan_source_for_year(conn: Any, year: int) -> tuple[str, int]:
+    """Return the table/year used for current-year admission plans.
+
+    2026 plans live in a dedicated table so the 2025-derived admission_plan stays
+    unchanged. If the 2026 table has not been populated yet, fall back to 2025.
+    """
+    if year == 2026 and _table_has_rows(conn, "admission_plan_2026", 2026):
+        return "admission_plan_2026", 2026
+    if year == 2026:
+        return "admission_plan", 2025
+    return "admission_plan", year
+
+
+def _history_for_program(
+    school_code: str,
+    major_code: str,
+    school_name: str,
+    major_name: str,
+    code_hist: dict[tuple[str, str], dict[int, int]],
+    name_hist: dict[tuple[str, str], dict[int, int]],
+) -> dict[int, int]:
+    """Resolve historical ranks by code first, then by normalized school-major name."""
+    result: dict[int, int] = {}
+    result.update(name_hist.get((school_name, normalize_major_name(major_name)), {}))
+    result.update(code_hist.get((school_code, major_code), {}))
+    return result
+
+
 def _level_label(school_name: str) -> str:
     import re as _re
 
@@ -175,11 +214,19 @@ def _load_lookups(conn: Any) -> dict:
         name2code[n] = code
     # (school_code, major_code) → {year: min_rank}
     hist: dict[tuple[str, str], dict[int, int]] = {}
-    for sc, mc, yr, rank in conn.execute(
-        "SELECT school_code, major_code, year, min_rank FROM historical_cutoff WHERE year IN (2025,2024,2023)"
+    # (school_name, normalized_major_name) → {year: min_rank}; used for 2026 plans
+    # because 2026 raw enrollment rows do not expose stable major codes.
+    hist_name: dict[tuple[str, str], dict[int, int]] = {}
+    for sc, sn, mc, mn, yr, rank in conn.execute(
+        """
+        SELECT school_code, school_name, major_code, major_name, year, min_rank
+        FROM historical_cutoff
+        WHERE year IN (2025,2024,2023)
+        """
     ):
         if rank:
             hist.setdefault((str(sc), str(mc)), {})[int(yr)] = int(rank)
+            hist_name.setdefault((str(sn), normalize_major_name(mn)), {})[int(yr)] = int(rank)
     # (school_name, 研究生学科码) → grade
     disc: dict[tuple[str, str], str] = {
         (str(r[0]), str(r[1])): str(r[2])
@@ -232,7 +279,7 @@ def _load_lookups(conn: Any) -> dict:
         "SELECT school_name, major_name, ranking, grade FROM ruanke_major_rank WHERE year=2026"
     ):
         ruanke_major[(sn, mn)] = {"ranking": rk or "—", "grade": gd or "—"}
-    return {"name2code": name2code, "hist": hist, "disc": disc, "prov": prov, "city": city,
+    return {"name2code": name2code, "hist": hist, "hist_name": hist_name, "disc": disc, "prov": prov, "city": city,
             "nature": nature, "ruanke": ruanke, "charter": charter, "subj_scores": subj_scores,
             "ruanke_major": ruanke_major, "admission_url": admission_url}
 
@@ -262,13 +309,14 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
 
     with get_conn("zhejiang") as conn:
         lk = _load_lookups(conn)
+        plan_table, plan_year = _plan_source_for_year(conn, year)
         rows_raw = conn.execute(
-            """SELECT school_code, school_name, major_code, major_name,
-                      subject_requirement_json, tuition, duration
-               FROM admission_plan WHERE year=?""", (year,)
+            f"""SELECT school_code, school_name, major_code, major_name,
+                       subject_requirement_json, tuition, duration
+                FROM {plan_table} WHERE year=?""", (plan_year,)
         ).fetchall()
 
-    name2code, hist, disc = lk["name2code"], lk["hist"], lk["disc"]
+    name2code, hist, hist_name, disc = lk["name2code"], lk["hist"], lk["hist_name"], lk["disc"]
     prov, city, nature, ruanke, charter = lk["prov"], lk["city"], lk["nature"], lk["ruanke"], lk["charter"]
     admission_url = lk["admission_url"]
     subj_scores = lk["subj_scores"]
@@ -312,7 +360,7 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
         if score_req and not _subject_score_ok(mn, score_req, student.subject_scores):
             continue
 
-        ranks = hist.get((sc, mc), {})
+        ranks = _history_for_program(sc, mc, sn, mn, hist, hist_name)
         # 学科评估：本科专业 → 研究生学科码 → 等级
         disc_code = _lookup_discipline_code(normalize_major_name(mn), raw_name=mn)
         grade = disc.get((sn, disc_code or ""), "")
