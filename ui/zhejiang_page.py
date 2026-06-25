@@ -334,7 +334,8 @@ def _render_screening(s: StudentInput) -> None:
     df = pd.DataFrame(rows)[[
         "排序", "专业名称", "专业代码", "二级学科", "学科评估", "软科专业排名", "软科专业评级", "院校名称",
         "招生官网", "院校代码", "层次", "城市", "办学类型", "学制", "学费/年",
-        "2025最低位次", "2024最低位次", "2023最低位次",
+        "2026计划数", "选科要求",
+        "2025最低分", "2025最低位次", "2024最低分", "2024最低位次", "2023最低分", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
     st.dataframe(
         _with_linked_school_names(df), use_container_width=True, hide_index=True, height=600,
@@ -349,8 +350,13 @@ def _render_screening(s: StudentInput) -> None:
             "招生官网": None,
             "院校级别": st.column_config.TextColumn(width="small"),
             "城市": st.column_config.TextColumn(width="small"),
+            "2026计划数": st.column_config.NumberColumn(width="small"),
+            "选科要求": st.column_config.TextColumn(width="medium"),
+            "2025最低分": st.column_config.NumberColumn(width="small"),
             "2025最低位次": st.column_config.NumberColumn(width="small"),
+            "2024最低分": st.column_config.NumberColumn(width="small"),
             "2024最低位次": st.column_config.NumberColumn(width="small"),
+            "2023最低分": st.column_config.NumberColumn(width="small"),
             "2023最低位次": st.column_config.NumberColumn(width="small"),
         },
     )
@@ -414,7 +420,8 @@ def _render_screening(s: StudentInput) -> None:
     df2 = pd.DataFrame(filtered_rows)[[
         "排序", "专业名称", "专业代码", "二级学科", "学科评估", "软科专业排名", "软科专业评级", "院校名称",
         "招生官网", "预警状态", "院校代码", "层次", "城市", "办学类型", "学制", "学费/年",
-        "2025最低位次", "2024最低位次", "2023最低位次",
+        "2026计划数", "选科要求",
+        "2025最低分", "2025最低位次", "2024最低分", "2024最低位次", "2023最低分", "2023最低位次",
     ]].rename(columns={"二级学科": "专业类", "学科评估": "学科评估结果", "层次": "院校级别"})
     st.dataframe(
         _with_linked_school_names(df2), use_container_width=True, hide_index=True, height=600,
@@ -430,8 +437,13 @@ def _render_screening(s: StudentInput) -> None:
             "招生官网": None,
             "院校级别": st.column_config.TextColumn(width="small"),
             "城市": st.column_config.TextColumn(width="small"),
+            "2026计划数": st.column_config.NumberColumn(width="small"),
+            "选科要求": st.column_config.TextColumn(width="medium"),
+            "2025最低分": st.column_config.NumberColumn(width="small"),
             "2025最低位次": st.column_config.NumberColumn(width="small"),
+            "2024最低分": st.column_config.NumberColumn(width="small"),
             "2024最低位次": st.column_config.NumberColumn(width="small"),
+            "2023最低分": st.column_config.NumberColumn(width="small"),
             "2023最低位次": st.column_config.NumberColumn(width="small"),
         },
     )
@@ -487,8 +499,9 @@ def _render_final(s: StudentInput) -> None:
     COLS = [
         "序号", "冲稳保", "专业名称", "专业代码", "二级学科", "学科评估", "软科专业排名", "软科专业评级",
         "保研率", "专业发展路径",
-        "院校名称", "招生官网", "院校代码", "层次", "学制", "学费/年", "预警",
-        "2025最低位次", "2024最低位次", "2023最低位次", "三年平均位次",
+        "院校名称", "招生官网", "院校代码", "层次", "学制", "学费/年", "2026计划数", "选科要求", "预警",
+        "2025最低分", "2025最低位次", "2024最低分", "2024最低位次", "2023最低分", "2023最低位次",
+        "三年平均位次",
     ]
     COL_CFG = {
         "序号":         st.column_config.NumberColumn(width="small"),
@@ -503,16 +516,21 @@ def _render_final(s: StudentInput) -> None:
         ),
         "招生官网":     None,
         "层次":         st.column_config.TextColumn(width="small"),
+        "2026计划数":   st.column_config.NumberColumn(width="small"),
+        "选科要求":     st.column_config.TextColumn(width="medium"),
         "预警":         st.column_config.TextColumn(width="small"),
+        "2025最低分":   st.column_config.NumberColumn(width="small"),
         "2025最低位次": st.column_config.NumberColumn(width="small"),
+        "2024最低分":   st.column_config.NumberColumn(width="small"),
         "2024最低位次": st.column_config.NumberColumn(width="small"),
+        "2023最低分":   st.column_config.NumberColumn(width="small"),
         "2023最低位次": st.column_config.NumberColumn(width="small"),
         "三年平均位次": st.column_config.NumberColumn(width="small"),
     }
     NEW_MAJOR_COLS = [
         "序号", "备注", "专业名称", "专业代码", "二级学科", "学科评估", "软科专业排名", "软科专业评级",
-        "院校名称", "招生官网", "院校代码", "层次", "学制", "学费/年", "预警",
-        "2025最低位次", "2024最低位次", "2023最低位次",
+        "院校名称", "招生官网", "院校代码", "层次", "学制", "学费/年", "2026计划数", "选科要求", "预警",
+        "2025最低分", "2025最低位次", "2024最低分", "2024最低位次", "2023最低分", "2023最低位次",
     ]
     NEW_MAJOR_COL_CFG = {
         **COL_CFG,

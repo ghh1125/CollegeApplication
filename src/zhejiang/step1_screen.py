@@ -9,8 +9,9 @@
 输出键（UI 显示名见 ui 层）：
   排序 | 专业名称 | 专业代码 | 二级学科(=专业类) | 学科评估 | 类别(门类) |
   院校名称 | 院校代码 | 层次(=院校级别) | 城市 | 办学类型 | 学制 | 学费/年 |
+  2026计划数 | 选科要求 |
   培养安排备注(校区/外语门槛，从专业名称拆出，避免污染历史位次匹配) |
-  省份 | 2025/2024/2023最低位次
+  省份 | 2025/2024/2023最低分 | 2025/2024/2023最低位次
 """
 
 from __future__ import annotations
@@ -384,10 +385,24 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
         plan_table, plan_year = _plan_source_for_year(conn, year)
         plan_columns = {row[1] for row in conn.execute(f"PRAGMA table_info({plan_table})")}
         province_code_expr = "province_major_code" if "province_major_code" in plan_columns else "''"
+        plan_count_expr = "plan_count" if "plan_count" in plan_columns else "NULL"
+        subject_text_expr = (
+            "subject_requirement_text"
+            if "subject_requirement_text" in plan_columns
+            else "subject_requirement"
+            if "subject_requirement" in plan_columns
+            else "''"
+        )
         note_expr = "training_note" if "training_note" in plan_columns else "''"
+        history_exprs = []
+        for hist_year in REF_YEARS:
+            for suffix in ("score", "rank"):
+                column = f"hist_{hist_year}_min_{suffix}"
+                history_exprs.append(column if column in plan_columns else "NULL")
         rows_raw = conn.execute(
             f"""SELECT school_code, school_name, major_code, {province_code_expr}, major_name,
-                       subject_requirement_json, tuition, duration, {note_expr}
+                       subject_requirement_json, tuition, duration, {plan_count_expr}, {subject_text_expr}, {note_expr},
+                       {", ".join(history_exprs)}
                 FROM {plan_table} WHERE year=?""", (plan_year,)
         ).fetchall()
 
@@ -398,7 +413,11 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
     subj_scores = lk["subj_scores"]
     budget = student.budget
     out: list[dict] = []
-    for sc, sn, mc, province_mc, mn, req, tuition, duration, training_note in rows_raw:
+    for row in rows_raw:
+        (
+            sc, sn, mc, province_mc, mn, req, tuition, duration, plan_count, subject_text, training_note,
+            h2025_score, h2025_rank, h2024_score, h2024_rank, h2023_score, h2023_rank,
+        ) = row
         sc, mc = str(sc), str(mc)
         # 1. 选科
         if not _subject_ok(req, selected):
@@ -437,6 +456,19 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             continue
 
         ranks = _history_for_program(sc, mc, sn, mn, hist, hist_name, hist_name_loose)
+        table_scores = {
+            2025: h2025_score,
+            2024: h2024_score,
+            2023: h2023_score,
+        }
+        table_ranks = {
+            2025: h2025_rank,
+            2024: h2024_rank,
+            2023: h2023_rank,
+        }
+        for hist_year, table_rank in table_ranks.items():
+            if table_rank:
+                ranks[hist_year] = int(table_rank)
         # 学科评估：本科专业 → 研究生学科码 → 等级
         disc_code = _lookup_discipline_code(normalize_major_name(mn), raw_name=mn)
         grade = disc.get((sn, disc_code or ""), "")
@@ -464,6 +496,8 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             "办学类型": nature.get(sn) or "—",
             "学制": duration or "—",
             "学费/年": (f"{tuition:,}元/年" if tuition else ch.get("tuition_text")) or "—",
+            "2026计划数": plan_count,
+            "选科要求": subject_text or "—",
             "体检要求": ch.get("physical_text") or "—",
             "外语要求": ch.get("language_text") or "—",
             "培养安排备注": training_note or "—",
@@ -471,8 +505,11 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             "预警": any(w in mn for w in WARN_MAJORS_2020_2024),
             "省份": prov.get(sn, ""),
             "_ruanke_rank": ruanke.get(sn),
+            "2025最低分": table_scores.get(2025),
             "2025最低位次": ranks.get(2025),
+            "2024最低分": table_scores.get(2024),
             "2024最低位次": ranks.get(2024),
+            "2023最低分": table_scores.get(2023),
             "2023最低位次": ranks.get(2023),
         })
 
