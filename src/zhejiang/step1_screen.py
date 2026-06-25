@@ -160,6 +160,28 @@ def _history_for_program(
     return result
 
 
+def _display_major_code(
+    raw_major_code: str,
+    fallback: tuple[int, str] | None = None,
+) -> str:
+    """Return the user-facing 浙江专业代号 (NOT the MOE national_code).
+
+    `ENR2026-*` is only an internal stable key generated from the 2026 scraped
+    plan row. It is not Zhejiang's application major code, so never show it to
+    users as "专业代码". When no real 2026 code is available, fall back to the
+    most recent historical year's code for the same (school, major) — but the
+    province's per-year code can shift (observed: 039→037 for the same major),
+    so it is shown with its source year, never claimed as the confirmed 2026 code.
+    """
+    code = str(raw_major_code or "").strip()
+    if not code.startswith("ENR2026"):
+        return code or "—"
+    if fallback:
+        yr, fb_code = fallback
+        return f"{fb_code}({yr}参考)"
+    return "—"
+
+
 def _level_label(school_name: str) -> str:
     import re as _re
 
@@ -217,6 +239,11 @@ def _load_lookups(conn: Any) -> dict:
     # (school_name, normalized_major_name) → {year: min_rank}; used for 2026 plans
     # because 2026 raw enrollment rows do not expose stable major codes.
     hist_name: dict[tuple[str, str], dict[int, int]] = {}
+    # (school_name, normalized_major_name) → (most_recent_year, 浙江官方专业代号)。
+    # 用于 2026 计划行兜底展示——浙江省每年专业代号会变（如某专业 2025 是"039"，
+    # 2026 变成"037"），所以这只是"最近一次见过的代号"，展示时必须标注年份，
+    # 不能当作已核准的 2026 代号。
+    code_fallback: dict[tuple[str, str], tuple[int, str]] = {}
     for sc, sn, mc, mn, yr, rank in conn.execute(
         """
         SELECT school_code, school_name, major_code, major_name, year, min_rank
@@ -227,6 +254,11 @@ def _load_lookups(conn: Any) -> dict:
         if rank:
             hist.setdefault((str(sc), str(mc)), {})[int(yr)] = int(rank)
             hist_name.setdefault((str(sn), normalize_major_name(mn)), {})[int(yr)] = int(rank)
+        if mc:
+            key = (str(sn), normalize_major_name(mn))
+            prev = code_fallback.get(key)
+            if prev is None or int(yr) > prev[0]:
+                code_fallback[key] = (int(yr), str(mc))
     # (school_name, 研究生学科码) → grade
     disc: dict[tuple[str, str], str] = {
         (str(r[0]), str(r[1])): str(r[2])
@@ -281,7 +313,7 @@ def _load_lookups(conn: Any) -> dict:
         ruanke_major[(sn, mn)] = {"ranking": rk or "—", "grade": gd or "—"}
     return {"name2code": name2code, "hist": hist, "hist_name": hist_name, "disc": disc, "prov": prov, "city": city,
             "nature": nature, "ruanke": ruanke, "charter": charter, "subj_scores": subj_scores,
-            "ruanke_major": ruanke_major, "admission_url": admission_url}
+            "ruanke_major": ruanke_major, "admission_url": admission_url, "code_fallback": code_fallback}
 
 
 HOME_PROVINCE = "浙江"
@@ -319,6 +351,7 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
     name2code, hist, hist_name, disc = lk["name2code"], lk["hist"], lk["hist_name"], lk["disc"]
     prov, city, nature, ruanke, charter = lk["prov"], lk["city"], lk["nature"], lk["ruanke"], lk["charter"]
     admission_url = lk["admission_url"]
+    code_fallback = lk["code_fallback"]
     subj_scores = lk["subj_scores"]
     budget = student.budget
     out: list[dict] = []
@@ -370,9 +403,12 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
             continue
         ch = charter.get(sn, {})
         rmj = lk["ruanke_major"].get((sn, mn), {})
-        # 2026招生计划用的是抓取脚本生成的占位代码（ENR2026-xxx），不是真实教育部专业码；
-        # 能从专业名解析出标准代码(code6)时优先用标准代码，解析不出时才保留占位代码。
-        display_code = code6 if (mc.startswith("ENR2026") and code6) else mc
+        # 2026招生计划抓取源没有暴露浙江当年填报用的专业代号（如 021/034）。
+        # `mc` 可能是 ENR2026-* 内部键，不能展示为专业代码；code6 是教育部目录码，
+        # 也不是浙江志愿填报代号。无真实2026代号时，兜底展示最近一年的省级代号
+        # （标注年份，不冒充已核准的2026代号——同名专业代号逐年会变）。
+        fb = code_fallback.get((sn, normalize_major_name(mn)))
+        display_code = _display_major_code(mc, fb)
         out.append({
             "专业名称": mn, "专业代码": display_code,
             "二级学科": MAJOR_CLASS_NAMES.get(class4, "—"),

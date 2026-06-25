@@ -154,6 +154,20 @@ class Zhejiang2026EnrollmentTests(unittest.TestCase):
 
         self.assertEqual(ranks, {2025: 9200, 2024: 9400})
 
+    def test_generated_2026_major_code_is_not_shown_to_users(self):
+        """ENR2026-* 是内部占位键，绝不能直接展示为专业代码。
+
+        浙江省每年发布的专业代号会变（同一专业不同年份代号不同），所以即便
+        有上一年的代号可兜底，也必须标注来源年份，不能冒充已核准的2026代号。
+        """
+        from src.zhejiang.step1_screen import _display_major_code
+
+        self.assertEqual(_display_major_code("ENR2026-095664efdf", None), "—")
+        self.assertEqual(
+            _display_major_code("ENR2026-095664efdf", (2025, "021")), "021(2025参考)"
+        )
+        self.assertEqual(_display_major_code("001", None), "001")
+
 
 if __name__ == "__main__":
     unittest.main()
