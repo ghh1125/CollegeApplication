@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS {TARGET_TABLE} (
     school_code TEXT NOT NULL,
     school_name TEXT NOT NULL,
     major_code TEXT NOT NULL,
+    province_major_code TEXT,
     major_name TEXT NOT NULL,
     plan_count INTEGER,
     subject_requirement TEXT,
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS {TARGET_TABLE} (
 """
 
 REQUIRED_COLUMNS = {
+    "province_major_code": "TEXT",
     "source_url": "TEXT",
     "source_file": "TEXT",
     "source_major": "TEXT",
@@ -156,6 +158,55 @@ def stable_major_code(row: dict[str, Any], school_code: str) -> str:
     return f"ENR2026-{digest}"
 
 
+def _find_nested_value(data: Any, keys: tuple[str, ...]) -> Any:
+    if isinstance(data, dict):
+        for key in keys:
+            if key in data and data[key] not in (None, ""):
+                return data[key]
+        for value in data.values():
+            found = _find_nested_value(value, keys)
+            if found not in (None, ""):
+                return found
+    elif isinstance(data, list):
+        for item in data:
+            found = _find_nested_value(item, keys)
+            if found not in (None, ""):
+                return found
+    return None
+
+
+def normalize_province_major_code(value: Any) -> str:
+    """Normalize 浙江志愿填报专业代号 such as 021/034.
+
+    The 2026 public enrollment-list source currently does not expose this field.
+    Do not accept generated ENR keys or six-digit national major catalog codes
+    such as 080901 as province-level application codes.
+    """
+    code = clean_text(value).upper()
+    if not code or code.startswith("ENR2026"):
+        return ""
+    if re.fullmatch(r"\d{6}", code):
+        return ""
+    if re.fullmatch(r"[0-9A-Z]{1,4}", code):
+        return code
+    return ""
+
+
+def extract_province_major_code(row: dict[str, Any]) -> str:
+    keys = (
+        "province_major_code",
+        "zhejiang_major_code",
+        "admission_major_code",
+        "plan_major_code",
+        "major_plan_code",
+        "zydm",
+        "专业代码",
+        "专业代号",
+    )
+    value = _find_nested_value(row, keys)
+    return normalize_province_major_code(value)
+
+
 def source_file_label(path: Path) -> str:
     try:
         return str(path.resolve().relative_to(PROJECT_ROOT))
@@ -201,6 +252,7 @@ INSERT INTO {TARGET_TABLE} (
     school_code,
     school_name,
     major_code,
+    province_major_code,
     major_name,
     plan_count,
     subject_requirement,
@@ -215,10 +267,11 @@ INSERT INTO {TARGET_TABLE} (
     source_major_subtitle,
     subject_req_source,
     need_review
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (year, province, batch, school_code, major_code)
 DO UPDATE SET
     school_name = EXCLUDED.school_name,
+    province_major_code = EXCLUDED.province_major_code,
     major_name = EXCLUDED.major_name,
     plan_count = EXCLUDED.plan_count,
     subject_requirement = EXCLUDED.subject_requirement,
@@ -261,6 +314,7 @@ def row_to_values(row: dict[str, Any], school_codes: dict[str, str], source_file
         school_code,
         school_name,
         stable_major_code(row, school_code),
+        extract_province_major_code(row),
         major_name,
         parse_int(row.get("enroll_num")),
         requirement_text,

@@ -64,6 +64,7 @@ class Zhejiang2026EnrollmentTests(unittest.TestCase):
                         "major": "工科试验班",
                         "major_subtitle": "(信息)",
                         "major_full_name": "工科试验班(信息)",
+                        "专业代码": "021",
                         "enroll_num": "10",
                         "major_length": "4",
                         "tuition": "6000",
@@ -108,7 +109,7 @@ class Zhejiang2026EnrollmentTests(unittest.TestCase):
             new_rows = conn.execute(
                 """
                 SELECT year, school_code, school_name, major_name, plan_count, tuition,
-                       duration, subject_requirement_json, source_file
+                       duration, subject_requirement_json, source_file, province_major_code
                 FROM admission_plan_2026
                 """
             ).fetchall()
@@ -124,6 +125,7 @@ class Zhejiang2026EnrollmentTests(unittest.TestCase):
             {"type": "ALL_REQUIRED", "subjects": ["物理", "化学"]},
         )
         self.assertFalse(str(row[8]).startswith("/"))
+        self.assertEqual(row[9], "021")
 
     def test_subject_requirement_parser_expands_abbreviated_subjects(self):
         from scripts.import_zhejiang_enrollment_2026 import subject_requirement_json_from_text
@@ -155,18 +157,13 @@ class Zhejiang2026EnrollmentTests(unittest.TestCase):
         self.assertEqual(ranks, {2025: 9200, 2024: 9400})
 
     def test_generated_2026_major_code_is_not_shown_to_users(self):
-        """ENR2026-* 是内部占位键，绝不能直接展示为专业代码。
-
-        浙江省每年发布的专业代号会变（同一专业不同年份代号不同），所以即便
-        有上一年的代号可兜底，也必须标注来源年份，不能冒充已核准的2026代号。
-        """
+        """ENR2026-* 和六位国家专业目录码都不能展示为浙江专业代码。"""
         from src.zhejiang.step1_screen import _display_major_code
 
-        self.assertEqual(_display_major_code("ENR2026-095664efdf", None), "—")
-        self.assertEqual(
-            _display_major_code("ENR2026-095664efdf", (2025, "021")), "021(2025参考)"
-        )
-        self.assertEqual(_display_major_code("001", None), "001")
+        self.assertEqual(_display_major_code("ENR2026-095664efdf", ""), "—")
+        self.assertEqual(_display_major_code("ENR2026-095664efdf", "021"), "021")
+        self.assertEqual(_display_major_code("ENR2026-095664efdf", "080901"), "—")
+        self.assertEqual(_display_major_code("001", ""), "001")
 
 
 if __name__ == "__main__":
