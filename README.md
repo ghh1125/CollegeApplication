@@ -70,7 +70,9 @@
     ├── parse_charter_requirements.py  # 解析章程选科/单科要求
     ├── build_school_master.py   # 构建学校主表
     ├── fetch_ruanke_major_rank.py   # 抓取软科中国大学专业排名（2026，838 专业 × 1136 所学校）
-    └── fetch_ruanke_school_rank.py  # 抓取软科中国大学排名全部14个子榜（主榜/医药/财经/政法等），用rankOverall统一映射主榜排名
+    ├── fetch_ruanke_school_rank.py  # 抓取软科中国大学排名全部14个子榜（主榜/医药/财经/政法等），用rankOverall统一映射主榜排名
+    ├── fetch_qianwen_2026_major_codes.py  # 登录千问志愿推荐工具，抓取浙江2026真实专业代号
+    └── clean_2026_training_notes.py # 剥离2026专业名称里混入的校区/外语门槛说明，避免污染历史位次匹配
 ```
 
 ---
@@ -80,7 +82,7 @@
 | 表名 | 行数 | 关键字段 | 用途 |
 |------|------|---------|------|
 | `admission_plan` | 23,531 | `school_name` `major_name` `major_code` `subject_requirement` `tuition` `duration` `year` | 2023–2025 浙江招生计划，含选科要求、学费、学制 |
-| `admission_plan_2026` | 24,340 | `school_name` `major_name` `major_code` `source_url` `source_major` | 2026 浙江招生计划；与历史位次（2025及更早）对不上的专业即「2026新专业」，第三步单独列出 |
+| `admission_plan_2026` | 24,340 | `school_name` `major_name` `major_code` `province_major_code` `training_note` `source_url` `source_major` | 2026 浙江招生计划；`province_major_code` 是千问抓取的真实浙江专业代号（97.8%覆盖）；`training_note` 是从专业名称剥离出的校区/外语门槛说明；与历史位次（2025及更早）对不上的专业即「2026新专业」，第三步单独列出 |
 | `historical_cutoff` | 66,563 | `school_name` `major_name` `min_rank` `min_score` `year` | 历年最低录取位次/分数，第一步筛选和冲稳保判断的核心数据 |
 | `major_description` | 1,355 | `national_code` `name` `is_what` `learn_what` `do_what` | 教育部本科专业目录（2026 版），883 个三级专业 + 部分专业画像 |
 | `major_profile` | 3,139 | `major_name` `career_direction` `summary` `fallback_from` | 专业画像（发展路径、学什么、做什么）；含 845 个标准专业 + 1,796 个浙江招生别名映射，浙江覆盖率 82% |

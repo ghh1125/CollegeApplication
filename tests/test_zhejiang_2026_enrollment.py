@@ -198,6 +198,30 @@ class Zhejiang2026EnrollmentTests(unittest.TestCase):
 
         self.assertEqual(ranks, {2025: 9200})
 
+    def test_strip_training_notes_extracts_pure_campus_and_language_notes(self):
+        """整个括号内容只有校区/学年安排或外语门槛时，应被剥离到备注，专业名留干净。"""
+        from src.zhejiang.rank_utils import strip_training_notes
+
+        self.assertEqual(
+            strip_training_notes("英语(要求高考英语成绩不低于120分)"),
+            ("英语", "要求高考英语成绩不低于120分"),
+        )
+        self.assertEqual(
+            strip_training_notes("汉语言文学(第一学年在杭州校区，第二学年起在校本部)"),
+            ("汉语言文学", "第一学年在杭州校区，第二学年起在校本部"),
+        )
+        self.assertEqual(
+            strip_training_notes("药学(中外合作办学)(要求高考外语成绩不低于90分)"),
+            ("药学(中外合作办学)", "要求高考外语成绩不低于90分"),
+        )
+
+    def test_strip_training_notes_keeps_brackets_mixed_with_major_list(self):
+        """括号里混杂了"含XX专业"等子方向区分信息时，不能剥离，否则会丢失区分信息。"""
+        from src.zhejiang.rank_utils import strip_training_notes
+
+        mixed = "工科试验班(宝山校区。含机械工程、自动化专业。原则上第一学年内进行专业分流)"
+        self.assertEqual(strip_training_notes(mixed), (mixed, ""))
+
     def test_generated_2026_major_code_is_not_shown_to_users(self):
         """ENR2026-* 和六位国家专业目录码都不能展示为浙江专业代码。"""
         from src.zhejiang.step1_screen import _display_major_code

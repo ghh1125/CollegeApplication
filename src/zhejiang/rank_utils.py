@@ -221,3 +221,31 @@ def normalize_major_name(name: str | None) -> str:
     text = re.sub(r"\s+", "", str(name or "").strip())
     text = text.replace("（", "(").replace("）", ")")
     return re.sub(r"\([^)]*\)", "", text)
+
+
+_CAMPUS_ONLY_NOTE = re.compile(r"^第[一二三四]+(?:[、，,]\s*[一二三四]+)*\s*学年[^。]*?校[区本][^。]*$")
+_LANGUAGE_THRESHOLD_NOTE = re.compile(r"^要求高考(?:外语|英语)成绩不低于\d+分$")
+
+
+def strip_training_notes(major_name: str | None) -> tuple[str, str]:
+    """从专业名称中剥离「纯校区/学年安排」和「外语门槛」两类括号备注。
+
+    2026年抓取源(千问)把这类培养安排信息直接拼进了专业名称，但 2023-2025
+    历年数据从不包含这类信息——同一个专业只因为多了这段说明，文本就对不上
+    历年记录，被误判为"新专业/无历史位次"。只处理整个括号内容**仅有**这两
+    类信息的安全情况；若括号里还混有"含XX专业"等子方向区分信息，不剥离
+    （避免丢失区分不同子方向的关键信息）。
+
+    Returns: (清洗后的专业名称, 被剥离的备注文本，多条用"；"拼接；无备注则为"")
+    """
+    notes: list[str] = []
+
+    def _replace(match: re.Match) -> str:
+        frag = match.group(1)
+        if _CAMPUS_ONLY_NOTE.match(frag) or _LANGUAGE_THRESHOLD_NOTE.match(frag):
+            notes.append(frag)
+            return ""
+        return match.group(0)
+
+    cleaned = re.sub(r"\(([^()]*)\)", _replace, str(major_name or ""))
+    return cleaned, "；".join(notes)
