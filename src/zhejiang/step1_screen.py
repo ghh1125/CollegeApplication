@@ -145,6 +145,16 @@ def _plan_source_for_year(conn: Any, year: int) -> tuple[str, int]:
     return "admission_plan", year
 
 
+def _light_norm_major(name: str) -> str:
+    """轻度归一化：统一全半角括号/空格，但**保留**括号内容。
+
+    与 normalize_major_name 不同——"数字媒体技术" 和 "数字媒体技术(中外合作办学)"
+    是两个完全不同的专业，不能因为去掉括号而被合并成同一个 key。
+    """
+    text = re.sub(r"\s+", "", str(name or "").strip())
+    return text.replace("（", "(").replace("）", ")")
+
+
 def _history_for_program(
     school_code: str,
     major_code: str,
@@ -152,10 +162,23 @@ def _history_for_program(
     major_name: str,
     code_hist: dict[tuple[str, str], dict[int, int]],
     name_hist: dict[tuple[str, str], dict[int, int]],
+    name_hist_loose: dict[tuple[str, str], dict[int, int]] | None = None,
 ) -> dict[int, int]:
-    """Resolve historical ranks by code first, then by normalized school-major name."""
+    """Resolve historical ranks by code first, then by school-major name.
+
+    专业名匹配分两层：
+    1. 精确层（保留括号）：区分"数字媒体技术"和"数字媒体技术(中外合作办学)"等不同子方向。
+    2. 模糊层（去括号兜底）：仅用于 2026 新专业措辞与历年不完全一致时的兜底，且仅在
+       该模糊 key 对应的历年数据**没有歧义**（同年所有变体位次一致）时才使用，
+       避免把不同子方向的位次互相覆盖。
+    """
     result: dict[int, int] = {}
-    result.update(name_hist.get((school_name, normalize_major_name(major_name)), {}))
+    exact_key = (school_name, _light_norm_major(major_name))
+    if exact_key in name_hist:
+        result.update(name_hist[exact_key])
+    elif name_hist_loose is not None:
+        loose_key = (school_name, normalize_major_name(major_name))
+        result.update(name_hist_loose.get(loose_key, {}))
     result.update(code_hist.get((school_code, major_code), {}))
     return result
 
@@ -244,9 +267,11 @@ def _load_lookups(conn: Any) -> dict:
         name2code[n] = code
     # (school_code, major_code) → {year: min_rank}
     hist: dict[tuple[str, str], dict[int, int]] = {}
-    # (school_name, normalized_major_name) → {year: min_rank}; used for 2026 plans
-    # because 2026 raw enrollment rows do not expose stable major codes.
+    # (school_name, 轻度归一化但保留括号的专业名) → {year: min_rank}; 精确层，
+    # 用于区分"数字媒体技术"和"数字媒体技术(中外合作办学)"等不同子方向。
     hist_name: dict[tuple[str, str], dict[int, int]] = {}
+    # (school_name, 完全去括号归一化专业名) → {(year, rank), ...}；用于检测模糊层歧义
+    _loose_raw: dict[tuple[str, str], dict[int, set[int]]] = {}
     for sc, sn, mc, mn, yr, rank in conn.execute(
         """
         SELECT school_code, school_name, major_code, major_name, year, min_rank
@@ -256,7 +281,16 @@ def _load_lookups(conn: Any) -> dict:
     ):
         if rank:
             hist.setdefault((str(sc), str(mc)), {})[int(yr)] = int(rank)
-            hist_name.setdefault((str(sn), normalize_major_name(mn)), {})[int(yr)] = int(rank)
+            hist_name.setdefault((str(sn), _light_norm_major(mn)), {})[int(yr)] = int(rank)
+            loose_key = (str(sn), normalize_major_name(mn))
+            _loose_raw.setdefault(loose_key, {}).setdefault(int(yr), set()).add(int(rank))
+    # 模糊层兜底：仅当某年所有同名（去括号后）变体的位次完全一致（即没有歧义）时才采用，
+    # 否则该年宁可留空，也不要把不同子方向的位次互相覆盖展示错误数据。
+    hist_name_loose: dict[tuple[str, str], dict[int, int]] = {}
+    for key, year_ranks in _loose_raw.items():
+        safe = {yr: next(iter(ranks)) for yr, ranks in year_ranks.items() if len(ranks) == 1}
+        if safe:
+            hist_name_loose[key] = safe
     # (school_name, 研究生学科码) → grade
     disc: dict[tuple[str, str], str] = {
         (str(r[0]), str(r[1])): str(r[2])
@@ -309,7 +343,8 @@ def _load_lookups(conn: Any) -> dict:
         "SELECT school_name, major_name, ranking, grade FROM ruanke_major_rank WHERE year=2026"
     ):
         ruanke_major[(sn, mn)] = {"ranking": rk or "—", "grade": gd or "—"}
-    return {"name2code": name2code, "hist": hist, "hist_name": hist_name, "disc": disc, "prov": prov, "city": city,
+    return {"name2code": name2code, "hist": hist, "hist_name": hist_name, "hist_name_loose": hist_name_loose,
+            "disc": disc, "prov": prov, "city": city,
             "nature": nature, "ruanke": ruanke, "charter": charter, "subj_scores": subj_scores,
             "ruanke_major": ruanke_major, "admission_url": admission_url}
 
@@ -349,6 +384,7 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
         ).fetchall()
 
     name2code, hist, hist_name, disc = lk["name2code"], lk["hist"], lk["hist_name"], lk["disc"]
+    hist_name_loose = lk["hist_name_loose"]
     prov, city, nature, ruanke, charter = lk["prov"], lk["city"], lk["nature"], lk["ruanke"], lk["charter"]
     admission_url = lk["admission_url"]
     subj_scores = lk["subj_scores"]
@@ -392,7 +428,7 @@ def _full_pool(student: Any, year: int = YEAR) -> list[dict]:
         if score_req and not _subject_score_ok(mn, score_req, student.subject_scores):
             continue
 
-        ranks = _history_for_program(sc, mc, sn, mn, hist, hist_name)
+        ranks = _history_for_program(sc, mc, sn, mn, hist, hist_name, hist_name_loose)
         # 学科评估：本科专业 → 研究生学科码 → 等级
         disc_code = _lookup_discipline_code(normalize_major_name(mn), raw_name=mn)
         grade = disc.get((sn, disc_code or ""), "")

@@ -139,11 +139,13 @@ class Zhejiang2026EnrollmentTests(unittest.TestCase):
             {"type": "ALL_REQUIRED", "subjects": ["思想政治", "历史", "地理"]},
         )
 
-    def test_2026_generated_major_code_can_use_name_based_history(self):
+    def test_2026_generated_major_code_matches_exact_bracketed_name(self):
+        """专业名匹配必须保留括号——"工科试验班(信息)"和"工科试验班(图灵班)"是不同专业，
+        不能因为都叫"工科试验班"就共用同一份历史位次。"""
         from src.zhejiang.step1_screen import _history_for_program
 
         code_hist = {("0001", "001"): {2025: 9000}}
-        name_hist = {("浙江大学", "工科试验班"): {2025: 9200, 2024: 9400}}
+        name_hist = {("浙江大学", "工科试验班(信息)"): {2025: 9200, 2024: 9400}}
 
         ranks = _history_for_program(
             "0001",
@@ -155,6 +157,46 @@ class Zhejiang2026EnrollmentTests(unittest.TestCase):
         )
 
         self.assertEqual(ranks, {2025: 9200, 2024: 9400})
+
+    def test_2026_unmatched_bracketed_name_does_not_fall_back_without_loose_table(self):
+        """精确(带括号)名匹配不上、且未提供模糊兜底表时，不能臆测去括号匹配，宁可留空。"""
+        from src.zhejiang.step1_screen import _history_for_program
+
+        code_hist: dict = {}
+        name_hist = {("浙江大学", "工科试验班(图灵班)"): {2025: 9200, 2024: 9400}}
+
+        ranks = _history_for_program(
+            "0001",
+            "ENR2026-abcdef12",
+            "浙江大学",
+            "工科试验班(信息)",
+            code_hist,
+            name_hist,
+        )
+
+        self.assertEqual(ranks, {})
+
+    def test_2026_loose_fallback_only_used_when_unambiguous(self):
+        """模糊(去括号)兜底只在该年所有同名变体位次完全一致(无歧义)时才生效；
+        有歧义的年份必须留空，不能把不同子方向的位次互相覆盖展示错误数据。"""
+        from src.zhejiang.step1_screen import _history_for_program
+
+        code_hist: dict = {}
+        name_hist: dict = {}
+        # 2025年只有一个变体(无歧义)，2024年有两个不同位次的变体(有歧义)
+        name_hist_loose = {("浙江大学", "工科试验班"): {2025: 9200}}
+
+        ranks = _history_for_program(
+            "0001",
+            "ENR2026-abcdef12",
+            "浙江大学",
+            "工科试验班(全新方向)",
+            code_hist,
+            name_hist,
+            name_hist_loose,
+        )
+
+        self.assertEqual(ranks, {2025: 9200})
 
     def test_generated_2026_major_code_is_not_shown_to_users(self):
         """ENR2026-* 和六位国家专业目录码都不能展示为浙江专业代码。"""
