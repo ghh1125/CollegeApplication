@@ -99,6 +99,11 @@ def ensure_sqlite_schema_columns(conn: Any) -> None:
     """Add columns needed by newer SQLite schemas when tables already exist."""
 
     for table, required_columns in SQLITE_REQUIRED_COLUMNS.items():
+        table_exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone()
+        if not table_exists:
+            continue
         existing_columns = {
             row[1]
             for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
