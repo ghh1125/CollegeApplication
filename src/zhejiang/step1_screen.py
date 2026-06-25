@@ -234,6 +234,12 @@ def _level_label(school_name: str) -> str:
         m = _re.match(r"^(.+?大学).+(分校|校区)$", name)
         if m:
             result.append(_norm(m.group(1)))
+        # 同时保留中间的城市限定括号：「XX大学(城市)YY校区」→「XX大学(城市)」
+        # 部分学校(如中国石油大学)的211/双一流身份是按校区分别认定的，
+        # 裸名"中国石油大学"不在名单里，只有"中国石油大学（北京）"在。
+        m3 = _re.match(r"^(.+?大学[（(][^）)]+[）)]).+(分校|校区)$", name)
+        if m3:
+            result.append(_norm(m3.group(1)))
         # 医学院/医学部：「XX大学医学院/部」→「XX大学」
         m2 = _re.match(r"^(.+?大学)医学[院部]$", name)
         if m2:

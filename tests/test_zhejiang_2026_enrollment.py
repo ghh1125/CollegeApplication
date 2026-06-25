@@ -222,6 +222,13 @@ class Zhejiang2026EnrollmentTests(unittest.TestCase):
         mixed = "工科试验班(宝山校区。含机械工程、自动化专业。原则上第一学年内进行专业分流)"
         self.assertEqual(strip_training_notes(mixed), (mixed, ""))
 
+    def test_level_label_keeps_city_qualifier_for_branch_campuses(self):
+        """中国石油大学等校的211/双一流身份按校区分别认定（"中国石油大学（北京）"），
+        裸名"中国石油大学"不在名单里——校区名不能把城市限定也一起去掉。"""
+        from src.zhejiang.step1_screen import _level_label
+
+        self.assertEqual(_level_label("中国石油大学(北京)克拉玛依校区"), "211/双一流")
+
     def test_generated_2026_major_code_is_not_shown_to_users(self):
         """ENR2026-* 和六位国家专业目录码都不能展示为浙江专业代码。"""
         from src.zhejiang.step1_screen import _display_major_code
