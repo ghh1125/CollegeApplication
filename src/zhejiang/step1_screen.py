@@ -214,10 +214,11 @@ def _level_label(school_name: str) -> str:
     is211 = any(c in n211 for c in cands)
     is双  = any(c in n双  for c in cands)
 
+    # 数据验证：985 ⊆ 211 ⊆ 双一流，全部成立，故按全部命中档次复合展示。
     if is985:
-        return "985"
+        return "985/211/双一流"
     if is211:
-        return "211/双一流"   # 数据验证：所有211都在双一流
+        return "211/双一流"
     if is双:
         return "双一流"
     return "其他"
