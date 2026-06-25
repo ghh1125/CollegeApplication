@@ -89,11 +89,11 @@ def cmd_scrape(profile_dir: str, out_path: str, max_iter: int, stall_limit: int)
             page.wait_for_timeout(700)
             if i % 15 == 0:
                 schools = _unique_school_ids(captured)
-                print(f"滚动{i}次, 响应{len(captured)}, 学校{len(schools)}")
+                print(f"滚动{i}次, 响应{len(captured)}, 学校{len(schools)}", flush=True)
                 if len(schools) == prev:
                     stall += 1
                     if stall >= stall_limit:
-                        print(f"连续{stall_limit}次无新增，停止于第{i}次")
+                        print(f"连续{stall_limit}次无新增，停止于第{i}次", flush=True)
                         break
                 else:
                     stall = 0
@@ -103,7 +103,7 @@ def cmd_scrape(profile_dir: str, out_path: str, max_iter: int, stall_limit: int)
     with open(out_path, "w", encoding="utf-8") as f:
         for body in captured:
             f.write(body + "\n")
-    print(f"完成，共{len(captured)}批响应，已保存到 {out_path}")
+    print(f"完成，共{len(captured)}批响应，已保存到 {out_path}", flush=True)
 
 
 def _unique_school_ids(bodies: list[str]) -> set[str]:
