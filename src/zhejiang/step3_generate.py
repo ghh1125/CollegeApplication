@@ -7,7 +7,7 @@
   10001 – 50000   位次÷100       +3000 内     +15000 内   20/30/30
   50001+          每 500 名       +3000 内     +15000 内   20/30/30
 
-冲/稳/保判定（以 2025 最低位次为准，无则用 2024/2023）：
+冲/稳/保判定（只以 2025 最低位次为准）：
   冲：ref_rank < student_rank            （往年录取比考生靠前，需冲）
   稳：student_rank ≤ ref_rank ≤ rank+稳  （接近或略低于考生）
   保：rank+稳 < ref_rank ≤ rank+保       （明显低于考生）
@@ -61,11 +61,10 @@ def _config(rank: int) -> _Cfg:
 
 
 def _ref_rank(r: dict) -> int | None:
-    """2025 → 2024 → 2023 优先取一个有效位次。"""
-    for y in (2025, 2024, 2023):
-        v = r.get(f"{y}最低位次")
-        if v:
-            return int(v)
+    """Return the 2025 rank used for 冲/稳/保 classification."""
+    v = r.get("2025最低位次")
+    if v:
+        return int(v)
     return None
 
 
@@ -129,7 +128,7 @@ def _select_front(pool: list[dict], count: int) -> list[dict]:
 def split_pools(
     rows: list[dict], rank: int, cfg: _Cfg
 ) -> tuple[list[dict], list[dict], list[dict]]:
-    """将候选行按冲/稳/保分成三个连续区间（无有效位次的行丢弃）：
+    """将候选行按冲/稳/保分成三个连续区间（无 2025 位次的行丢弃）：
       冲：[rush_start, rank)
       稳：[rank, rank + stable]
       保：(rank + stable, rank + safety]

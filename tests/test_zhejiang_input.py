@@ -171,6 +171,23 @@ class ScreeningTests(unittest.TestCase):
         self.assertEqual(len(rows), 0)  # 临床医学类被色盲剔除
 
 
+class Step3RankingTests(unittest.TestCase):
+    def test_split_pools_uses_only_2025_rank(self):
+        from src.zhejiang.step3_generate import _config, split_pools
+
+        cfg = _config(8000)
+        rows = [
+            {"专业名称": "只有2024位次", "2025最低位次": None, "2024最低位次": 8100, "2023最低位次": 8200},
+            {"专业名称": "有2025位次", "2025最低位次": 8100, "2024最低位次": None, "2023最低位次": None},
+        ]
+
+        chong, wen, bao = split_pools(rows, 8000, cfg)
+        names = {r["专业名称"] for r in chong + wen + bao}
+
+        self.assertNotIn("只有2024位次", names)
+        self.assertIn("有2025位次", names)
+
+
 class FinalVolunteerTests(unittest.TestCase):
     """最终 80 志愿生成（需真实库，缺库则跳过）。"""
 
